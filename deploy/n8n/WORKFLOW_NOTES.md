@@ -61,13 +61,15 @@
 2. `Feed Sources`
 3. `RSS Feed Read`
 4. `00_common_normalize_text_object`
-5. `Vault Writer`
+5. `02_enrich_with_llm`
+6. `Vault Writer`
 
 说明：
 
-- 当前仓库里的 `deploy/n8n/workflows/01_rss_to_obsidian_raw.json` 应视为“主干基线模板”。
+- 当前仓库里的 `deploy/n8n/workflows/01_rss_to_obsidian_raw.json` 已串联 `02_enrich_with_llm`，应视为“RSS -> enrich -> Vault”的主干基线模板。
 - 若仓库继续保留 `active=false`，文档中要明确它是导入模板，不是默认生产态工作流。
 - 空配置时允许保留演示 RSS，但只作为 smoke test，不作为长期默认源。
+- `Build Markdown` 应写回 `summary / reason / enriched_at`，不要让 enrich 结果停留在临时执行数据里。
 
 ### `02_enrich_with_llm`
 
@@ -77,10 +79,11 @@
 
 建议节点顺序：
 
-1. `Validate Normalized Text Object`
-2. `Build LLM Request`
-3. `HTTP Request -> {{$env.LLM_BASE_URL}}/chat/completions`
-4. `Parse And Merge Enrichment`
+1. `Execute Workflow Trigger` 或 `Manual Trigger + Example Normalized Text Object`
+2. `Validate Normalized Text Object`
+3. `Build LLM Request`
+4. `HTTP Request -> {{$env.LLM_BASE_URL}}/chat/completions`
+5. `Parse And Merge Enrichment`
 
 输出要求：LLM 返回固定 JSON schema，并补写到同一对象上：
 
@@ -99,6 +102,8 @@
 - `summary` 是主干最终摘要，不再从别处复制第二份摘要字段。
 - `Video Transcript API` 若上游已返回摘要，只写入 `upstream_summary` 供参考。
 - 同一条对象只更新同一份 frontmatter 和正文，不再产出第二种 note 结构。
+- 被 `01_rss_to_obsidian_raw` 调用时，应通过 `Execute Workflow Trigger` 直接消费上游 item，不再重新造一份示例对象。
+- 作为 `01` 的子工作流导入时，`02_enrich_with_llm` 必须处于可执行状态，否则 `Execute Workflow` 会直接报 `Workflow is not active`。
 - 工作流应在调用 LLM 之前校验 `item_id / source_type / source_name / title / content_text` 和 `LLM_BASE_URL / LLM_MODEL / LLM_API_KEY`。
 - 推荐沿用 OpenAI-compatible Chat Completions 接口，并把 `response_format` 固定成 `json_object`。
 - 回写对象时应新增 `summary`、`reason`、`enriched_at`，并把 `status` 更新为 `enriched`。

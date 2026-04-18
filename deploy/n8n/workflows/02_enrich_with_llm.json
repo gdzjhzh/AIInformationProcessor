@@ -1,8 +1,8 @@
 {
   "id": "828e50ae98c24f31",
   "name": "02 Enrich With LLM",
-  "description": "Runnable template workflow: validate a NormalizedTextObject, call an OpenAI-compatible chat completions API, and merge score/category/tags/summary/reason back onto the same object.",
-  "active": false,
+  "description": "Runnable template and callable sub-workflow: validate a NormalizedTextObject, call an OpenAI-compatible chat completions API, and merge score/category/tags/summary/reason back onto the same object.",
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -14,6 +14,19 @@
       "position": [
         260,
         240
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "362d59bb-d7c0-453a-b499-2f61446ad502",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        420
       ]
     },
     {
@@ -114,6 +127,17 @@
         [
           {
             "node": "Example Normalized Text Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Validate Normalized Text Object",
             "type": "main",
             "index": 0
           }
