@@ -278,3 +278,14 @@ dedupe_action: full_push
 status: raw
 ---
 ```
+## 运行态同步
+
+- 仓库内的 `deploy/n8n/workflows/*.json` 才是工作流定义的 source of truth
+- 不要继续手改 `deploy/data/n8n/database.sqlite`
+- 使用 `python deploy/n8n/scripts/sync_workflows.py` 把 repo JSON 同步到当前 n8n 主库
+- 同步脚本会先备份活动 SQLite 库，再补齐 `workflow_entity` 和 `workflow_history`
+- 被 `Execute Workflow` 调用的子工作流，必须同时具备：
+  - `workflow_entity.active = true`
+  - `workflow_entity.activeVersionId = versionId`
+  - `workflow_history.versionId = versionId`
+- 当前 `02_enrich_with_llm` 就依赖这三项，缺任意一项都会在运行时触发 `Workflow is not active`

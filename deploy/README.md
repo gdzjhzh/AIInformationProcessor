@@ -172,3 +172,27 @@ docker compose --profile headless up -d browserless rsshub
 4. 确认主干稳定后，再接入 `Embedding + Qdrant` 做三级降噪。
 5. 再接入 `im2memo -> Memos -> memo auto` 这条增强支路。
 6. 最后补 `Video Transcript API`、`手动提交`、`每日复盘` 和 `订阅管理 Web 端`。
+## 同步工作流到运行态
+
+仓库里的 `deploy/n8n/workflows/*.json` 是版本控制下的主定义，`deploy/data/n8n/database.sqlite` 只是运行态缓存。
+在导入、更新或串联工作流后，使用下面的命令把仓库版本同步到当前 n8n 主库：
+
+```powershell
+python deploy/n8n/scripts/sync_workflows.py
+```
+
+如果只想同步某几条工作流，可以重复传 `--workflow-id`：
+
+```powershell
+python deploy/n8n/scripts/sync_workflows.py `
+  --workflow-id D3a7Kp9Lm4Qx2Rst `
+  --workflow-id 828e50ae98c24f31
+```
+
+这个脚本会：
+- 先对当前活动 SQLite 库做一次备份
+- 用 repo JSON 更新 `workflow_entity`
+- 确保当前 `versionId` 在 `workflow_history` 中存在
+- 对 `active: true` 的工作流补齐 `activeVersionId`
+
+这一步是 `01 -> 02` 链路稳定运行的前提，因为 `Execute Workflow` 调子工作流时不会只看 `active` 标志，还会检查当前激活版本是否真的存在于版本历史中。
