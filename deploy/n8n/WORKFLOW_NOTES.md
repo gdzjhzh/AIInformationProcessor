@@ -109,13 +109,16 @@
 
 建议节点顺序：
 
-1. `Input`
-2. `Embedding HTTP Request`
-3. `Qdrant Search`
-4. `Code: Decide Action`
-5. `IF`
-6. `Qdrant Upsert`
-7. `Vault Writer` 与 `Notifier` 分支
+1. `Validate Gate Input`
+2. `Build Embedding Request`
+3. `HTTP Request -> {{$env.EMBEDDING_BASE_URL}}/embeddings`
+4. `Build Qdrant Search Request`
+5. `Qdrant Search -> http://qdrant:6333/collections/{collection}/points/search`
+6. `Code: Decide Action`
+7. `Build Qdrant Upsert Payload`
+8. `IF dedupe_action != silent`
+9. `Qdrant Upsert`
+10. `Vault Writer` 与 `Notifier` 分支
 
 判定规则：
 
@@ -127,6 +130,9 @@
 
 - `EMBEDDING_MODEL` 与 `QDRANT_VECTOR_SIZE` 必须绑定，不能留一个空模型配一个写死维度。
 - `Qdrant` 在主干里是写入前判定器，不是事后增强件。
+- `03_qdrant_gate` 的输入应来自 `02_enrich_with_llm`，至少带上 `summary`，不要回退成只看 raw 文本。
+- 工作流应输出 `should_write_to_vault`、`should_notify`、`should_upsert_qdrant` 和 `notification_mode`，让下游分支而不是把判断硬编码进别的节点。
+- `item_id` 是业务幂等主键，不要直接拿去当 Qdrant 点 ID；应生成稳定的 `qdrant_point_id` UUID。
 
 ### `04_video_transcript_ingest`
 
@@ -199,12 +205,14 @@ Content-Type: application/json
 {
   "points": [
     {
-      "id": "{{$json.id}}",
+      "id": "{{$json.qdrant_point_id}}",
       "vector": {{$json.embedding}},
       "payload": {
+        "item_id": "{{$json.item_id}}",
         "title": "{{$json.title}}",
-        "url": "{{$json.url}}",
-        "published_at": "{{$json.published_at}}"
+        "canonical_url": "{{$json.canonical_url}}",
+        "published_at": "{{$json.published_at}}",
+        "dedupe_action": "{{$json.dedupe_action}}"
       }
     }
   ]
