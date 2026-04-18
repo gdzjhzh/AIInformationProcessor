@@ -1,0 +1,128 @@
+{
+  "id": "acb525fca8ea4dc4",
+  "name": "04 Video Transcript Ingest",
+  "description": "Template workflow: treat VideoTranscriptAPI as an external transcript adapter, then normalize into the shared mainline object.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a089c8af-8f77-4707-9840-0b6e470aa2e1",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [\n  {\n    json: {\n      transcript_source_url: 'https://www.youtube.com/watch?v=example',\n      source_name: 'Manual video ingest',\n      source_type: 'transcript',\n      media_type: 'video'\n    }\n  }\n];"
+      },
+      "id": "53c35a87-d018-4470-b16a-3c219a38cc52",
+      "name": "Example Transcript Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    transcript_api_request: {\n      base_url: $env.VIDEO_TRANSCRIPT_BASE_URL || 'set-in-env',\n      endpoint: '/api/transcribe',\n      method: 'POST',\n      body: {\n        url: $json.transcript_source_url\n      }\n    }\n  }\n};"
+      },
+      "id": "8d427074-e6b9-450a-8798-d0b6cc608fcf",
+      "name": "Build Transcript API Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    upstream_task_id: 'task_123456',\n    upstream_view_token: 'view_token_123456',\n    upstream_summary: 'Optional upstream summary for reference only.',\n    canonical_url: $json.transcript_source_url,\n    original_id: 'youtube:example',\n    title: 'Example transcript item',\n    author: 'Example creator',\n    published_at: '2026-04-17T09:00:00-04:00',\n    transcript_text: 'Calibrated transcript text fetched from /view/{token}?raw=calibrated.'\n  }\n};"
+      },
+      "id": "c3d852b9-8917-4a86-b2e5-f9fdb2b50411",
+      "name": "Apply Example Transcript Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const crypto = require('crypto');\n\nconst stableHash = (value) => crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');\nconst publishedAt = new Date($json.published_at || Date.now()).toISOString();\nconst ingestedAt = new Date().toISOString();\nconst canonicalUrl = String($json.canonical_url || '').trim();\nconst sourceType = String($json.source_type || 'transcript').trim() || 'transcript';\nconst originalId = String($json.original_id || '').trim();\nconst title = String($json.title || 'untitled').trim() || 'untitled';\nconst author = String($json.author || '').trim();\nconst contentText = String($json.transcript_text || '').trim();\nconst itemKey = canonicalUrl || (sourceType && originalId ? `${sourceType}:${originalId}` : '') || [title, publishedAt, author].filter(Boolean).join('::');\nconst itemId = stableHash(itemKey);\n\nreturn {\n  json: {\n    item_id: itemId,\n    source_type: sourceType,\n    source_name: String($json.source_name || 'video-transcript-api').trim() || 'video-transcript-api',\n    original_id: originalId,\n    canonical_url: canonicalUrl,\n    title,\n    author,\n    published_at: publishedAt,\n    ingested_at: ingestedAt,\n    media_type: String($json.media_type || 'video').trim() || 'video',\n    content_text: contentText,\n    content_html: '',\n    upstream_task_id: String($json.upstream_task_id || '').trim(),\n    upstream_view_token: String($json.upstream_view_token || '').trim(),\n    upstream_summary: String($json.upstream_summary || '').trim(),\n    content_hash: `sha256:${stableHash(contentText)}`,\n    score: 0,\n    category: 'pending',\n    tags: ['inbox', 'ai-information-processor', 'transcript'],\n    dedupe_action: 'full_push',\n    status: 'raw',\n    vault_path: ''\n  }\n};"
+      },
+      "id": "958f67d5-d895-4b21-8dd7-d8f329b40ef4",
+      "name": "Normalize Transcript Object",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        {
+          "node": "Example Transcript Request",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Example Transcript Request": {
+      "main": [
+        {
+          "node": "Build Transcript API Request",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Build Transcript API Request": {
+      "main": [
+        {
+          "node": "Apply Example Transcript Result",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Apply Example Transcript Result": {
+      "main": [
+        {
+          "node": "Normalize Transcript Object",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "ada5ba14-64df-436b-9ff7-44fb3855b129",
+  "tags": []
+}

@@ -1,0 +1,152 @@
+{
+  "id": "a793499a65e344bc",
+  "name": "03 Qdrant Gate",
+  "description": "Template workflow: apply embedding, nearest-neighbor lookup and the three-way dedupe action contract.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5fdd0eff-5818-4e9c-83cc-c14abd64c420",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [\n  {\n    json: {\n      item_id: '6d6e2f96ab2c',\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      canonical_url: 'https://example.com/post',\n      title: 'Example normalized item',\n      published_at: '2026-04-17T09:00:00-04:00',\n      content_text: 'Normalized plain text content for vector search.',\n      content_hash: 'sha256:example',\n      embedding_model: $env.EMBEDDING_MODEL || 'text-embedding-3-small',\n      qdrant_collection: $env.QDRANT_COLLECTION || 'article_embeddings',\n      tags: ['inbox', 'ai-information-processor'],\n      status: 'enriched'\n    }\n  }\n];"
+      },
+      "id": "1ac5c46d-dace-4d4b-bce3-6978be3a3b8f",
+      "name": "Example Enriched Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    qdrant_search_payload: {\n      collection: $json.qdrant_collection,\n      vector_size: Number($env.QDRANT_VECTOR_SIZE || 1536),\n      limit: 1,\n      with_payload: true\n    }\n  }\n};"
+      },
+      "id": "6f6b40b9-2e7f-46ac-b070-149681be4938",
+      "name": "Build Search Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    qdrant_result: [\n      {\n        score: 0.91,\n        payload: {\n          item_id: 'existing-item',\n          title: 'Existing similar item',\n          canonical_url: 'https://example.com/existing'\n        }\n      }\n    ]\n  }\n};"
+      },
+      "id": "0d89809e-0e0f-4ac7-b8de-b112c4ff8703",
+      "name": "Apply Example Qdrant Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const match = $json.qdrant_result?.[0];\n\nlet dedupeAction = 'full_push';\nif (match && match.score >= 0.97) {\n  dedupeAction = 'silent';\n} else if (match && match.score >= 0.85) {\n  dedupeAction = 'diff_push';\n}\n\nreturn {\n  json: {\n    ...$json,\n    dedupe_action: dedupeAction,\n    matched_payload: match?.payload || null,\n    matched_score: match?.score || 0,\n    status: dedupeAction === 'silent' ? 'deduped' : $json.status\n  }\n};"
+      },
+      "id": "a7fafd3e-ef12-480e-b9c0-c9222adf57c7",
+      "name": "Decide Dedupe Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    qdrant_upsert_payload: {\n      points: [\n        {\n          id: $json.item_id,\n          vector: 'replace-with-real-embedding-vector',\n          payload: {\n            item_id: $json.item_id,\n            title: $json.title,\n            canonical_url: $json.canonical_url,\n            published_at: $json.published_at,\n            dedupe_action: $json.dedupe_action\n          }\n        }\n      ]\n    }\n  }\n};"
+      },
+      "id": "cff43ca0-35dc-436f-a85a-adf1b903e251",
+      "name": "Build Upsert Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        {
+          "node": "Example Enriched Item",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Example Enriched Item": {
+      "main": [
+        {
+          "node": "Build Search Payload",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Build Search Payload": {
+      "main": [
+        {
+          "node": "Apply Example Qdrant Result",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Apply Example Qdrant Result": {
+      "main": [
+        {
+          "node": "Decide Dedupe Action",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Decide Dedupe Action": {
+      "main": [
+        {
+          "node": "Build Upsert Payload",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "96d9c3cd-7641-4806-8e0b-a907bd9329b5",
+  "tags": []
+}
