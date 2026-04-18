@@ -45,7 +45,6 @@ services:
       VIDEO_TRANSCRIPT_API_KEY: ${VIDEO_TRANSCRIPT_API_KEY}
       FEISHU_WEBHOOK_URL: ${FEISHU_WEBHOOK_URL}
     depends_on:
-      - memos
       - qdrant
 
   qdrant:
@@ -75,10 +74,19 @@ services:
     restart: unless-stopped
     shm_size: 1gb
     environment:
+      TZ: ${TZ:-America/New_York}
       TIMEOUT: "120000"
       CONNECTION_TIMEOUT: "120000"
       MAX_CONCURRENT_SESSIONS: "5"
       MAX_QUEUE_LENGTH: "10"
+
+  video-transcript-api:
+    profiles:
+      - transcript
+    image: ${VIDEO_TRANSCRIPT_IMAGE:-video-transcript-api:latest}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/New_York}
 
   rsshub:
     image: diygod/rsshub:latest
@@ -102,6 +110,7 @@ services:
     ports:
       - "127.0.0.1:${IM2MEMO_PORT:-3000}:3000"
     environment:
+      TZ: ${TZ:-America/New_York}
       MEMOS_URL: http://memos:5230
       MEMOS_TOKEN: ${IM2MEMO_MEMOS_TOKEN}
       FEISHU_APP_ID: ${FEISHU_APP_ID}

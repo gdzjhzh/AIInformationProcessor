@@ -65,6 +65,8 @@ docker compose up -d memos n8n qdrant redis rsshub
 
 `n8n` 容器内会额外挂载一个 `/vault` 目录，对应本地 `vault/`，后续工作流直接往这里写 Markdown。
 
+当前主干只把 `qdrant` 作为 n8n 的直接依赖。`memos` 会继续部署，但不再作为主干编排器的启动前置条件。
+
 ## Obsidian 主库约定
 
 - 默认 Vault 路径：`./vault`
@@ -106,6 +108,26 @@ docker compose --profile feishu up -d im2memo
 
 如果拉取 `im2memo` 时看到 `denied`，说明当前公开 GHCR 镜像不可直接拉取。这时保留现有环境变量不动，后续改成你自己构建出来的本地镜像标签，再覆盖 `.env` 里的 `IM2MEMO_IMAGE` 即可。
 
+## Video Transcript API 以可选 profile 接入
+
+这个服务仍然应作为独立仓维护，只通过 HTTP 接进当前主干，不要把它的业务逻辑重写进 n8n code node。
+
+如果你已经在独立仓里构建或拉取了镜像：
+
+1. 在 `.env` 里覆盖 `VIDEO_TRANSCRIPT_IMAGE`
+2. 把 `VIDEO_TRANSCRIPT_BASE_URL` 指向该服务在 Docker 网络中的实际地址
+3. 再执行：
+
+```powershell
+docker compose --profile transcript up -d video-transcript-api
+```
+
+注意：
+
+- 当前仓库只负责 profile 骨架，不内嵌该独立服务的专用配置文件。
+- 时区要和本仓库的 `TZ` 保持一致。
+- n8n 容器内访问该服务时，必须使用容器地址，不要写 `localhost`。
+
 ## 需要动态渲染路由时再启用 browserless
 
 有些 RSSHub 路由依赖浏览器渲染，这时把 `.env` 里的 `RSSHUB_PUPPETEER_WS_ENDPOINT` 改成：
@@ -130,6 +152,7 @@ docker compose --profile headless up -d browserless rsshub
 
 - `LLM_API_KEY`: 用于摘要和打分
 - `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL`: 用于向量去重
+  `EMBEDDING_MODEL` 和 `QDRANT_VECTOR_SIZE` 要成对调整，避免 collection 维度错配
 - `VIDEO_TRANSCRIPT_BASE_URL` / `VIDEO_TRANSCRIPT_API_KEY`: 用于音视频转文本
 - `FEISHU_WEBHOOK_URL`: 用于 n8n 最终推送飞书
 
