@@ -75,6 +75,13 @@
 
 输入：`NormalizedTextObject`
 
+建议节点顺序：
+
+1. `Validate Normalized Text Object`
+2. `Build LLM Request`
+3. `HTTP Request -> {{$env.LLM_BASE_URL}}/chat/completions`
+4. `Parse And Merge Enrichment`
+
 输出要求：LLM 返回固定 JSON schema，并补写到同一对象上：
 
 ```json
@@ -92,6 +99,9 @@
 - `summary` 是主干最终摘要，不再从别处复制第二份摘要字段。
 - `Video Transcript API` 若上游已返回摘要，只写入 `upstream_summary` 供参考。
 - 同一条对象只更新同一份 frontmatter 和正文，不再产出第二种 note 结构。
+- 工作流应在调用 LLM 之前校验 `item_id / source_type / source_name / title / content_text` 和 `LLM_BASE_URL / LLM_MODEL / LLM_API_KEY`。
+- 推荐沿用 OpenAI-compatible Chat Completions 接口，并把 `response_format` 固定成 `json_object`。
+- 回写对象时应新增 `summary`、`reason`、`enriched_at`，并把 `status` 更新为 `enriched`。
 
 ### `03_qdrant_gate`
 
