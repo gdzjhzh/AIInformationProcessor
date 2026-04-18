@@ -1,0 +1,110 @@
+name: ai-information-processor
+
+services:
+  memos:
+    image: neosmemo/memos:stable
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MEMOS_PORT:-5230}:5230"
+    volumes:
+      - ./data/memos:/var/opt/memos
+    environment:
+      TZ: ${TZ:-America/New_York}
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+    volumes:
+      - ./data/n8n:/home/node/.n8n
+      - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
+    environment:
+      TZ: ${TZ:-America/New_York}
+      GENERIC_TIMEZONE: ${TZ:-America/New_York}
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_RESTRICT_FILE_ACCESS_TO: "/vault;/home/node/.n8n-files"
+      OBSIDIAN_VAULT_PATH: /vault
+      OBSIDIAN_INBOX_DIR: ${OBSIDIAN_INBOX_DIR}
+      OBSIDIAN_DAILY_DIR: ${OBSIDIAN_DAILY_DIR}
+      RSS_SOURCE_URLS_JSON: ${RSS_SOURCE_URLS_JSON}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION}
+      QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE}
+      VIDEO_TRANSCRIPT_BASE_URL: ${VIDEO_TRANSCRIPT_BASE_URL}
+      VIDEO_TRANSCRIPT_API_KEY: ${VIDEO_TRANSCRIPT_API_KEY}
+      FEISHU_WEBHOOK_URL: ${FEISHU_WEBHOOK_URL}
+    depends_on:
+      - memos
+      - qdrant
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    environment:
+      TZ: ${TZ:-America/New_York}
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    volumes:
+      - ./data/redis:/data
+
+  browserless:
+    profiles:
+      - headless
+    image: browserless/chrome:latest
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      TIMEOUT: "120000"
+      CONNECTION_TIMEOUT: "120000"
+      MAX_CONCURRENT_SESSIONS: "5"
+      MAX_QUEUE_LENGTH: "10"
+
+  rsshub:
+    image: diygod/rsshub:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RSSHUB_PORT:-1200}:1200"
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-America/New_York}
+      CACHE_TYPE: redis
+      REDIS_URL: redis://redis:6379/
+      PUPPETEER_WS_ENDPOINT: ${RSSHUB_PUPPETEER_WS_ENDPOINT:-}
+    depends_on:
+      - redis
+
+  im2memo:
+    profiles:
+      - feishu
+    image: ${IM2MEMO_IMAGE:-ghcr.io/zj1123581321/im2memo:latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${IM2MEMO_PORT:-3000}:3000"
+    environment:
+      MEMOS_URL: http://memos:5230
+      MEMOS_TOKEN: ${IM2MEMO_MEMOS_TOKEN}
+      FEISHU_APP_ID: ${FEISHU_APP_ID}
+      FEISHU_APP_SECRET: ${FEISHU_APP_SECRET}
+    depends_on:
+      - memos

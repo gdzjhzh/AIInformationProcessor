@@ -1,0 +1,232 @@
+{
+  "id": "D3a7Kp9Lm4Qx2Rst",
+  "name": "01 RSS to Obsidian Raw Inbox",
+  "description": "First-pass ingest workflow: RSS to Markdown to Obsidian raw inbox.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a5f9550a-bf22-48c6-a312-5cf700fe8fc1",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "1ca63570-4561-453d-a1b0-7162a9ccfd6a",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fef5ef5d-6a54-4b73-b35f-7ff9eec7fe0c",
+              "name": "rssSourcesJson",
+              "value": "={{$env.RSS_SOURCE_URLS_JSON}}",
+              "type": "string"
+            },
+            {
+              "id": "8fb75e0a-4105-42bc-9557-0a2c11c242c8",
+              "name": "obsidianInboxDir",
+              "value": "={{$env.OBSIDIAN_INBOX_DIR}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4f102b58-591b-4d18-bce7-5f4f59a94728",
+      "name": "Runtime Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const config = $input.first()?.json || {};\nconst rawSourcesJson = (config.rssSourcesJson || '').trim();\nconst fallbackSources = [\n  {\n    feedUrl: 'http://rsshub:1200/xiaoyuzhou/podcast/648b0b641c48983391a63f98',\n    sourceName: '42章经',\n    sourceType: 'podcast'\n  }\n];\n\nlet sources = fallbackSources;\nif (rawSourcesJson) {\n  try {\n    const parsed = JSON.parse(rawSourcesJson);\n    if (!Array.isArray(parsed)) {\n      throw new Error('RSS_SOURCE_URLS_JSON must be a JSON array');\n    }\n    sources = parsed;\n  } catch (error) {\n    throw new Error(`RSS_SOURCE_URLS_JSON parse failed: ${error.message}`);\n  }\n}\n\nconst obsidianInboxDir = (config.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\n\nreturn sources.map((source, index) => {\n  const feedUrl = (source.feedUrl || source.url || '').trim();\n  if (!feedUrl) {\n    throw new Error(`Source ${index + 1} is missing feedUrl/url`);\n  }\n\n  return {\n    json: {\n      feedUrl,\n      sourceName: source.sourceName || source.name || `source-${index + 1}`,\n      sourceType: source.sourceType || 'rss',\n      obsidianInboxDir\n    }\n  };\n});"
+      },
+      "id": "eb11ad43-31e8-4e95-9b84-a22f16b83b14",
+      "name": "Feed Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.feedUrl}}",
+        "options": {}
+      },
+      "id": "38b97ff2-5e43-4a74-8561-976462f79f1a",
+      "name": "RSS Read",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        1020,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const stripHtml = (value = '') => value\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ')\n  .replace(/&amp;/gi, '&')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst title = (($json.title || '').trim() || 'untitled');\nconst sourceUrl = $json.link || $json.guid || '';\nconst publishedAt = $json.isoDate || $json.pubDate || new Date().toISOString();\nconst rawHtml = [\n  $json['content:encoded'],\n  $json.content,\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) => typeof value === 'string' && value.trim()) || '';\n\nlet sourceHost = 'unknown-source';\nconst hostMatch = String(sourceUrl).match(/^https?:\\/\\/([^\\/?#]+)/i);\nif (hostMatch?.[1]) {\n  sourceHost = hostMatch[1].replace(/^www\\./i, '');\n}\n\nreturn {\n  json: {\n    title,\n    sourceUrl,\n    sourceHost,\n    publishedAt,\n    author: $json.creator || $json.author || '',\n    rawContent: stripHtml(rawHtml),\n    rawHtml,\n    originalItem: $json,\n    obsidianInboxDir: $json.obsidianInboxDir || '00_Inbox/AI_Information_Processor'\n  }\n};"
+      },
+      "id": "a559b962-d95f-4ad4-a478-e8ff1ef941d2",
+      "name": "Normalize Article",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const slugify = (value = '') => value\n  .toString()\n  .normalize('NFKD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9\\u4e00-\\u9fa5]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .toLowerCase();\n\nconst yamlEscape = (value = '') => value\n  .toString()\n  .replace(/\\\\/g, '\\\\\\\\')\n  .replace(/\"/g, '\\\\\"');\n\nconst inboxDir = ($json.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\nconst dateForFile = new Date($json.publishedAt || Date.now());\nconst yyyy = dateForFile.getFullYear();\nconst mm = String(dateForFile.getMonth() + 1).padStart(2, '0');\nconst dd = String(dateForFile.getDate()).padStart(2, '0');\nconst hh = String(dateForFile.getHours()).padStart(2, '0');\nconst mi = String(dateForFile.getMinutes()).padStart(2, '0');\nconst ss = String(dateForFile.getSeconds()).padStart(2, '0');\nconst timestamp = `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;\nconst titleSlug = slugify($json.title).slice(0, 80) || 'untitled';\nconst fileBaseName = `${timestamp}_${titleSlug}`;\nconst excerpt = ($json.rawContent || '').slice(0, 280).trim();\nconst tags = ['inbox', 'ai-information-processor', 'raw-ingest', slugify($json.sourceHost)].filter(Boolean);\nconst authorLine = $json.author ? `author: \\\"${yamlEscape($json.author)}\\\"\\n` : '';\nconst sourceUrl = $json.sourceUrl || '';\nconst markdown = `---\\ntitle: \\\"${yamlEscape($json.title)}\\\"\\nsource: \\\"${yamlEscape($json.sourceHost)}\\\"\\nsource_url: \\\"${yamlEscape(sourceUrl)}\\\"\\npublished_at: \\\"${new Date($json.publishedAt).toISOString()}\\\"\\ningested_at: \\\"${new Date().toISOString()}\\\"\\nworkflow: \\\"rss-to-obsidian-raw\\\"\\nstatus: \\\"raw\\\"\\n${authorLine}tags:\\n${tags.map((tag) => `  - ${tag}`).join('\\n')}\\n---\\n\\n# ${$json.title}\\n\\n> Source: ${sourceUrl ? `[${$json.sourceHost}](${sourceUrl})` : $json.sourceHost}\\n\\n## Excerpt\\n\\n${excerpt || 'No text excerpt extracted.'}\\n\\n## Raw Content\\n\\n${$json.rawContent || 'No text content extracted from this feed item.'}\\n`;\n\nreturn {\n  json: {\n    ...$json,\n    fileBaseName,\n    relativeFilePath: `${inboxDir}/${fileBaseName}.md`\n  },\n  binary: {\n    data: {\n      data: Buffer.from(markdown, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: `${fileBaseName}.md`,\n      fileExtension: 'md'\n    }\n  }\n};"
+      },
+      "id": "ceb0e5d2-bd1c-4731-9db4-3a9f4ccfe60f",
+      "name": "Build Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{'/vault/' + $json.relativeFilePath}}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "14ba2b32-f344-4567-aef7-e89e60f59d7f",
+      "name": "Write Binary File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        210
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Runtime Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Runtime Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runtime Config": {
+      "main": [
+        [
+          {
+            "node": "Feed Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Feed Sources": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Normalize Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Article": {
+      "main": [
+        [
+          {
+            "node": "Build Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Markdown": {
+      "main": [
+        [
+          {
+            "node": "Write Binary File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "f040e011-f6d4-42db-b8ec-7a1619b3be91",
+  "tags": []
+}

@@ -1,0 +1,21 @@
+# External dependency repository
+/RSSHub/
+
+# Local secrets
+/deploy/.env
+
+# Runtime data
+/deploy/data/
+/backups/
+
+# Obsidian runtime content; keep scaffold docs and placeholders
+/deploy/vault/**
+!/deploy/vault/
+!/deploy/vault/README.md
+!/deploy/vault/**/
+!/deploy/vault/**/.gitkeep
+
+# OS noise
+Thumbs.db
+Desktop.ini
+.DS_Store
