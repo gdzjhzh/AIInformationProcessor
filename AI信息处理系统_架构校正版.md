@@ -8,8 +8,114 @@
 2. `Memos` 不是主库，而是碎片收藏、IM 收件和 AI 增强支路。
 3. `n8n` 负责流程编排，承接图中的 `AI Info Processor`。
 4. `Qdrant` 负责三级降噪的向量检索，不在 n8n 内存里做全量比较。
-5. 所有输入先统一转成文本，再进入打分、分类、摘要、去重和落库流程。
+5. 所有输入先统一转成 `NormalizedTextObject`，再进入打分、分类、摘要、去重和落库流程。
 6. `回顾分析层` 不是主干流水线里的下一站，而是读取已有内容再回写到 `Obsidian` 的反馈回路。
+
+## 阶段 0：统一对象契约
+
+阶段 0 不是可选优化，而是后续所有入口、去重、摘要和回写的共同基线。没有统一对象契约，RSS、转录、手动提交和 Memos 支路会各自长出一套字段体系，最终导致重复写入、无法幂等更新、frontmatter 漂移和后续复盘口径不一致。
+
+### 分层约束
+
+系统按四层落地：
+
+- `数据面`：所有入口先产出 `NormalizedTextObject`，主干负责 AI enrich、Embedding、Qdrant 判定和 Obsidian 写入。
+- `支路面`：`Memos / im2memo` 是可选增强支路，不参与主干串行依赖。
+- `反馈面`：`Every Day Analysis / 微信群总结 / ManicTime` 只读取已沉淀内容，再回写总结结果。
+- `控制面`：订阅管理 Web 端只负责配置、分组和开关，不直接承载主干处理逻辑。
+
+### NormalizedTextObject
+
+所有入口在进入主干前，至少要产出下面这组字段：
+
+```yaml
+item_id: string
+source_type: rss | youtube_xml | podcast | transcript | manual | memos
+source_name: string
+original_id: string
+canonical_url: string
+title: string
+author: string
+published_at: string
+ingested_at: string
+media_type: text | audio | video | image
+content_text: string
+content_html: string
+upstream_task_id: string
+upstream_view_token: string
+upstream_summary: string
+content_hash: string
+score: number
+category: string
+tags: string[]
+dedupe_action: full_push | diff_push | silent
+status: raw | enriched | deduped | archived
+vault_path: string
+```
+
+字段说明：
+
+- `item_id`：幂等主键，用于稳定更新同一条内容。
+- `canonical_url`：优先保留平台最终链接，供去重和回溯使用。
+- `content_text`：后续 embedding、评分、摘要统一消费的主文本。
+- `content_html`：可选保留原始正文，用于需要更丰富渲染的场景。
+- `upstream_task_id / upstream_view_token / upstream_summary`：保留上游服务回执，但只作为内部追踪字段。
+- `vault_path`：写入 Vault 后的稳定目标路径，用于后续补写而不是重新造一份新笔记。
+
+### item_id 与幂等规则
+
+- 优先使用 `canonical_url` 生成稳定哈希。
+- 若缺失 `canonical_url`，退化为 `source_type + original_id`。
+- 若仍缺失，再退化为 `title + published_at + author` 的组合哈希。
+- `item_id` 一旦确定，同一条内容后续重复抓取时应更新同一路径，而不是制造第二份笔记。
+- `content_hash` 只用于内容变化检测，不能替代 `item_id`。
+
+### 文件命名与 frontmatter 规则
+
+默认文件名：
+
+`{date}_{source_type}_{item_id[:10]}_{slug}.md`
+
+建议 frontmatter：
+
+```yaml
+---
+title: 标题
+item_id: 6d6e2f96ab2c
+source_type: rss
+source_name: OpenAI YouTube
+original_id: yt:abc123
+canonical_url: https://example.com/post
+published_at: 2026-04-17T09:00:00-04:00
+ingested_at: 2026-04-17T09:05:00-04:00
+media_type: text
+content_hash: sha256:...
+workflow: rss-to-obsidian-raw
+score: 0
+category: pending
+tags:
+  - inbox
+  - ai-information-processor
+dedupe_action: full_push
+status: raw
+upstream_task_id:
+upstream_summary:
+---
+```
+
+约束：
+
+- `published_at`、`ingested_at` 一律写入带时区的 ISO 8601。
+- `upstream_view_token` 不进入公开正文，只保留在内部字段或私有 metadata。
+- `status` 反映对象阶段，而不是工作流名称。
+- 后续 `Workflow 1A / Workflow 2` 只补写同一份 frontmatter，不再引入第二套 note 结构。
+
+### 统一时区规则
+
+- 主干仓库统一使用同一个 `TZ`，由 `deploy/.env` 和 `compose.yaml` 向所有容器传递。
+- 文件命名、`published_at`、`ingested_at`、Daily 路由和复盘统计必须共享同一时区口径。
+- 如需展示原始平台时区，可额外保留字段，但主干写库时间一律遵循系统统一时区。
+- `Video Transcript API` 若外部独立部署，接入时也必须显式对齐主干时区。
 
 ## 主干与回路
 
@@ -62,7 +168,7 @@ ManicTime + 每日复盘 + 群聊总结
 
 - `AI Info Processor`: 长文打分、分类、摘要、Embedding 去重
 - `rss2im`: 短文本过滤
-- `Video Transcript API`: 音视频转录与摘要
+- `Video Transcript API`: 音视频下载、转录与校对，输出可复用的上游文本对象
 - `手动提交`: Tasker / Quicker / Web 快速投递
 
 ### 存储与增强层
@@ -99,6 +205,17 @@ ManicTime + 每日复盘 + 群聊总结
 - `订阅管理 Web 端`
 
 ## 执行顺序
+
+### 阶段 0：先固化统一对象 contract
+
+目标：
+`定义 NormalizedTextObject / item_id / 命名 / frontmatter / 时区规则`
+
+要求：
+
+- 先把主干 contract 写成文档和模板，不让每个入口各自造字段。
+- 先确定文件稳定命名和幂等更新规则，再接更多入口。
+- 先统一时间口径，再做 Daily 路由、复盘统计和外部服务接入。
 
 ### 阶段 1：主干先跑通
 
@@ -145,6 +262,7 @@ ManicTime + 每日复盘 + 群聊总结
 要求：
 
 - 所有入口统一转成文本对象
+- `Video Transcript API` 只负责下载、转录、校对，上游摘要仅作为 `upstream_summary` 参考字段
 - 再复用主干处理流程
 
 ### 阶段 5：加入回顾分析
@@ -182,6 +300,6 @@ ManicTime + 每日复盘 + 群聊总结
 
 下一步的具体落地任务应是：
 
-1. 在 `n8n` 中创建第一条 `写入 Obsidian Markdown` 的工作流。
-2. 设计 Markdown 文件命名、目录和 frontmatter 规范。
-3. 再补飞书推送和 Qdrant 去重。
+1. 先补齐 `阶段 0` 文档、对象契约、稳定命名和 frontmatter 规范。
+2. 把 `01_rss_to_obsidian_raw` 改成输出统一对象并走统一 writer。
+3. 再补 `Workflow 1A` 的结构化 AI enrich 与 `Workflow 2` 的 Qdrant gate。
