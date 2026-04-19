@@ -62,14 +62,17 @@
 3. `RSS Feed Read`
 4. `00_common_normalize_text_object`
 5. `02_enrich_with_llm`
-6. `Vault Writer`
+6. `03_qdrant_gate`
+7. `IF should_write_to_vault`
+8. `Vault Writer`
 
 说明：
 
-- 当前仓库里的 `deploy/n8n/workflows/01_rss_to_obsidian_raw.json` 已串联 `02_enrich_with_llm`，应视为“RSS -> enrich -> Vault”的主干基线模板。
+- 当前仓库里的 `deploy/n8n/workflows/01_rss_to_obsidian_raw.json` 已串联 `02_enrich_with_llm` 和 `03_qdrant_gate`，应视为“RSS -> enrich -> gate -> Vault”的主干基线模板。
 - 若仓库继续保留 `active=false`，文档中要明确它是导入模板，不是默认生产态工作流。
 - 空配置时允许保留演示 RSS，但只作为 smoke test，不作为长期默认源。
 - `Build Markdown` 应写回 `summary / reason / enriched_at`，不要让 enrich 结果停留在临时执行数据里。
+- `silent` 必须真正跳过写库；`diff_push` 则应把匹配上下文一起写入 note，便于核对实际降噪结果。
 
 ### `02_enrich_with_llm`
 
@@ -114,22 +117,28 @@
 
 建议节点顺序：
 
-1. `Validate Gate Input`
-2. `Build Embedding Request`
-3. `HTTP Request -> {{$env.EMBEDDING_BASE_URL}}/embeddings`
-4. `Build Qdrant Search Request`
-5. `Qdrant Search -> http://qdrant:6333/collections/{collection}/points/search`
-6. `Code: Decide Action`
-7. `Build Qdrant Upsert Payload`
-8. `IF dedupe_action != silent`
-9. `Qdrant Upsert`
-10. `Vault Writer` 与 `Notifier` 分支
+1. `Execute Workflow Trigger` 或 `Manual Trigger + Example Enriched Item`
+2. `Validate Gate Input`
+3. `Build Embedding Request`
+4. `HTTP Request -> {{$env.EMBEDDING_BASE_URL}}/embeddings`
+5. `Build Qdrant Search Request`
+6. `Qdrant Search -> http://qdrant:6333/collections/{collection}/points/search`
+7. `Code: Decide Action`
+8. `Build Qdrant Upsert Payload`
+9. `IF dedupe_action != silent`
+10. `Qdrant Upsert`
+11. `Vault Writer` 与 `Notifier` 分支
 
 判定规则：
 
 - `< 0.85`：`full_push`
 - `0.85 ~ 0.97`：`diff_push`
 - `> 0.97`：`silent`
+
+默认应通过环境变量显式收口为：
+
+- `QDRANT_DIFF_THRESHOLD=0.85`
+- `QDRANT_SILENT_THRESHOLD=0.97`
 
 约束：
 
@@ -138,6 +147,9 @@
 - `03_qdrant_gate` 的输入应来自 `02_enrich_with_llm`，至少带上 `summary`，不要回退成只看 raw 文本。
 - 工作流应输出 `should_write_to_vault`、`should_notify`、`should_upsert_qdrant` 和 `notification_mode`，让下游分支而不是把判断硬编码进别的节点。
 - `item_id` 是业务幂等主键，不要直接拿去当 Qdrant 点 ID；应生成稳定的 `qdrant_point_id` UUID。
+- 若最近邻命中的 `payload.item_id` 与当前对象相同，要先区分“同一篇文章内容未变”与“同一篇文章更新了内容”：
+  - 相同 `content_hash`：`silent`
+  - 不同 `content_hash`：`diff_push`
 
 ### `04_video_transcript_ingest`
 
@@ -283,9 +295,10 @@ status: raw
 - 仓库内的 `deploy/n8n/workflows/*.json` 才是工作流定义的 source of truth
 - 不要继续手改 `deploy/data/n8n/database.sqlite`
 - 使用 `python deploy/n8n/scripts/sync_workflows.py` 把 repo JSON 同步到当前 n8n 主库
+- 使用 `python deploy/n8n/scripts/smoke_qdrant_gate.py` 在终端侧检查 embedding 配置、collection 维度和三种 `dedupe_action` 的实际分支结果
 - 同步脚本会先备份活动 SQLite 库，再补齐 `workflow_entity` 和 `workflow_history`
 - 被 `Execute Workflow` 调用的子工作流，必须同时具备：
   - `workflow_entity.active = true`
   - `workflow_entity.activeVersionId = versionId`
   - `workflow_history.versionId = versionId`
-- 当前 `02_enrich_with_llm` 就依赖这三项，缺任意一项都会在运行时触发 `Workflow is not active`
+- 当前 `02_enrich_with_llm` 和 `03_qdrant_gate` 都依赖这三项，缺任意一项都会在运行时触发 `Workflow is not active`

@@ -153,6 +153,7 @@ docker compose --profile headless up -d browserless rsshub
 - `LLM_API_KEY`: 用于摘要和打分
 - `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL`: 用于向量去重
   `EMBEDDING_MODEL` 和 `QDRANT_VECTOR_SIZE` 要成对调整，避免 collection 维度错配
+- `QDRANT_DIFF_THRESHOLD` / `QDRANT_SILENT_THRESHOLD`: 控制 `full_push -> diff_push -> silent` 的分界值，默认分别为 `0.85 / 0.97`
 - `VIDEO_TRANSCRIPT_BASE_URL` / `VIDEO_TRANSCRIPT_API_KEY`: 用于音视频转文本
 - `FEISHU_WEBHOOK_URL`: 用于 n8n 最终推送飞书
 
@@ -169,7 +170,7 @@ docker compose --profile headless up -d browserless rsshub
 1. 先初始化 Obsidian Vault 和 Memos 管理员账号。
 2. 先做第一条主干：`RSS/YouTube/播客 -> AI 打分 -> Markdown 写入 Obsidian`。
 3. 再补 `飞书/企业微信推送`。
-4. 确认主干稳定后，再接入 `Embedding + Qdrant` 做三级降噪。
+4. 确认主干稳定后，再接入 `Embedding + Qdrant` 做三级降噪；当前 repo 里的 01 已经预留 `02 -> 03 -> should_write_to_vault` 分支。
 5. 再接入 `im2memo -> Memos -> memo auto` 这条增强支路。
 6. 最后补 `Video Transcript API`、`手动提交`、`每日复盘` 和 `订阅管理 Web 端`。
 ## 同步工作流到运行态
@@ -195,4 +196,15 @@ python deploy/n8n/scripts/sync_workflows.py `
 - 确保当前 `versionId` 在 `workflow_history` 中存在
 - 对 `active: true` 的工作流补齐 `activeVersionId`
 
-这一步是 `01 -> 02` 链路稳定运行的前提，因为 `Execute Workflow` 调子工作流时不会只看 `active` 标志，还会检查当前激活版本是否真的存在于版本历史中。
+这一步是 `01 -> 02 -> 03` 链路稳定运行的前提，因为 `Execute Workflow` 调子工作流时不会只看 `active` 标志，还会检查当前激活版本是否真的存在于版本历史中。
+
+同步后建议再跑一次：
+
+```powershell
+python deploy/n8n/scripts/smoke_qdrant_gate.py
+```
+
+这个 smoke 脚本会：
+- 直接检查 `EMBEDDING_*` 是否已配置
+- 核对 `QDRANT_COLLECTION` 是否存在，以及实际维度是否等于 `QDRANT_VECTOR_SIZE`
+- 用合成向量验证 `full_push`、`diff_push`、`silent` 三种动作，以及“同一 `item_id` 内容更新”不会被误吞

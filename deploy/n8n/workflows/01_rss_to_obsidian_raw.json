@@ -1,7 +1,7 @@
 {
   "id": "D3a7Kp9Lm4Qx2Rst",
   "name": "01 RSS to Obsidian Raw Inbox",
-  "description": "Template workflow: RSS ingress -> NormalizedTextObject -> 02 enrich sub-workflow -> Obsidian inbox writer.",
+  "description": "Template workflow: RSS ingress -> NormalizedTextObject -> 02 enrich sub-workflow -> 03 Qdrant gate -> Obsidian inbox writer.",
   "active": false,
   "isArchived": false,
   "nodes": [
@@ -134,17 +134,70 @@
     },
     {
       "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "a793499a65e344bc",
+          "mode": "list",
+          "cachedResultName": "03 Qdrant Gate"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "47be42ab-f7f1-4f56-98ef-68856e3dc0c7",
+      "name": "03 Qdrant Gate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1800,
+        210
+      ]
+    },
+    {
+      "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const slugify = (value = '') => String(value)\n  .normalize('NFKD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9\\u4e00-\\u9fa5]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .toLowerCase();\n\nconst yamlEscape = (value = '') => String(value)\n  .replace(/\\\\/g, '\\\\\\\\')\n  .replace(/\"/g, '\\\\\"');\n\nconst yamlBlock = (key, value = '') => {\n  const normalized = String(value || '').replace(/\\r\\n/g, '\\n').trim();\n  if (!normalized) {\n    return '';\n  }\n  const indented = normalized\n    .split('\\n')\n    .map((line) => `  ${line}`)\n    .join('\\n');\n  return `${key}: |-\\n${indented}\\n`;\n};\n\nconst inboxDir = ($json.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\nconst dateForFile = new Date($json.published_at || Date.now());\nconst yyyy = dateForFile.getFullYear();\nconst mm = String(dateForFile.getMonth() + 1).padStart(2, '0');\nconst dd = String(dateForFile.getDate()).padStart(2, '0');\nconst datePrefix = `${yyyy}-${mm}-${dd}`;\nconst sourceType = slugify($json.source_type || 'rss') || 'rss';\nconst itemIdShort = String($json.item_id || 'unknown').slice(0, 10);\nconst titleSlug = slugify($json.title).slice(0, 80) || 'untitled';\nconst fileBaseName = `${datePrefix}_${sourceType}_${itemIdShort}_${titleSlug}`;\nconst relativeFilePath = `${inboxDir}/${fileBaseName}.md`;\nconst summary = String($json.summary || '').trim();\nconst reason = String($json.reason || '').trim();\nconst excerpt = (summary || ($json.content_text || '').slice(0, 280)).trim();\nconst tags = Array.isArray($json.tags) && $json.tags.length\n  ? $json.tags.filter(Boolean)\n  : ['inbox', 'ai-information-processor'];\nconst tagLines = tags.map((tag) => `  - ${tag}`).join('\\n');\nconst authorLine = $json.author ? `author: \\\"${yamlEscape($json.author)}\\\"\\n` : '';\nconst originalIdLine = $json.original_id ? `original_id: \\\"${yamlEscape($json.original_id)}\\\"\\n` : '';\nconst sourceHostLine = $json.source_host ? `source_host: \\\"${yamlEscape($json.source_host)}\\\"\\n` : '';\nconst enrichedAtLine = $json.enriched_at ? `enriched_at: \\\"${yamlEscape($json.enriched_at)}\\\"\\n` : '';\nconst summaryLine = yamlBlock('summary', summary);\nconst reasonLine = yamlBlock('reason', reason);\nconst summarySection = summary ? `## Summary\\n\\n${summary}\\n\\n` : '';\nconst reasonSection = reason ? `## Reason\\n\\n${reason}\\n\\n` : '';\nconst canonicalUrl = $json.canonical_url || '';\nconst workflowName = $json.enriched_at ? 'rss-to-obsidian-mainline' : 'rss-to-obsidian-raw';\nconst markdown = `---\\ntitle: \\\"${yamlEscape($json.title)}\\\"\\nitem_id: \\\"${yamlEscape($json.item_id)}\\\"\\nsource_type: \\\"${yamlEscape($json.source_type)}\\\"\\nsource_name: \\\"${yamlEscape($json.source_name)}\\\"\\n${sourceHostLine}${originalIdLine}canonical_url: \\\"${yamlEscape(canonicalUrl)}\\\"\\npublished_at: \\\"${yamlEscape($json.published_at)}\\\"\\ningested_at: \\\"${yamlEscape($json.ingested_at)}\\\"\\n${enrichedAtLine}media_type: \\\"${yamlEscape($json.media_type)}\\\"\\ncontent_hash: \\\"${yamlEscape($json.content_hash)}\\\"\\nworkflow: \\\"${workflowName}\\\"\\nscore: ${Number($json.score || 0)}\\ncategory: \\\"${yamlEscape($json.category || 'pending')}\\\"\\ndedupe_action: \\\"${yamlEscape($json.dedupe_action || 'full_push')}\\\"\\nstatus: \\\"${yamlEscape($json.status || 'raw')}\\\"\\n${authorLine}${summaryLine}${reasonLine}tags:\\n${tagLines}\\n---\\n\\n# ${$json.title}\\n\\n> Source Name: ${$json.source_name || 'unknown-source'}\\n> Canonical URL: ${canonicalUrl || 'N/A'}\\n\\n## Excerpt\\n\\n${excerpt || 'No text excerpt extracted.'}\\n\\n${summarySection}${reasonSection}## Raw Content\\n\\n${$json.content_text || 'No text content extracted from this feed item.'}\\n`;\n\nreturn {\n  json: {\n    ...$json,\n    fileBaseName,\n    relativeFilePath,\n    vault_path: relativeFilePath\n  },\n  binary: {\n    data: {\n      data: Buffer.from(markdown, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: `${fileBaseName}.md`,\n      fileExtension: 'md'\n    }\n  }\n};"
+        "jsCode": "const slugify = (value = '') => String(value)\n  .normalize('NFKD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9\\u4e00-\\u9fa5]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .toLowerCase();\n\nconst yamlEscape = (value = '') => String(value)\n  .replace(/\\\\/g, '\\\\\\\\')\n  .replace(/\"/g, '\\\\\"');\n\nconst yamlBlock = (key, value = '') => {\n  const normalized = String(value || '').replace(/\\r\\n/g, '\\n').trim();\n  if (!normalized) {\n    return '';\n  }\n  const indented = normalized\n    .split('\\n')\n    .map((line) => `  ${line}`)\n    .join('\\n');\n  return `${key}: |-\\n${indented}\\n`;\n};\n\nconst inboxDir = ($json.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\nconst dateForFile = new Date($json.published_at || Date.now());\nconst yyyy = dateForFile.getFullYear();\nconst mm = String(dateForFile.getMonth() + 1).padStart(2, '0');\nconst dd = String(dateForFile.getDate()).padStart(2, '0');\nconst datePrefix = `${yyyy}-${mm}-${dd}`;\nconst sourceType = slugify($json.source_type || 'rss') || 'rss';\nconst itemIdShort = String($json.item_id || 'unknown').slice(0, 10);\nconst titleSlug = slugify($json.title).slice(0, 80) || 'untitled';\nconst fileBaseName = `${datePrefix}_${sourceType}_${itemIdShort}_${titleSlug}`;\nconst relativeFilePath = `${inboxDir}/${fileBaseName}.md`;\nconst summary = String($json.summary || '').trim();\nconst reason = String($json.reason || '').trim();\nconst excerpt = (summary || ($json.content_text || '').slice(0, 280)).trim();\nconst dedupeAction = String($json.dedupe_action || 'full_push').trim() || 'full_push';\nconst notificationMode = String($json.notification_mode || '').trim();\nconst matchedPayload = $json.matched_payload && typeof $json.matched_payload === 'object' ? $json.matched_payload : null;\nconst matchedScore = Number($json.matched_score || 0);\nconst matchedTitle = matchedPayload ? String(matchedPayload.title || '').trim() : '';\nconst matchedItemId = matchedPayload ? String(matchedPayload.item_id || '').trim() : '';\nconst matchedCanonicalUrl = matchedPayload ? String(matchedPayload.canonical_url || '').trim() : '';\nconst tags = Array.isArray($json.tags) && $json.tags.length\n  ? $json.tags.filter(Boolean)\n  : ['inbox', 'ai-information-processor'];\nconst normalizedTags = [...new Set([...tags, `dedupe-${dedupeAction}`].filter(Boolean))];\nconst tagLines = normalizedTags.map((tag) => `  - ${tag}`).join('\\n');\nconst authorLine = $json.author ? `author: \\\"${yamlEscape($json.author)}\\\"\\n` : '';\nconst originalIdLine = $json.original_id ? `original_id: \\\"${yamlEscape($json.original_id)}\\\"\\n` : '';\nconst sourceHostLine = $json.source_host ? `source_host: \\\"${yamlEscape($json.source_host)}\\\"\\n` : '';\nconst enrichedAtLine = $json.enriched_at ? `enriched_at: \\\"${yamlEscape($json.enriched_at)}\\\"\\n` : '';\nconst notificationModeLine = notificationMode ? `notification_mode: \\\"${yamlEscape(notificationMode)}\\\"\\n` : '';\nconst matchedScoreLine = Number.isFinite(matchedScore) && matchedScore > 0 ? `matched_score: ${matchedScore}\\n` : '';\nconst matchedItemIdLine = matchedItemId ? `matched_item_id: \\\"${yamlEscape(matchedItemId)}\\\"\\n` : '';\nconst matchedCanonicalUrlLine = matchedCanonicalUrl ? `matched_canonical_url: \\\"${yamlEscape(matchedCanonicalUrl)}\\\"\\n` : '';\nconst matchedSameItemLine = $json.matched_same_item ? 'matched_same_item: true\\n' : '';\nconst summaryLine = yamlBlock('summary', summary);\nconst reasonLine = yamlBlock('reason', reason);\nconst summarySection = summary ? `## Summary\\n\\n${summary}\\n\\n` : '';\nconst reasonSection = reason ? `## Reason\\n\\n${reason}\\n\\n` : '';\nconst dedupeLines = matchedPayload ? [\n  `- Action: ${dedupeAction}`,\n  `- Notification Mode: ${notificationMode || 'n/a'}`,\n  Number.isFinite(matchedScore) && matchedScore > 0 ? `- Matched Score: ${matchedScore.toFixed(4)}` : '',\n  matchedItemId ? `- Matched Item ID: ${matchedItemId}` : '',\n  matchedTitle ? `- Matched Title: ${matchedTitle}` : '',\n  matchedCanonicalUrl ? `- Matched Canonical URL: ${matchedCanonicalUrl}` : '',\n  $json.matched_same_item ? '- Same Item ID Match: true' : ''\n].filter(Boolean).join('\\n') : '';\nconst dedupeSection = dedupeLines ? `## Dedupe Context\\n\\n${dedupeLines}\\n\\n` : '';\nconst canonicalUrl = $json.canonical_url || '';\nconst workflowName = $json.enriched_at ? 'rss-to-obsidian-mainline-qdrant' : 'rss-to-obsidian-raw';\nconst markdown = `---\\ntitle: \\\"${yamlEscape($json.title)}\\\"\\nitem_id: \\\"${yamlEscape($json.item_id)}\\\"\\nsource_type: \\\"${yamlEscape($json.source_type)}\\\"\\nsource_name: \\\"${yamlEscape($json.source_name)}\\\"\\n${sourceHostLine}${originalIdLine}canonical_url: \\\"${yamlEscape(canonicalUrl)}\\\"\\npublished_at: \\\"${yamlEscape($json.published_at)}\\\"\\ningested_at: \\\"${yamlEscape($json.ingested_at)}\\\"\\n${enrichedAtLine}media_type: \\\"${yamlEscape($json.media_type)}\\\"\\ncontent_hash: \\\"${yamlEscape($json.content_hash)}\\\"\\nworkflow: \\\"${workflowName}\\\"\\nscore: ${Number($json.score || 0)}\\ncategory: \\\"${yamlEscape($json.category || 'pending')}\\\"\\ndedupe_action: \\\"${yamlEscape(dedupeAction)}\\\"\\nstatus: \\\"${yamlEscape($json.status || 'raw')}\\\"\\n${notificationModeLine}${matchedScoreLine}${matchedItemIdLine}${matchedCanonicalUrlLine}${matchedSameItemLine}${authorLine}${summaryLine}${reasonLine}tags:\\n${tagLines}\\n---\\n\\n# ${$json.title}\\n\\n> Source Name: ${$json.source_name || 'unknown-source'}\\n> Canonical URL: ${canonicalUrl || 'N/A'}\\n\\n## Excerpt\\n\\n${excerpt || 'No text excerpt extracted.'}\\n\\n${summarySection}${reasonSection}${dedupeSection}## Raw Content\\n\\n${$json.content_text || 'No text content extracted from this feed item.'}\\n`;\n\nreturn {\n  json: {\n    ...$json,\n    fileBaseName,\n    relativeFilePath,\n    vault_path: relativeFilePath,\n    vault_write: 'written'\n  },\n  binary: {\n    data: {\n      data: Buffer.from(markdown, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: `${fileBaseName}.md`,\n      fileExtension: 'md'\n    }\n  }\n};"
       },
       "id": "ceb0e5d2-bd1c-4731-9db4-3a9f4ccfe60f",
       "name": "Build Markdown",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1800,
+        2320,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all()\n  .filter((item) => Boolean(item.json?.should_write_to_vault))\n  .map((item) => ({\n    json: item.json,\n    binary: item.binary\n  }));"
+      },
+      "id": "261c2164-0622-441e-b5eb-c65abf84f5d3",
+      "name": "Should Write To Vault",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
         210
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    vault_write: 'skipped',\n    relativeFilePath: $json.vault_path || ''\n  }\n};"
+      },
+      "id": "3eb72950-1f2d-40aa-8ccb-31ffd3ef0a6f",
+      "name": "Skip Vault Write",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        300
       ]
     },
     {
@@ -158,8 +211,8 @@
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
       "position": [
-        2060,
-        210
+        2580,
+        120
       ]
     }
   ],
@@ -234,6 +287,28 @@
       "main": [
         [
           {
+            "node": "03 Qdrant Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 Qdrant Gate": {
+      "main": [
+        [
+          {
+            "node": "Should Write To Vault",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Write To Vault": {
+      "main": [
+        [
+          {
             "node": "Build Markdown",
             "type": "main",
             "index": 0
@@ -261,6 +336,6 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "f040e011-f6d4-42db-b8ec-7a1619b3be91",
+  "versionId": "2041a5ce-ae53-4ec8-b68c-f134f6a72cfb",
   "tags": []
 }
