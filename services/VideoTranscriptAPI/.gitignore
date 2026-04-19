@@ -1,0 +1,115 @@
+# Python字节码和缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache
+*.pyc
+*.pyo
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.env
+.venv
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 日志文件
+data/logs/
+*.log
+
+# 数据目录
+data/cache/
+data/temp/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/output
+data/risk_control/
+tests/llm/output
+
+
+# 媒体文件
+*.mp3
+*.mp4
+*.m4a
+*.m4s
+*.wav
+*.flac
+
+# 模型文件
+models/
+
+# 测试输出
+test_output/
+tests/sample_files/test_files/
+test_cache_dir/
+tests/llm/validation_scoring_results.json
+
+# 配置文件（敏感信息）
+config/config.jsonc
+config/users.json
+
+# 第三方工具输出
+third_party/BBDown/output/
+
+# Python分发
+build/
+dist/
+*.egg-info/
+
+# 开发工具
+.coverage
+.pytest_cache
+.mypy_cache
+.tox
+
+# 操作系统文件
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+data/workspace
+
+# 调试和临时文件
+debug_*.json
+debug_*.txt
+debug_*.html
+error_*.json
+temp_*.html
+tmp_*
+
+# 输出文件（根目录）
+output/
+
+# 文档构建
+docs/_build/
+debug
+data/debug
+logs
+tests/output
+*nul
+
+# Claude Code 临时目录
+tmpclaude-*
+
+tests/unit/data
+
+# Docker
+docker/data/
+docker/export/
+docker/deploy_targets.json
+docker/push_to_acr.bat
+docker/push_to_acr.sh
+docker/push_to_ghcr.sh
+docker/pull_and_deploy.sh
+# Tools
+.cx-index.db
+graphify-out/

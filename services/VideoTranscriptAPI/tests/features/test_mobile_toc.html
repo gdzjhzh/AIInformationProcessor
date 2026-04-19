@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>移动端 TOC 测试</title>
+
+    <!-- 基础样式 -->
+    <style>
+        :root {
+            --bg-gradient-start: #667eea;
+            --bg-gradient-end: #764ba2;
+            --text-primary: #333;
+            --text-secondary: #6b7280;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #f3f4f6;
+            --border-primary: #e5e7eb;
+            --header-text: #ffffff;
+        }
+
+        [data-theme="dark"] {
+            --bg-gradient-start: #1e293b;
+            --bg-gradient-end: #0f172a;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --bg-primary: #1e293b;
+            --bg-secondary: #334155;
+            --bg-tertiary: #475569;
+            --border-primary: #475569;
+            --header-text: #f8fafc;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            background: var(--bg-secondary);
+            transition: background 0.3s ease;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0;
+            background: var(--bg-primary);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: var(--header-text);
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header .meta {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: white;
+        }
+
+        .section {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-primary);
+        }
+
+        .section h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.2rem;
+            border-bottom: 2px solid var(--border-primary);
+            padding-bottom: 8px;
+        }
+
+        .content {
+            line-height: 1.7;
+        }
+
+        .content h1 { font-size: 1.5rem; margin: 20px 0 12px; }
+        .content h2 { font-size: 1.3rem; margin: 18px 0 10px; }
+        .content h3 { font-size: 1.1rem; margin: 16px 0 8px; }
+        .content h4 { font-size: 1rem; margin: 14px 0 6px; }
+
+        .content p {
+            margin-bottom: 12px;
+        }
+
+        .test-info {
+            position: fixed;
+            bottom: 150px;
+            left: 10px;
+            right: 10px;
+            background: rgba(255, 193, 7, 0.9);
+            color: #000;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            text-align: center;
+            z-index: 2000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+    </style>
+
+    <!-- 引入浮动 TOC 样式 -->
+    <link rel="stylesheet" href="../../src/web/static/css/floating-toc.css">
+</head>
+<body>
+    <!-- 测试提示 -->
+    <div class="test-info" id="test-info">
+        📱 移动端测试模式<br>
+        请检查：<br>
+        1. 右下角是否有 📑 按钮<br>
+        2. 点击按钮是否弹出目录<br>
+        3. 点击 ✕ 是否能关闭
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <button id="theme-toggle" class="theme-toggle" title="切换主题">🌙</button>
+            <h1>移动端 TOC 功能测试</h1>
+            <div class="meta">
+                测试日期：2025-10-22
+            </div>
+        </div>
+
+        <!-- 内容总结区块 -->
+        <div class="section">
+            <h2>📝 内容总结</h2>
+            <div class="content">
+                <h1>第一部分：移动端测试</h1>
+                <p>这是第一部分的内容，用于测试移动端 TOC 功能。请向下滚动查看更多内容。</p>
+                <p>测试要点：浮动按钮、面板弹出、关闭功能。</p>
+
+                <h2>1.1 基础功能测试</h2>
+                <p>测试浮动按钮是否显示在右下角。</p>
+                <p>按钮应该是圆形，带有渐变背景色。</p>
+
+                <h3>1.1.1 点击测试</h3>
+                <p>点击浮动按钮，应该弹出目录面板。</p>
+                <p>面板应该从底部滑入，占据屏幕下半部分。</p>
+
+                <h3>1.1.2 关闭测试</h3>
+                <p>点击 ✕ 按钮，应该关闭面板。</p>
+                <p>点击遮罩层，也应该关闭面板。</p>
+                <p>点击目录项后，应该自动关闭面板并跳转。</p>
+
+                <h2>1.2 交互测试</h2>
+                <p>测试各种交互场景。</p>
+
+                <h3>1.2.1 滚动测试</h3>
+                <p>滚动页面时，浮动按钮应该保持在固定位置。</p>
+
+                <h3>1.2.2 主题切换测试</h3>
+                <p>切换主题时，TOC 颜色应该自动适配。</p>
+
+                <h1>第二部分：深入测试</h1>
+                <p>这是第二部分，继续测试更多功能。</p>
+
+                <h2>2.1 性能测试</h2>
+                <p>测试打开/关闭面板的流畅度。</p>
+
+                <h3>2.1.1 动画效果</h3>
+                <p>面板滑入动画应该流畅。</p>
+
+                <h3>2.1.2 响应速度</h3>
+                <p>按钮点击应该立即响应。</p>
+
+                <h2>2.2 边界测试</h2>
+                <p>测试各种边界情况。</p>
+
+                <h3>2.2.1 快速点击</h3>
+                <p>快速多次点击按钮，不应该出现异常。</p>
+
+                <h3>2.2.2 内容滚动</h3>
+                <p>在面板内滚动目录，应该流畅。</p>
+
+                <h1>第三部分：总结</h1>
+                <p>总结测试结果。</p>
+
+                <h2>3.1 测试清单</h2>
+                <p>检查所有测试项是否通过。</p>
+
+                <h2>3.2 问题记录</h2>
+                <p>记录发现的任何问题。</p>
+            </div>
+        </div>
+
+        <!-- 校对文本区块 -->
+        <div class="section">
+            <h2>✨ 校对文本</h2>
+            <div class="content">
+                <p>这是校对文本区块。</p>
+                <p>在目录中应该显示为"✨ 校对文本"链接。</p>
+                <p>点击后应该跳转到这里。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主题切换脚本 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const THEME_KEY = 'vta_theme_preference';
+
+            function getStoredTheme() {
+                try {
+                    return localStorage.getItem(THEME_KEY) ? JSON.parse(localStorage.getItem(THEME_KEY)) : null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function setStoredTheme(theme) {
+                try {
+                    localStorage.setItem(THEME_KEY, JSON.stringify(theme));
+                } catch (e) {
+                    console.error('Failed to save theme preference');
+                }
+            }
+
+            function detectSystemTheme() {
+                return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+            }
+
+            function applyTheme(theme) {
+                const body = document.body;
+                const themeToggle = document.getElementById('theme-toggle');
+
+                if (theme === 'dark') {
+                    body.setAttribute('data-theme', 'dark');
+                    if (themeToggle) themeToggle.textContent = '☀️';
+                } else {
+                    body.removeAttribute('data-theme');
+                    if (themeToggle) themeToggle.textContent = '🌙';
+                }
+            }
+
+            function toggleTheme() {
+                const currentTheme = document.body.hasAttribute('data-theme') ? 'dark' : 'light';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                setStoredTheme(newTheme);
+                applyTheme(newTheme);
+            }
+
+            const savedTheme = getStoredTheme();
+            const theme = savedTheme || detectSystemTheme();
+            applyTheme(theme);
+
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle) {
+                themeToggle.addEventListener('click', toggleTheme);
+            }
+
+            // 5秒后自动隐藏测试提示
+            setTimeout(() => {
+                const testInfo = document.getElementById('test-info');
+                if (testInfo) {
+                    testInfo.style.transition = 'opacity 0.5s ease';
+                    testInfo.style.opacity = '0';
+                    setTimeout(() => testInfo.remove(), 500);
+                }
+            }, 5000);
+        });
+    </script>
+
+    <!-- 引入浮动 TOC 脚本 -->
+    <script src="../../src/web/static/js/floating-toc.js"></script>
+</body>
+</html>

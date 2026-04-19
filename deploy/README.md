@@ -36,11 +36,11 @@
 - `AI Info Processor` 的基础编排容器 `n8n`
 - `Qdrant`
 - `Memos`
+- `Video Transcript API`（已内嵌到 `services/VideoTranscriptAPI`，按需用 profile 启动）
 - `Obsidian Vault` 本地目录挂载到 `n8n:/vault`
 
 ## 仍待补齐的模块
 
-- `Video Transcript API`
 - `rss2im`
 - `手动提交`
 - `memo auto`
@@ -62,6 +62,13 @@ docker compose up -d memos n8n qdrant redis rsshub
 - n8n: [http://localhost:5678](http://localhost:5678)
 - Qdrant: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 - RSSHub: [http://localhost:1200](http://localhost:1200)
+
+### RSSHub 两种启动模式
+
+- 默认模式：`docker compose up -d rsshub`，使用 `.env` 里的 `RSSHUB_IMAGE`，默认值是 `diygod/rsshub:latest`
+- 本地源码模式：`docker compose -f compose.yaml -f compose.rsshub-local.yaml up -d --build rsshub`
+- 本地源码目录：`../services/RSSHub`
+- 需要让仓库里的自定义路由或补丁真正生效时，再切到本地源码模式
 
 `n8n` 容器内会额外挂载一个 `/vault` 目录，对应本地 `vault/`，后续工作流直接往这里写 Markdown。
 
@@ -109,6 +116,16 @@ docker compose --profile feishu up -d im2memo
 如果拉取 `im2memo` 时看到 `denied`，说明当前公开 GHCR 镜像不可直接拉取。这时保留现有环境变量不动，后续改成你自己构建出来的本地镜像标签，再覆盖 `.env` 里的 `IM2MEMO_IMAGE` 即可。
 
 ## Video Transcript API 以可选 profile 接入
+
+更新：当前生效的接入方式如下。
+
+- 源码已经内嵌到 `services/VideoTranscriptAPI`
+- 配置目录使用 `services/VideoTranscriptAPI/config`
+- 运行数据使用 `deploy/data/video-transcript-api`
+- `docker compose --profile transcript up -d video-transcript-api` 会直接 build 仓内源码
+- `n8n` 容器内访问地址默认写成 `http://video-transcript-api:8000`
+- 本地浏览器访问地址仍然是 `http://localhost:8000`
+- `VideoTranscriptAPI` 仍然通过 HTTP 作为独立适配层接入主干，不把它的业务逻辑重写进 `n8n` code node
 
 这个服务仍然应作为独立仓维护，只通过 HTTP 接进当前主干，不要把它的业务逻辑重写进 n8n code node。
 

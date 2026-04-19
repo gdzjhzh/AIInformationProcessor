@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>浮动 TOC 功能测试</title>
+
+    <!-- 引入 base.html 的样式 -->
+    <style>
+        /* CSS变量定义 - 主题系统 */
+        :root {
+            /* 浅色主题 */
+            --bg-gradient-start: #667eea;
+            --bg-gradient-end: #764ba2;
+            --text-primary: #333;
+            --text-secondary: #6b7280;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #f3f4f6;
+            --border-primary: #e5e7eb;
+            --header-text: #ffffff;
+        }
+
+        /* 深色主题 */
+        [data-theme="dark"] {
+            --bg-gradient-start: #1e293b;
+            --bg-gradient-end: #0f172a;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --bg-primary: #1e293b;
+            --bg-secondary: #334155;
+            --bg-tertiary: #475569;
+            --border-primary: #475569;
+            --header-text: #f8fafc;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--bg-secondary);
+            transition: color 0.3s ease, background 0.3s ease;
+        }
+
+        .container {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: background 0.3s ease;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: var(--header-text);
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .section {
+            padding: 30px;
+            border-bottom: 1px solid var(--border-primary);
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section h2 {
+            margin: 0 0 20px 0;
+            color: var(--text-primary);
+            font-size: 1.3rem;
+            border-bottom: 2px solid var(--border-primary);
+            padding-bottom: 10px;
+        }
+
+        .content {
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+
+        /* Markdown样式 */
+        .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .content h1 { font-size: 1.6rem; }
+        .content h2 { font-size: 1.4rem; }
+        .content h3 { font-size: 1.2rem; }
+        .content h4 { font-size: 1.1rem; }
+
+        .content p {
+            margin-bottom: 16px;
+        }
+
+        /* 主题切换按钮样式 */
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            color: var(--header-text);
+            font-size: 1.2rem;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        [data-theme="dark"] .theme-toggle {
+            background: rgba(0, 0, 0, 0.2);
+            border-color: rgba(0, 0, 0, 0.3);
+        }
+    </style>
+
+    <!-- 引入浮动 TOC 样式 -->
+    <link rel="stylesheet" href="../../src/web/static/css/floating-toc.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button id="theme-toggle" class="theme-toggle" title="切换主题">🌙</button>
+            <h1>浮动 TOC 功能测试</h1>
+            <div class="meta">
+                👤 测试作者<br>
+                ⏰ 2025-10-22
+            </div>
+        </div>
+
+        <!-- 内容总结区块 -->
+        <div class="section">
+            <h2>📝 内容总结</h2>
+            <div class="content">
+                <h1>第一部分：核心概念</h1>
+                <p>这是第一部分的内容，介绍了核心概念。这段内容用于测试浮动 TOC 的滚动高亮功能。</p>
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+
+                <h2>1.1 基础知识</h2>
+                <p>基础知识的详细介绍。这是一个二级标题，在 TOC 中会有缩进。</p>
+                <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+
+                <h3>1.1.1 概念定义</h3>
+                <p>概念的定义部分。这是三级标题，缩进会更明显。</p>
+
+                <h3>1.1.2 实践应用</h3>
+                <p>实践应用的案例分析。</p>
+
+                <h4>1.1.2.1 案例一</h4>
+                <p>第一个案例的详细说明。这是四级标题，最深层的缩进。</p>
+
+                <h4>1.1.2.2 案例二</h4>
+                <p>第二个案例的详细说明。</p>
+
+                <h2>1.2 进阶内容</h2>
+                <p>进阶内容的讲解。</p>
+                <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+
+                <h1>第二部分：深入探讨</h1>
+                <p>这是第二部分，深入探讨相关主题。</p>
+                <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+
+                <h2>2.1 技术细节</h2>
+                <p>技术细节的说明。</p>
+
+                <h3>2.1.1 实现原理</h3>
+                <p>实现原理的解析。</p>
+
+                <h3>2.1.2 性能优化</h3>
+                <p>性能优化的策略。</p>
+
+                <h2>2.2 最佳实践</h2>
+                <p>最佳实践的分享。</p>
+
+                <h3>2.2.1 代码规范</h3>
+                <p>代码规范的建议。</p>
+
+                <h3>2.2.2 测试方法</h3>
+                <p>测试方法的介绍。</p>
+
+                <h1>第三部分：总结与展望</h1>
+                <p>总结全文内容，并展望未来发展方向。</p>
+
+                <h2>3.1 核心要点回顾</h2>
+                <p>回顾前面讲解的核心要点。</p>
+
+                <h2>3.2 未来趋势</h2>
+                <p>分析未来的发展趋势。</p>
+
+                <h3>3.2.1 技术演进</h3>
+                <p>技术演进的方向。</p>
+
+                <h3>3.2.2 应用场景扩展</h3>
+                <p>应用场景的扩展可能性。</p>
+            </div>
+        </div>
+
+        <!-- 校对文本区块 -->
+        <div class="section">
+            <h2>✨ 校对文本</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">
+                🎤 本校对文本包含说话人识别信息
+            </p>
+            <div class="content">
+                <p>这是经过校对的文本内容。TOC 中会显示一个快速跳转链接。</p>
+                <p>校对后的内容更加准确和流畅，便于阅读和理解。</p>
+                <p>这部分内容会在 TOC 中显示为"✨ 校对文本"链接。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主题切换脚本 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const THEME_KEY = 'vta_theme_preference';
+
+            function getStoredTheme() {
+                try {
+                    const value = localStorage.getItem(THEME_KEY);
+                    return value ? JSON.parse(value) : null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function setStoredTheme(theme) {
+                try {
+                    localStorage.setItem(THEME_KEY, JSON.stringify(theme));
+                } catch (e) {
+                    console.error('Failed to save theme preference');
+                }
+            }
+
+            function detectSystemTheme() {
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    return 'dark';
+                }
+                return 'light';
+            }
+
+            function applyTheme(theme) {
+                const body = document.body;
+                const themeToggle = document.getElementById('theme-toggle');
+
+                if (theme === 'dark') {
+                    body.setAttribute('data-theme', 'dark');
+                    if (themeToggle) {
+                        themeToggle.textContent = '☀️';
+                        themeToggle.title = '切换到浅色模式';
+                    }
+                } else {
+                    body.removeAttribute('data-theme');
+                    if (themeToggle) {
+                        themeToggle.textContent = '🌙';
+                        themeToggle.title = '切换到深色模式';
+                    }
+                }
+            }
+
+            function toggleTheme() {
+                const currentTheme = document.body.hasAttribute('data-theme') ? 'dark' : 'light';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                setStoredTheme(newTheme);
+                applyTheme(newTheme);
+            }
+
+            // 初始化主题
+            const savedTheme = getStoredTheme();
+            const theme = savedTheme || detectSystemTheme();
+            applyTheme(theme);
+
+            // 绑定切换按钮
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle) {
+                themeToggle.addEventListener('click', toggleTheme);
+            }
+        });
+    </script>
+
+    <!-- 引入浮动 TOC 脚本 -->
+    <script src="../../src/web/static/js/floating-toc.js"></script>
+</body>
+</html>

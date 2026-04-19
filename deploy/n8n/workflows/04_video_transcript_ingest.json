@@ -1,8 +1,8 @@
 {
   "id": "acb525fca8ea4dc4",
   "name": "04 Video Transcript Ingest",
-  "description": "Template workflow: treat VideoTranscriptAPI as an external transcript adapter, then normalize into the shared mainline object.",
-  "active": false,
+  "description": "Runnable ingress workflow: submit a URL to VideoTranscriptAPI, poll task completion over HTTP nodes, reuse task.data.transcript, then pass the result through 00 -> 02 -> 03.",
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -13,14 +13,27 @@
       "typeVersion": 1,
       "position": [
         260,
-        240
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "d1fd76f2-0a91-4289-a89a-d77839c8a3f1",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        380
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "return [\n  {\n    json: {\n      transcript_source_url: 'https://www.youtube.com/watch?v=example',\n      source_name: 'Manual video ingest',\n      source_type: 'transcript',\n      media_type: 'video'\n    }\n  }\n];"
+        "jsCode": "return [\n  {\n    json: {\n      transcript_source_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',\n      source_name: 'Video Transcript API smoke',\n      source_type: 'transcript',\n      media_type: 'video',\n      use_speaker_recognition: false,\n      published_at: new Date().toISOString(),\n      obsidian_inbox_dir: '00_Inbox/AI_Information_Processor'\n    }\n  }\n];"
       },
       "id": "53c35a87-d018-4470-b16a-3c219a38cc52",
       "name": "Example Transcript Request",
@@ -28,14 +41,14 @@
       "typeVersion": 2,
       "position": [
         520,
-        240
+        180
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "return {\n  json: {\n    ...$json,\n    transcript_api_request: {\n      base_url: $env.VIDEO_TRANSCRIPT_BASE_URL || 'set-in-env',\n      endpoint: '/api/transcribe',\n      method: 'POST',\n      body: {\n        url: $json.transcript_source_url\n      }\n    }\n  }\n};"
+        "jsCode": "const sourceUrl = String($json.transcript_source_url || $json.url || '').trim();\nif (!sourceUrl) {\n  throw new Error('transcript_source_url is required for 04_video_transcript_ingest');\n}\n\nconst baseUrl = String($env.VIDEO_TRANSCRIPT_BASE_URL || '').trim().replace(/\\/+$/, '');\nconst apiKey = String($env.VIDEO_TRANSCRIPT_API_KEY || '').trim();\nif (!baseUrl) {\n  throw new Error('VIDEO_TRANSCRIPT_BASE_URL is required for 04_video_transcript_ingest');\n}\nif (!apiKey) {\n  throw new Error('VIDEO_TRANSCRIPT_API_KEY is required for 04_video_transcript_ingest');\n}\n\nconst metadataOverride = {};\nfor (const [sourceKey, targetKey] of [\n  ['title', 'title'],\n  ['author', 'author'],\n  ['description', 'description']\n]) {\n  const value = String($json[sourceKey] || '').trim();\n  if (value) {\n    metadataOverride[targetKey] = value;\n  }\n}\n\nconst requestBody = {\n  url: sourceUrl,\n  use_speaker_recognition: Boolean($json.use_speaker_recognition),\n};\n\nconst downloadUrl = String($json.download_url || '').trim();\nif (downloadUrl) {\n  requestBody.download_url = downloadUrl;\n}\n\nconst wechatWebhook = String($json.wechat_webhook || '').trim();\nif (wechatWebhook) {\n  requestBody.wechat_webhook = wechatWebhook;\n}\n\nif (Object.keys(metadataOverride).length) {\n  requestBody.metadata_override = metadataOverride;\n}\n\nreturn {\n  json: {\n    ...$json,\n    transcript_source_url: sourceUrl,\n    transcript_api: {\n      base_url: baseUrl,\n      api_key: apiKey,\n      submit_url: `${baseUrl}/api/transcribe`,\n      request_body: requestBody,\n      poll_interval_ms: Math.max(1000, Number($json.poll_interval_ms || 3000)),\n      max_polls: Math.max(1, Number($json.max_polls || 40))\n    }\n  }\n};"
       },
       "id": "8d427074-e6b9-450a-8798-d0b6cc608fcf",
       "name": "Build Transcript API Request",
@@ -43,75 +56,446 @@
       "typeVersion": 2,
       "position": [
         780,
-        240
+        280
       ]
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "return {\n  json: {\n    ...$json,\n    upstream_task_id: 'task_123456',\n    upstream_view_token: 'view_token_123456',\n    upstream_summary: 'Optional upstream summary for reference only.',\n    canonical_url: $json.transcript_source_url,\n    original_id: 'youtube:example',\n    title: 'Example transcript item',\n    author: 'Example creator',\n    published_at: '2026-04-17T09:00:00-04:00',\n    transcript_text: 'Calibrated transcript text fetched from /view/{token}?raw=calibrated.'\n  }\n};"
+        "method": "POST",
+        "url": "={{$json.transcript_api.submit_url}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $json.transcript_api.api_key}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.transcript_api.request_body) }}",
+        "options": {}
       },
-      "id": "c3d852b9-8917-4a86-b2e5-f9fdb2b50411",
-      "name": "Apply Example Transcript Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "0ff8c82d-dcc2-4b3b-a4e7-4ed53baef645",
+      "name": "Submit Transcript Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1040,
-        240
+        280
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const crypto = require('crypto');\n\nconst stableHash = (value) => crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');\nconst publishedAt = new Date($json.published_at || Date.now()).toISOString();\nconst ingestedAt = new Date().toISOString();\nconst canonicalUrl = String($json.canonical_url || '').trim();\nconst sourceType = String($json.source_type || 'transcript').trim() || 'transcript';\nconst originalId = String($json.original_id || '').trim();\nconst title = String($json.title || 'untitled').trim() || 'untitled';\nconst author = String($json.author || '').trim();\nconst contentText = String($json.transcript_text || '').trim();\nconst itemKey = canonicalUrl || (sourceType && originalId ? `${sourceType}:${originalId}` : '') || [title, publishedAt, author].filter(Boolean).join('::');\nconst itemId = stableHash(itemKey);\n\nreturn {\n  json: {\n    item_id: itemId,\n    source_type: sourceType,\n    source_name: String($json.source_name || 'video-transcript-api').trim() || 'video-transcript-api',\n    original_id: originalId,\n    canonical_url: canonicalUrl,\n    title,\n    author,\n    published_at: publishedAt,\n    ingested_at: ingestedAt,\n    media_type: String($json.media_type || 'video').trim() || 'video',\n    content_text: contentText,\n    content_html: '',\n    upstream_task_id: String($json.upstream_task_id || '').trim(),\n    upstream_view_token: String($json.upstream_view_token || '').trim(),\n    upstream_summary: String($json.upstream_summary || '').trim(),\n    content_hash: `sha256:${stableHash(contentText)}`,\n    score: 0,\n    category: 'pending',\n    tags: ['inbox', 'ai-information-processor', 'transcript'],\n    dedupe_action: 'full_push',\n    status: 'raw',\n    vault_path: ''\n  }\n};"
+        "jsCode": "const requestItem = $('Build Transcript API Request').item.json || {};\nconst submitResponse = $json || {};\nconst transcriptApi = requestItem.transcript_api || {};\nconst baseUrl = String(transcriptApi.base_url || '').replace(/\\/+$/, '');\nconst apiKey = String(transcriptApi.api_key || '').trim();\nconst taskId = String(submitResponse?.data?.task_id || '').trim();\nconst viewToken = String(submitResponse?.data?.view_token || '').trim();\n\nif (!baseUrl || !apiKey) {\n  throw new Error('Transcript API connection info is missing after submission');\n}\nif (!taskId || !viewToken) {\n  throw new Error(`Transcript API submit response missing task_id/view_token: ${JSON.stringify(submitResponse)}`);\n}\n\nreturn {\n  json: {\n    ...requestItem,\n    submit_response: submitResponse,\n    upstream_task_id: taskId,\n    upstream_view_token: viewToken,\n    poll_attempt: 0,\n    poll_state: 'pending',\n    task_status_url: `${baseUrl}/api/task/${encodeURIComponent(taskId)}`,\n    transcript_exports: {\n      calibrated: `${baseUrl}/view/${viewToken}?raw=calibrated`,\n      transcript: `${baseUrl}/view/${viewToken}?raw=transcript`,\n      summary: `${baseUrl}/view/${viewToken}?raw=summary`\n    }\n  }\n};"
       },
-      "id": "958f67d5-d895-4b21-8dd7-d8f329b40ef4",
-      "name": "Normalize Transcript Object",
+      "id": "98a3ca8f-4245-41f0-8b02-7ec6b988db53",
+      "name": "Build Transcript Poll Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1300,
-        240
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "if (!String($json.task_status_url || '').trim()) {\n  throw new Error('task_status_url is required before polling Transcript API task status');\n}\n\nreturn {\n  json: {\n    ...$json\n  }\n};"
+      },
+      "id": "544565b4-0ac3-4b25-a17a-99b174f51098",
+      "name": "Prepare Transcript Task Status Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$json.task_status_url}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $json.transcript_api.api_key}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9f980fee-f771-49b6-ad44-8c56a33194e8",
+      "name": "Fetch Transcript Task Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const context = $('Prepare Transcript Task Status Request').item.json || {};\nconst taskStatus = $json || {};\nconst maxPolls = Math.max(1, Number(context.transcript_api?.max_polls || 40));\nconst nextAttempt = Number(context.poll_attempt || 0) + 1;\nconst responseCode = Number(taskStatus.code || 0);\n\nif (!Number.isFinite(responseCode)) {\n  throw new Error(`Transcript API task status returned a non-numeric code: ${JSON.stringify(taskStatus)}`);\n}\n\nif (responseCode === 202) {\n  if (nextAttempt >= maxPolls) {\n    throw new Error(`Transcript API task ${context.upstream_task_id || 'unknown'} did not finish within ${maxPolls} polls`);\n  }\n\n  return {\n    json: {\n      ...context,\n      poll_attempt: nextAttempt,\n      poll_state: 'pending',\n      transcript_status: String(taskStatus.message || '').trim()\n    }\n  };\n}\n\nif (responseCode >= 500) {\n  throw new Error(`Transcript API task ${context.upstream_task_id || 'unknown'} failed: ${taskStatus.message || 'unknown error'}`);\n}\n\nconst taskData = taskStatus.data && typeof taskStatus.data === 'object' ? taskStatus.data : {};\nconst transcriptText = String(taskData.transcript || '').trim();\nif (!transcriptText) {\n  throw new Error(`Transcript API task ${context.upstream_task_id || 'unknown'} completed without transcript text`);\n}\n\nreturn {\n  json: {\n    ...context,\n    poll_attempt: nextAttempt,\n    poll_state: 'completed',\n    upstream_summary: String(context.upstream_summary || '').trim(),\n    canonical_url: String(context.canonical_url || context.transcript_source_url || '').trim(),\n    original_id: String(context.original_id || `video-transcript:${context.upstream_view_token || 'unknown'}`).trim(),\n    title: String(taskData.video_title || context.title || 'untitled transcript item').trim() || 'untitled transcript item',\n    author: String(taskData.author || context.author || '').trim(),\n    published_at: context.published_at || new Date().toISOString(),\n    transcript_text: transcriptText,\n    transcript_status: String(taskStatus.message || '').trim(),\n    original_item: {\n      request: context.transcript_api?.request_body || {},\n      submit_response: context.submit_response || {},\n      task_status: taskStatus\n    }\n  }\n};"
+      },
+      "id": "5c39fd5d-20db-4214-92a0-9a9ebd55d4d2",
+      "name": "Resolve Transcript Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.poll_state}}",
+              "operation": "equal",
+              "value2": "pending"
+            }
+          ]
+        }
+      },
+      "id": "186281cc-6bde-43e0-a5d7-8dbab298f6b2",
+      "name": "Needs Another Poll",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const delayMs = Math.max(1000, Number($json.transcript_api?.poll_interval_ms || 3000));\nawait new Promise((resolve) => setTimeout(resolve, delayMs));\nreturn {\n  json: {\n    ...$json\n  }\n};"
+      },
+      "id": "c29ab9b8-89d1-428f-9d02-d5f911fd82a0",
+      "name": "Sleep Before Next Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const transcriptText = String($json.transcript_text || $json.calibrated_transcript || '').trim();\nif (!transcriptText) {\n  throw new Error('Resolved transcript payload is missing transcript_text');\n}\n\nconst obsidianInboxDir = String($json.obsidian_inbox_dir || $env.OBSIDIAN_INBOX_DIR || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\n\nreturn {\n  json: {\n    source_type: String($json.source_type || 'transcript').trim() || 'transcript',\n    source_name: String($json.source_name || 'video-transcript-api').trim() || 'video-transcript-api',\n    canonical_url: String($json.canonical_url || $json.transcript_source_url || '').trim(),\n    original_id: String($json.original_id || '').trim(),\n    title: String($json.title || 'untitled').trim() || 'untitled',\n    author: String($json.author || '').trim(),\n    published_at: $json.published_at || new Date().toISOString(),\n    media_type: String($json.media_type || 'video').trim() || 'video',\n    raw_html: '',\n    raw_text: transcriptText,\n    obsidian_inbox_dir: obsidianInboxDir,\n    extra_tags: ['transcript'],\n    upstream_task_id: String($json.upstream_task_id || '').trim(),\n    upstream_view_token: String($json.upstream_view_token || '').trim(),\n    upstream_summary: String($json.upstream_summary || '').trim(),\n    original_item: $json.original_item ?? $json\n  }\n};"
+      },
+      "id": "fd48bc59-b434-4c1d-9f47-5456f1cb983f",
+      "name": "Transcript Adapter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "d4f093a8e2f74e39",
+          "mode": "list",
+          "cachedResultName": "00 Common Normalize Text Object"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "64d6739e-3d26-4dde-b9c9-5917a4ba5078",
+      "name": "00 Common Normalize Text Object",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2860,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "828e50ae98c24f31",
+          "mode": "list",
+          "cachedResultName": "02 Enrich With LLM"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "9bd0f58b-3c2d-4672-af66-84d3c9d8fd29",
+      "name": "02 Enrich With LLM",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3120,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const originalItem = $json.original_item && typeof $json.original_item === 'object' ? $json.original_item : {};\nconst taskStatus = originalItem.task_status && typeof originalItem.task_status === 'object' ? originalItem.task_status : {};\nconst taskStatusData = taskStatus.data && typeof taskStatus.data === 'object' ? taskStatus.data : {};\n\nreturn {\n  json: {\n    item_id: String($json.item_id || '').trim(),\n    source_type: String($json.source_type || '').trim(),\n    source_name: String($json.source_name || '').trim(),\n    source_host: String($json.source_host || '').trim(),\n    original_id: String($json.original_id || '').trim(),\n    canonical_url: String($json.canonical_url || '').trim(),\n    title: String($json.title || '').trim(),\n    author: String($json.author || '').trim(),\n    published_at: $json.published_at || null,\n    ingested_at: $json.ingested_at || null,\n    media_type: String($json.media_type || '').trim(),\n    content_text: String($json.content_text || '').trim(),\n    content_html: String($json.content_html || '').trim(),\n    upstream_task_id: String($json.upstream_task_id || '').trim(),\n    upstream_view_token: String($json.upstream_view_token || '').trim(),\n    upstream_summary: String($json.upstream_summary || '').trim(),\n    content_hash: String($json.content_hash || '').trim(),\n    score: $json.score ?? null,\n    category: String($json.category || '').trim(),\n    tags: Array.isArray($json.tags) ? $json.tags : [],\n    dedupe_action: String($json.dedupe_action || '').trim(),\n    status: String($json.status || '').trim(),\n    vault_path: String($json.vault_path || '').trim(),\n    obsidianInboxDir: String($json.obsidianInboxDir || '').trim(),\n    summary: String($json.summary || '').trim(),\n    reason: String($json.reason || '').trim(),\n    enriched_at: $json.enriched_at || null,\n    original_item: {\n      request: originalItem.request ?? {},\n      submit_response: originalItem.submit_response ?? {},\n      task_status: {\n        code: taskStatus.code ?? null,\n        message: String(taskStatus.message || '').trim(),\n        data: {\n          task_id: String(taskStatusData.task_id || '').trim(),\n          view_token: String(taskStatusData.view_token || '').trim(),\n          video_title: String(taskStatusData.video_title || '').trim(),\n          author: String(taskStatusData.author || '').trim()\n        }\n      }\n    }\n  }\n};"
+      },
+      "id": "e83fe13f-8eaf-4b3a-844e-8d19a35f7e81",
+      "name": "Prepare Gate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3320,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "a793499a65e344bc",
+          "mode": "list",
+          "cachedResultName": "03 Qdrant Gate"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "df6066ab-e77b-4f27-8b0d-1280a1b30f5f",
+      "name": "03 Qdrant Gate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3380,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return { json: { ...$json } };"
+      },
+      "id": "45984f85-a527-476f-a718-73241e9521e7",
+      "name": "Return Mainline Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3640,
+        280
       ]
     }
   ],
   "connections": {
     "When clicking 'Execute workflow'": {
       "main": [
-        {
-          "node": "Example Transcript Request",
-          "type": "main",
-          "index": 0
-        }
+        [
+          {
+            "node": "Example Transcript Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Example Transcript Request": {
       "main": [
-        {
-          "node": "Build Transcript API Request",
-          "type": "main",
-          "index": 0
-        }
+        [
+          {
+            "node": "Build Transcript API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build Transcript API Request": {
       "main": [
-        {
-          "node": "Apply Example Transcript Result",
-          "type": "main",
-          "index": 0
-        }
+        [
+          {
+            "node": "Submit Transcript Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Apply Example Transcript Result": {
+    "Submit Transcript Task": {
       "main": [
-        {
-          "node": "Normalize Transcript Object",
-          "type": "main",
-          "index": 0
-        }
+        [
+          {
+            "node": "Build Transcript Poll Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Poll Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Transcript Task Status Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Transcript Task Status Request": {
+      "main": [
+        [
+          {
+            "node": "Fetch Transcript Task Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Transcript Task Status": {
+      "main": [
+        [
+          {
+            "node": "Resolve Transcript Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Transcript Result": {
+      "main": [
+        [
+          {
+            "node": "Needs Another Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Another Poll": {
+      "main": [
+        [
+          {
+            "node": "Sleep Before Next Poll",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transcript Adapter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sleep Before Next Poll": {
+      "main": [
+        [
+          {
+            "node": "Prepare Transcript Task Status Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcript Adapter": {
+      "main": [
+        [
+          {
+            "node": "00 Common Normalize Text Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "00 Common Normalize Text Object": {
+      "main": [
+        [
+          {
+            "node": "02 Enrich With LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 Enrich With LLM": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gate Input": {
+      "main": [
+        [
+          {
+            "node": "03 Qdrant Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 Qdrant Gate": {
+      "main": [
+        [
+          {
+            "node": "Return Mainline Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -123,6 +507,6 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "ada5ba14-64df-436b-9ff7-44fb3855b129",
+  "versionId": "7e2cad04-661f-47dc-b6df-4b4e42e32f94",
   "tags": []
 }

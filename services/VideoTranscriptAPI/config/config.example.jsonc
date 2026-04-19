@@ -1,0 +1,271 @@
+{
+    // ============================================================
+    // API 服务配置
+    // ============================================================
+    "api": {
+        "port": 8000,                    // 服务监听端口
+        "host": "0.0.0.0",               // 服务监听地址，0.0.0.0 表示所有网卡
+        "auth_token": "your-auth-token-here"  // API 访问令牌
+    },
+
+    // ============================================================
+    // TikHub API 配置（用于抖音/小红书视频下载）
+    // ============================================================
+    "tikhub": {
+        "api_key": "your-tikhub-api-key-here",  // TikHub API 密钥
+        "max_retries": 2,                // 最大重试次数
+        "retry_delay": 5,                // 重试间隔（秒）
+        "timeout": 30                    // 请求超时时间（秒）
+    },
+
+    // ============================================================
+    // CapsWriter-Offline 转录服务配置
+    // 通用语音转录引擎，速度快、资源消耗低
+    // ============================================================
+    "capswriter": {
+        "server_url": "ws://localhost:6016",  // WebSocket 服务地址
+        "max_retries": 5,                // 连接最大重试次数
+        "retry_delay": 3,                // 重试间隔（秒）
+        "connection_timeout": 10         // 连接超时时间（秒）
+    },
+
+    // ============================================================
+    // 并发处理配置
+    // ============================================================
+    "concurrent": {
+        "max_workers": 3,                // 转录任务最大并发数
+        "queue_size": 10,                // 任务队列大小
+        "llm_max_workers": 10            // LLM 处理最大并发数
+    },
+
+    // ============================================================
+    // 存储配置
+    // ============================================================
+    "storage": {
+        "temp_dir": "./data/temp",            // 临时文件目录（自动清理）
+        "workspace_dir": "./data/workspace",   // 转录工作目录
+        "cache_dir": "./data/cache",          // 缓存目录（持久化存储）
+        "cache_retention_days": 360            // 缓存保留天数
+    },
+
+    // ============================================================
+    // Web 界面配置
+    // ============================================================
+    "web": {
+        "base_url": "http://localhost:8000",  // Web 服务基础 URL
+        "enable_view_links": true,       // 是否在响应中返回查看链接
+        "timezone": "UTC+8"              // 时区设置
+    },
+
+    // ============================================================
+    // 企业微信通知配置
+    // ============================================================
+    "wechat": {
+        "webhook": "your-webhook-url-here"  // 企业微信机器人 Webhook 地址
+    },
+
+    // ============================================================
+    // BBDown 下载器配置（用于 B 站视频下载）
+    // ============================================================
+    "bbdown": {
+        "use_bbdown": true,              // 是否使用 BBDown
+        "executable": "BBDown/BBDown.exe",       // Windows 可执行文件路径
+        "executable_linux": "BBDown/BBDown",     // Linux 可执行文件路径
+        "executable_mac": "BBDown/BBDown_Mac",   // macOS 可执行文件路径
+        "audio_only": true,              // 是否只下载音频
+        "timeout": 300                   // 下载超时时间（秒）
+    },
+
+    // ============================================================
+    // 日志配置
+    // ============================================================
+    "log": {
+        "level": "INFO",                 // 日志级别: DEBUG, INFO, WARNING, ERROR
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "file": "./data/logs/app.log",   // 日志文件路径
+        "debug_dir": "./data/logs/debug",      // 调试日志目录
+        "llm_debug_dir": "./data/logs/llm_debug",  // LLM 调试日志目录
+        "max_size": 10485760,            // 单个日志文件大小限制（字节，默认 10MB）
+        "backup_count": 5                // 日志文件备份数量
+    },
+
+    // ============================================================
+    // LLM 大语言模型配置
+    // 用于转录文本的校对和总结
+    // ============================================================
+    //
+    // 【处理流程说明】
+    // 1. 校对(calibrate): 修正转录文本中的错别字、标点、语法等
+    // 2. 总结(summary): 对校对后的文本生成摘要
+    //
+    // 【reasoning_effort 参数说明】
+    // OpenAI API 支持三个级别: "low"(1K tokens), "medium"(8K), "high"(24K)
+    // - null   = 模型不支持该参数，请求时不携带此字段
+    // - "none" = 模型支持该参数，但关闭思考功能
+    // - "low"/"medium"/"high" = 启用对应级别的思考能力
+    //
+    // ============================================================
+    "llm": {
+        "api_key": "your-llm-api-key-here",     // LLM API 密钥
+        "base_url": "your-base-url-here",       // LLM API 基础 URL（兼容 OpenAI 格式）
+
+        // ------------------------------------------------------
+        // 校对模型配置
+        // ------------------------------------------------------
+        "calibrate_model": "gpt-4.1-mini",      // 校对使用的模型
+        "calibrate_reasoning_effort": null,     // null=不支持思考, "none"=关闭思考, "low"/"medium"/"high"=思考级别
+
+        // ------------------------------------------------------
+        // 总结模型配置
+        // ------------------------------------------------------
+        "summary_model": "deepseek-chat",       // 总结使用的模型
+        "summary_reasoning_effort": "high",     // 总结推理强度
+
+        // ------------------------------------------------------
+        // 风险内容模型配置
+        // 当检测到敏感内容时，自动切换到此模型
+        // 校对和总结共享风险检测结果：一次检测，两处生效
+        // ------------------------------------------------------
+        "risk_calibrate_model": "gpt-4o-mini",  // 风险内容校对使用的模型（可选，为空则不切换）
+        "risk_calibrate_reasoning_effort": null,
+        "risk_summary_model": "gpt-4o-mini",    // 风险内容总结使用的模型
+        "risk_summary_reasoning_effort": "medium",
+        "enable_risk_model_selection": false,   // 是否启用风险模型自动选择
+
+        // ------------------------------------------------------
+        // 通用配置
+        // ------------------------------------------------------
+        "max_retries": 2,                // LLM 调用失败时的最大重试次数
+        "retry_delay": 5,                // 重试间隔（秒）
+        "min_summary_threshold": 500,    // 文本长度低于此值时跳过总结
+        "min_calibrate_ratio": 0.8,      // 校对后文本长度/原文长度的最小比例，低于则视为异常
+
+        // ------------------------------------------------------
+        // 统一质量验证配置（新增）
+        // ------------------------------------------------------
+        "quality_validation": {
+            "score_weights": {
+                "accuracy": 0.40,
+                "completeness": 0.30,
+                "fluency": 0.20,
+                "format": 0.10
+            },
+            "quality_threshold": {
+                "overall_score": 8.0,
+                "minimum_single_score": 7.0
+            }
+        },
+
+        // ------------------------------------------------------
+        // 分段处理配置
+        // 【触发条件】文本长度 >= enable_threshold 且 use_speaker_recognition=false
+        // 【适用场景】
+        //   - CapsWriter 转录的长文本（use_speaker_recognition=false）
+        //   - YouTube 直接获取的长字幕
+        // 【作用】将超长文本分段后并发校对，提高效率
+        // ------------------------------------------------------
+        "segmentation": {
+            "enable_threshold": 20000,   // 触发分段的文本长度阈值（字符数）
+            "segment_size": 8000,        // 每段的目标大小
+            "max_segment_size": 12000,   // 每段的最大大小（避免截断句子时超出）
+            "concurrent_workers": 10,    // 并发处理的段落数
+            "quality_validation": {
+                "enabled": true,         // 默认开启
+                "pass_ratio": 0.7,       // 绿灯区阈值
+                "force_retry_ratio": 0.5,// 红灯区阈值
+                "fallback_strategy": "best_quality"
+            }
+        },
+
+        // ------------------------------------------------------
+        // 结构化校准配置
+        // 【触发条件】use_speaker_recognition=true 且转录数据包含说话人标识
+        // 【适用场景】仅 FunASR 转录结果（带 spk_0, spk_1 等标识）
+        // 【作用】按说话人对话分块校对，保留对话结构，推断真实说话人名称
+        // 【优先级】高于分段处理，满足条件时优先使用
+        // ------------------------------------------------------
+        "structured_calibration": {
+            "min_chunk_length": 800,     // 单个校对块的最小长度
+            "max_chunk_length": 3000,    // 单个校对块的最大长度
+            "preferred_chunk_length": 2000,  // 首选块长度（尽量接近此值分块）
+            "max_calibration_retries": 2,    // 单块校对失败的最大重试次数
+            "calibration_concurrent_limit": 10,  // 并发校对的块数
+            "quality_validation": {
+                "enabled": false,        // 默认关闭
+                "fallback_strategy": "best_quality"
+            }
+        },
+
+        // ------------------------------------------------------
+        // JSON 结构化输出配置
+        // 用于控制 LLM 的 JSON 输出模式
+        // ------------------------------------------------------
+        "json_output": {
+            // 按模型名匹配输出模式（支持通配符 *）
+            // 匹配顺序：从前到后，首次匹配生效
+            // 可选值：json_schema（严格模式）、json_object（兼容模式）
+            "mode_by_model": {
+                "deepseek*": "json_object",     // DeepSeek 系列不支持 json_schema
+                "qwen*": "json_object",         // 通义千问部分支持
+                "glm*": "json_object",          // 智谱 GLM 系列
+                "*": "json_schema"              // 其他模型使用严格模式
+            },
+            // json_object 模式下解析失败时的最大重试次数
+            "max_retries": 2,
+            // 是否启用模式降级（false 时强制使用 json_schema，用于调试）
+            "enable_fallback": true
+        }
+    },
+
+    // ============================================================
+    // FunASR 说话人识别转录服务配置
+    // 支持说话人识别、时间戳、情感分析
+    // ============================================================
+    "funasr_spk_server": {
+        "server_url": "ws://localhost:8767",  // WebSocket 服务地址
+        "max_retries": 3,                // 最大重试次数
+        "retry_delay": 5,                // 重试间隔（秒）
+        "connection_timeout": 30         // 连接超时时间（秒）
+    },
+
+    // ============================================================
+    // 风控配置
+    // ============================================================
+    "risk_control": {
+        "enabled": false,                // 是否启用风控
+        "sensitive_word_urls": [         // 敏感词库 URL 列表
+            "https://raw.githubusercontent.com/konsheng/Sensitive-lexicon/refs/heads/main/Vocabulary/%E6%96%B0%E6%80%9D%E6%83%B3%E5%90%AF%E8%92%99.txt"
+        ],
+        "cache_file": "./data/risk_control/sensitive_words.txt"  // 敏感词缓存文件
+    },
+
+    // ============================================================
+    // yt-dlp 配置（YouTube 下载器）
+    // ============================================================
+    "ytdlp": {
+        "socket_timeout": 30,            // Socket 超时时间（秒）
+        "retries": 10,                   // 重试次数
+        "fragment_retries": 10,          // 分片重试次数
+        "extractor_retries": 5,          // 提取器重试次数
+        // 播放器客户端优先级（用于绕过限制）
+        "player_client": ["android_vr", "android_music", "android", "ios", "tv_embedded"],
+        "youtube_cookie": {
+            "enabled": false,            // 是否启用 Cookie
+            "file_path": "./config/youtube_cookies.txt",  // Cookie 文件路径
+            "fallback_without_cookie": true  // Cookie 失败时是否回退
+        }
+    },
+
+    // ============================================================
+    // YouTube API Server 配置
+    // 用于解决本地 IP 风控问题的远程下载服务
+    // ============================================================
+    "youtube_api_server": {
+        "enabled": false,                // 是否启用
+        "base_url": "http://your-youtube-api-server:8000",  // 服务地址
+        "api_key": "your-api-key-here",  // API 密钥
+        "timeout": 30,                   // 请求超时时间（秒）
+        "poll_interval": 30,             // 轮询间隔（秒）
+        "max_wait_time": 3600            // 最大等待时间（秒）
+    }
+}

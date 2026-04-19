@@ -52,6 +52,15 @@ def fetch_one(cursor: sqlite3.Cursor, query: str, params: tuple[Any, ...] = ()) 
     return cursor.fetchone()
 
 
+def table_exists(cursor: sqlite3.Cursor, table_name: str) -> bool:
+    row = fetch_one(
+        cursor,
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    )
+    return row is not None
+
+
 def ensure_shared_workflow(
     cursor: sqlite3.Cursor,
     workflow_id: str,
@@ -80,6 +89,104 @@ def ensure_shared_workflow(
         VALUES (?, ?, ?, ?, ?)
         """,
         (workflow_id, project_id, "workflow:owner", now, now),
+    )
+
+
+def ensure_published_version(
+    cursor: sqlite3.Cursor,
+    workflow_id: str,
+    version_id: str,
+    now: str,
+    user_id: str | None,
+) -> None:
+    if not table_exists(cursor, "workflow_published_version"):
+        return
+
+    existing = fetch_one(
+        cursor,
+        "SELECT publishedVersionId FROM workflow_published_version WHERE workflowId = ?",
+        (workflow_id,),
+    )
+    if existing:
+        cursor.execute(
+            """
+            UPDATE workflow_published_version
+            SET publishedVersionId = ?, updatedAt = ?
+            WHERE workflowId = ?
+            """,
+            (version_id, now, workflow_id),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO workflow_published_version (workflowId, publishedVersionId, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?)
+            """,
+            (workflow_id, version_id, now, now),
+        )
+
+    if not table_exists(cursor, "workflow_publish_history"):
+        return
+
+    history = fetch_one(
+        cursor,
+        """
+        SELECT id
+        FROM workflow_publish_history
+        WHERE workflowId = ? AND versionId = ? AND event = ?
+        ORDER BY createdAt DESC
+        LIMIT 1
+        """,
+        (workflow_id, version_id, "activated"),
+    )
+    if history:
+        return
+
+    cursor.execute(
+        """
+        INSERT INTO workflow_publish_history (workflowId, versionId, event, userId, createdAt)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (workflow_id, version_id, "activated", user_id, now),
+    )
+
+
+def remove_published_version(
+    cursor: sqlite3.Cursor,
+    workflow_id: str,
+    version_id: str,
+    now: str,
+    user_id: str | None,
+) -> None:
+    if table_exists(cursor, "workflow_published_version"):
+        cursor.execute(
+            "DELETE FROM workflow_published_version WHERE workflowId = ?",
+            (workflow_id,),
+        )
+
+    if not table_exists(cursor, "workflow_publish_history"):
+        return
+
+    history = fetch_one(
+        cursor,
+        """
+        SELECT id
+        FROM workflow_publish_history
+        WHERE workflowId = ? AND versionId = ? AND event = ?
+        ORDER BY createdAt DESC
+        LIMIT 1
+        """,
+        (workflow_id, version_id, "deactivated"),
+    )
+    if history:
+        return
+
+    cursor.execute(
+        """
+        INSERT INTO workflow_publish_history (workflowId, versionId, event, userId, createdAt)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (workflow_id, version_id, "deactivated", user_id, now),
     )
 
 
@@ -308,16 +415,21 @@ def main() -> int:
         cursor = conn.cursor()
         personal_project = fetch_one(
             cursor,
-            "SELECT id FROM project WHERE type = 'personal' ORDER BY createdAt ASC LIMIT 1",
+            "SELECT * FROM project WHERE type = 'personal' ORDER BY createdAt ASC LIMIT 1",
         )
         if not personal_project:
             raise SystemExit("Could not find a personal project in the active n8n database.")
+        project_owner_id = personal_project["creatorId"] if "creatorId" in personal_project.keys() else None
 
         now = utc_now_sql()
         synced: list[str] = []
         for path, workflow in workflows:
             version_id = upsert_workflow_entity(cursor, workflow, personal_project["id"], now)
             upsert_workflow_history(cursor, workflow, version_id, now)
+            if workflow.get("active"):
+                ensure_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
+            else:
+                remove_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
             synced.append(
                 f"{workflow['id']} | active={bool(workflow.get('active'))} | version={version_id} | {path.name}"
             )

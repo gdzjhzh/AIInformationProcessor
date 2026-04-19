@@ -1,0 +1,197 @@
+{
+  "passed": 38,
+  "failed": 0,
+  "warnings": 0,
+  "tests": [
+    {
+      "name": "CSS 文件存在",
+      "status": "PASS",
+      "message": "路径: D:\\MyFolders\\Developments\\0Python\\250427_VideoTranscriptApi\\src\\web\\static\\css\\floating-toc.css"
+    },
+    {
+      "name": "JS 文件存在",
+      "status": "PASS",
+      "message": "路径: D:\\MyFolders\\Developments\\0Python\\250427_VideoTranscriptApi\\src\\web\\static\\js\\floating-toc.js"
+    },
+    {
+      "name": "模板文件存在",
+      "status": "PASS",
+      "message": "路径: D:\\MyFolders\\Developments\\0Python\\250427_VideoTranscriptApi\\src\\web\\templates\\transcript.html"
+    },
+    {
+      "name": "CSS 类 .floating-toc-container 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "CSS 类 .toc-indicator 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "CSS 类 .toc-header 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "CSS 类 .toc-content 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "CSS 类 .toc-link 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "CSS 类 .floating-toc-mobile-btn 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "CSS 类 .floating-toc-mobile-panel 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "CSS 变量定义",
+      "status": "PASS",
+      "message": "找到 4/4 个变量"
+    },
+    {
+      "name": "移动端媒体查询",
+      "status": "PASS",
+      "message": "存在移动端适配代码"
+    },
+    {
+      "name": "深色主题支持",
+      "status": "PASS",
+      "message": "存在深色主题样式"
+    },
+    {
+      "name": "函数 extractHeadings 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 findCalibratedSection 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 createPCTocHTML 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 createMobileTocHTML 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 renderTOC 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 handleTocClick 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 handlePinClick 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 setupScrollObserver 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "函数 updateActiveLink 存在",
+      "status": "PASS",
+      "message": ""
+    },
+    {
+      "name": "IntersectionObserver 实现",
+      "status": "PASS",
+      "message": "使用了高性能的滚动监听"
+    },
+    {
+      "name": "状态持久化",
+      "status": "PASS",
+      "message": "支持 Pin 状态保存"
+    },
+    {
+      "name": "移动端检测",
+      "status": "PASS",
+      "message": "实现了移动端判断逻辑"
+    },
+    {
+      "name": "事件监听",
+      "status": "PASS",
+      "message": "正确绑定了事件处理器"
+    },
+    {
+      "name": "CSS 文件引用",
+      "status": "PASS",
+      "message": "模板中引用了 TOC 样式文件"
+    },
+    {
+      "name": "JS 文件引用",
+      "status": "PASS",
+      "message": "模板中引用了 TOC 脚本文件"
+    },
+    {
+      "name": "内容总结区块",
+      "status": "PASS",
+      "message": "存在内容总结区块"
+    },
+    {
+      "name": "校对文本区块",
+      "status": "PASS",
+      "message": "存在校对文本区块"
+    },
+    {
+      "name": "严格模式",
+      "status": "PASS",
+      "message": "使用了 'use strict'"
+    },
+    {
+      "name": "代码注释",
+      "status": "PASS",
+      "message": "找到 66 处注释"
+    },
+    {
+      "name": "配置管理",
+      "status": "PASS",
+      "message": "使用了配置对象管理常量"
+    },
+    {
+      "name": "错误处理",
+      "status": "PASS",
+      "message": "实现了异常捕获"
+    },
+    {
+      "name": "过渡动画",
+      "status": "PASS",
+      "message": "使用了平滑的过渡效果"
+    },
+    {
+      "name": "关键帧动画",
+      "status": "PASS",
+      "message": "定义了关键帧动画"
+    },
+    {
+      "name": "无障碍优化",
+      "status": "PASS",
+      "message": "支持减少动画偏好"
+    },
+    {
+      "name": "打印样式",
+      "status": "PASS",
+      "message": "定义了打印样式"
+    }
+  ]
+}

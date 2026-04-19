@@ -1,5 +1,4 @@
-# External dependency repository
-/RSSHub/
+# Vendored service sources live under /services and are tracked by the main repo.
 
 # Local secrets
 /deploy/.env

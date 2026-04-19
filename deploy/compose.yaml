@@ -14,6 +14,9 @@ services:
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     ports:
       - "127.0.0.1:${N8N_PORT:-5678}:5678"
     volumes:
@@ -29,6 +32,8 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       N8N_RESTRICT_FILE_ACCESS_TO: "/vault;/home/node/.n8n-files"
+      N8N_RUNNERS_TASK_REQUEST_TIMEOUT: ${N8N_RUNNERS_TASK_REQUEST_TIMEOUT:-600}
+      N8N_RUNNERS_TASK_TIMEOUT: ${N8N_RUNNERS_TASK_TIMEOUT:-1800}
       OBSIDIAN_VAULT_PATH: /vault
       OBSIDIAN_INBOX_DIR: ${OBSIDIAN_INBOX_DIR}
       OBSIDIAN_DAILY_DIR: ${OBSIDIAN_DAILY_DIR}
@@ -85,13 +90,21 @@ services:
   video-transcript-api:
     profiles:
       - transcript
-    image: ${VIDEO_TRANSCRIPT_IMAGE:-video-transcript-api:latest}
+    build:
+      context: ../services/VideoTranscriptAPI
+      dockerfile: docker/Dockerfile
+    image: ${VIDEO_TRANSCRIPT_IMAGE:-ai-information-processor-video-transcript-api:local}
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ../services/VideoTranscriptAPI/config:/app/config
+      - ./data/video-transcript-api:/app/data
     environment:
       TZ: ${TZ:-America/New_York}
 
   rsshub:
-    image: diygod/rsshub:latest
+    image: ${RSSHUB_IMAGE:-diygod/rsshub:latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${RSSHUB_PORT:-1200}:1200"

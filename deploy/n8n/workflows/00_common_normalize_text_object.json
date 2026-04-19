@@ -1,8 +1,8 @@
 {
   "id": "d4f093a8e2f74e39",
   "name": "00 Common Normalize Text Object",
-  "description": "Template workflow: convert arbitrary source payloads into the shared NormalizedTextObject contract.",
-  "active": false,
+  "description": "Runnable sub-workflow: normalize source-adapter input into the shared NormalizedTextObject contract while preserving mainline-equivalent IDs, tags, source_host, and vault routing context.",
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -13,14 +13,27 @@
       "typeVersion": 1,
       "position": [
         260,
-        240
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "13e33c4f-531f-4488-96ea-148a5ccbb72d",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        380
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "return [\n  {\n    json: {\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      title: 'Example source item',\n      canonical_url: 'https://example.com/post',\n      original_id: 'yt:abc123',\n      author: 'OpenAI',\n      published_at: '2026-04-17T09:00:00-04:00',\n      raw_html: '<p>This is the original HTML body.</p>',\n      raw_text: 'This is the original HTML body.',\n      media_type: 'text'\n    }\n  }\n];"
+        "jsCode": "return [\n  {\n    json: {\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      title: 'Example source item',\n      canonical_url: 'https://example.com/post',\n      original_id: 'yt:abc123',\n      author: 'OpenAI',\n      published_at: '2026-04-17T09:00:00-04:00',\n      raw_html: '<p>This is the original HTML body.</p>',\n      raw_text: 'This is the original HTML body.',\n      media_type: 'text',\n      obsidian_inbox_dir: '00_Inbox/AI_Information_Processor',\n      extra_tags: ['example-source'],\n      upstream_task_id: '',\n      upstream_view_token: '',\n      upstream_summary: '',\n      original_item: {\n        source: 'example'\n      }\n    }\n  }\n];"
       },
       "id": "c480e656-1cb9-4d74-9d81-a12b1a3b0986",
       "name": "Example Source Payload",
@@ -28,42 +41,57 @@
       "typeVersion": 2,
       "position": [
         520,
-        240
+        180
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const crypto = require('crypto');\n\nconst stableHash = (value) => crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');\nconst stripHtml = (value = '') => String(value)\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ')\n  .replace(/&amp;/gi, '&')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst canonicalUrl = String($json.canonical_url || '').trim();\nconst sourceType = String($json.source_type || 'manual').trim() || 'manual';\nconst sourceName = String($json.source_name || 'unknown-source').trim() || 'unknown-source';\nconst originalId = String($json.original_id || '').trim();\nconst title = String($json.title || 'untitled').trim() || 'untitled';\nconst author = String($json.author || '').trim();\nconst publishedAt = new Date($json.published_at || Date.now()).toISOString();\nconst ingestedAt = new Date().toISOString();\nconst mediaType = String($json.media_type || 'text').trim() || 'text';\nconst contentHtml = String($json.raw_html || '').trim();\nconst contentText = String($json.raw_text || stripHtml(contentHtml)).trim();\nconst itemKey = canonicalUrl || (sourceType && originalId ? `${sourceType}:${originalId}` : '') || [title, publishedAt, author].filter(Boolean).join('::');\nconst itemId = stableHash(itemKey);\n\nreturn {\n  json: {\n    item_id: itemId,\n    source_type: sourceType,\n    source_name: sourceName,\n    original_id: originalId,\n    canonical_url: canonicalUrl,\n    title,\n    author,\n    published_at: publishedAt,\n    ingested_at: ingestedAt,\n    media_type: mediaType,\n    content_text: contentText,\n    content_html: contentHtml,\n    upstream_task_id: '',\n    upstream_view_token: '',\n    upstream_summary: '',\n    content_hash: `sha256:${stableHash(contentText)}`,\n    score: 0,\n    category: 'pending',\n    tags: ['inbox', 'ai-information-processor'],\n    dedupe_action: 'full_push',\n    status: 'raw',\n    vault_path: ''\n  }\n};"
+        "jsCode": "const rightRotate = (value, amount) => (value >>> amount) | (value << (32 - amount));\n\nconst sha256 = (value = '') => {\n  const utf8 = unescape(encodeURIComponent(String(value)));\n  const maxWord = 2 ** 32;\n  const words = [];\n  const asciiBitLength = utf8.length * 8;\n  const hash = [];\n  const k = [];\n  const isComposite = {};\n\n  for (let candidate = 2; k.length < 64; candidate += 1) {\n    if (!isComposite[candidate]) {\n      for (let multiple = candidate * candidate; multiple < 512; multiple += candidate) {\n        isComposite[multiple] = true;\n      }\n      if (hash.length < 8) {\n        hash.push((Math.sqrt(candidate) * maxWord) | 0);\n      }\n      k.push((candidate ** (1 / 3) * maxWord) | 0);\n    }\n  }\n\n  let message = `${utf8}\\x80`;\n  while ((message.length % 64) !== 56) {\n    message += '\\x00';\n  }\n\n  for (let i = 0; i < message.length; i += 1) {\n    words[i >> 2] |= message.charCodeAt(i) << ((3 - (i % 4)) * 8);\n  }\n\n  words.push((asciiBitLength / maxWord) | 0);\n  words.push(asciiBitLength);\n\n  for (let j = 0; j < words.length; j += 16) {\n    const w = words.slice(j, j + 16);\n    const workingHash = hash.slice();\n\n    for (let i = 0; i < 64; i += 1) {\n      const w15 = w[i - 15];\n      const w2 = w[i - 2];\n      const sigma0 = i < 16 ? 0 : (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3));\n      const sigma1 = i < 16 ? 0 : (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10));\n      w[i] = i < 16 ? w[i] : (((w[i - 16] + sigma0) | 0) + ((w[i - 7] + sigma1) | 0)) | 0;\n\n      const [a, b, c, d, e, f, g, h] = workingHash;\n      const sum1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);\n      const choice = (e & f) ^ (~e & g);\n      const temp1 = (((((h + sum1) | 0) + choice) | 0) + k[i] + w[i]) | 0;\n      const sum0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);\n      const majority = (a & b) ^ (a & c) ^ (b & c);\n      const temp2 = (sum0 + majority) | 0;\n\n      workingHash[0] = (temp1 + temp2) | 0;\n      workingHash[1] = a;\n      workingHash[2] = b;\n      workingHash[3] = c;\n      workingHash[4] = (d + temp1) | 0;\n      workingHash[5] = e;\n      workingHash[6] = f;\n      workingHash[7] = g;\n    }\n\n    for (let i = 0; i < 8; i += 1) {\n      hash[i] = (hash[i] + workingHash[i]) | 0;\n    }\n  }\n\n  return hash.slice(0, 8).map((valuePart) => (valuePart >>> 0).toString(16).padStart(8, '0')).join('');\n};\n\nconst slugify = (value = '') => String(value)\n  .normalize('NFKD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9\\u4e00-\\u9fa5]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .toLowerCase();\n\nconst stripHtml = (value = '') => String(value)\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ')\n  .replace(/&amp;/gi, '&')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst stableHash = (value) => sha256(String(value));\n\nconst title = (($json.title || '').trim() || 'untitled');\nconst canonicalUrl = String($json.canonical_url || '').trim();\nconst publishedAtRaw = $json.published_at || new Date().toISOString();\nconst publishedAt = new Date(publishedAtRaw).toISOString();\nconst ingestedAt = $json.ingested_at ? new Date($json.ingested_at).toISOString() : new Date().toISOString();\nconst rawHtml = String($json.raw_html || $json.content_html || '').trim();\nconst rawText = String($json.raw_text || '').trim();\nconst contentText = String(rawText || stripHtml(rawHtml)).trim();\nconst author = String($json.author || '').trim();\nconst sourceType = String($json.source_type || 'manual').trim() || 'manual';\nconst sourceName = String($json.source_name || '').trim();\nconst originalId = String($json.original_id || '').trim();\nconst mediaType = String($json.media_type || 'text').trim() || 'text';\nconst obsidianInboxDir = String($json.obsidian_inbox_dir || $json.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\nconst upstreamTaskId = String($json.upstream_task_id || '').trim();\nconst upstreamViewToken = String($json.upstream_view_token || '').trim();\nconst upstreamSummary = String($json.upstream_summary || '').trim();\nconst originalItem = $json.original_item ?? null;\nconst existingTags = Array.isArray($json.tags) ? $json.tags : [];\nconst extraTags = Array.isArray($json.extra_tags) ? $json.extra_tags : [];\n\nlet sourceHost = String($json.source_host || '').trim();\nif (!sourceHost) {\n  const hostMatch = canonicalUrl.match(/^https?:\\/\\/([^\\/?#]+)/i);\n  if (hostMatch?.[1]) {\n    sourceHost = hostMatch[1].replace(/^www\\./i, '');\n  }\n}\nif (!sourceHost) {\n  sourceHost = 'unknown-source';\n}\n\nconst itemKey = canonicalUrl\n  || (sourceType && originalId ? `${sourceType}:${originalId}` : '')\n  || [title, publishedAt, author].filter(Boolean).join('::');\nconst itemId = stableHash(itemKey);\nconst contentHash = `sha256:${stableHash(contentText)}`;\nconst tags = [...new Set([\n  'inbox',\n  'ai-information-processor',\n  ...existingTags.map((tag) => String(tag).trim()),\n  ...extraTags.map((tag) => String(tag).trim()),\n  slugify(sourceHost),\n  slugify(sourceName),\n  slugify(sourceType)\n].filter(Boolean))];\n\nreturn {\n  json: {\n    item_id: itemId,\n    source_type: sourceType,\n    source_name: sourceName || sourceHost || 'unknown-source',\n    source_host: sourceHost,\n    original_id: originalId,\n    canonical_url: canonicalUrl,\n    title,\n    author,\n    published_at: publishedAt,\n    ingested_at: ingestedAt,\n    media_type: mediaType,\n    content_text: contentText,\n    content_html: rawHtml,\n    upstream_task_id: upstreamTaskId,\n    upstream_view_token: upstreamViewToken,\n    upstream_summary: upstreamSummary,\n    content_hash: contentHash,\n    score: 0,\n    category: 'pending',\n    tags,\n    dedupe_action: 'full_push',\n    status: 'raw',\n    vault_path: String($json.vault_path || '').trim(),\n    obsidianInboxDir,\n    original_item: originalItem\n  }\n};"
       },
       "id": "f83e467e-128a-4fab-b507-3017eb4acb84",
       "name": "Normalize Text Object",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        780,
-        240
+        820,
+        280
       ]
     }
   ],
   "connections": {
     "When clicking 'Execute workflow'": {
       "main": [
-        {
-          "node": "Example Source Payload",
-          "type": "main",
-          "index": 0
-        }
+        [
+          {
+            "node": "Example Source Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize Text Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Example Source Payload": {
       "main": [
-        {
-          "node": "Normalize Text Object",
-          "type": "main",
-          "index": 0
-        }
+        [
+          {
+            "node": "Normalize Text Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -75,6 +103,6 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "83b9cd35-ae50-4cc4-ace9-824a47c62854",
+  "versionId": "dfdaab6e-3261-4841-b16c-0b392f6e8531",
   "tags": []
 }

@@ -1,0 +1,6 @@
+services:
+  rsshub:
+    build:
+      context: ../services/RSSHub
+      dockerfile: Dockerfile
+    image: ${RSSHUB_LOCAL_IMAGE:-ai-information-processor-rsshub:local}

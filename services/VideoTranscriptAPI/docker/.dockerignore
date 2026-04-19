@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Virtual env
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Data (runtime, not build)
+data/cache
+data/temp
+data/workspace
+data/logs
+data/debug
+data/risk_control
+
+# Media files
+*.mp3
+*.mp4
+*.m4a
+*.m4s
+*.wav
+*.flac
+
+# Config (mounted at runtime)
+config/config.jsonc
+config/users.json
+
+# Tests
+tests/
+test_output/
+
+# Docs
+docs/
+README.md
+
+# BBDown binaries (Linux version downloaded during build)
+BBDown/
+
+# Debug files
+debug_*
+error_*
+temp_*
+tmp_*
+output/
+logs/
+*nul

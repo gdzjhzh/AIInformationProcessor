@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title or "视频转录" }} - 视频转录查看器{% endblock %}
+{% block meta_description %}{{ title or "视频转录" }} - {{ platform or "" }} 视频转录校对结果{% endblock %}
+{% block og_title %}{{ title or "视频转录" }} - 视频转录查看器{% endblock %}
+{% block og_description %}{{ title or "视频转录" }} 的转录校对结果{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/floating-toc.css">
+<style>
+/* Section header with inline action */
+.section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-header h2 { margin-bottom: 0; }
+
+/* Recalibrate button */
+.recalibrate-btn {
+    background: var(--bg-secondary, #f5f5f5);
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-primary, #333);
+    transition: background 0.2s;
+}
+.recalibrate-btn:hover { background: var(--bg-tertiary, #e8e8e8); }
+
+/* Recalibrate dialog */
+.recalibrate-dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    background: var(--bg-primary, #fff);
+    color: var(--text-primary, #333);
+}
+.recalibrate-dialog::backdrop { background: rgba(0,0,0,0.4); }
+.recalibrate-dialog h3 { margin: 0 0 8px; font-size: 1.1rem; }
+.recalibrate-dialog .dialog-desc { margin: 0 0 16px; font-size: 0.85rem; color: var(--text-secondary, #666); }
+.recalibrate-dialog label { display: block; margin-bottom: 4px; font-size: 0.85rem; font-weight: 500; }
+.recalibrate-dialog input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    background: var(--bg-secondary, #f9f9f9);
+    color: var(--text-primary, #333);
+}
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dialog-btn {
+    padding: 7px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, #ddd);
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.dialog-btn-cancel { background: var(--bg-secondary, #f5f5f5); color: var(--text-primary, #333); }
+.dialog-btn-confirm { background: var(--accent-color, #4a90d9); color: #fff; border-color: transparent; }
+.dialog-btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+.dialog-status { margin-top: 12px; font-size: 0.82rem; color: var(--text-secondary, #666); }
+.dialog-status-error { color: #d9534f; }
+.dialog-status-ok { color: #5cb85c; }
+
+/* Inline recalibrate status (replaces button during processing) */
+.recalibrate-status { font-size: 0.85rem; color: var(--text-secondary, #888); white-space: nowrap; }
+.recalibrate-done { color: #5cb85c; }
+.recalibrate-error { color: #d9534f; }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- 统计信息（单行显示） -->
+    {% if stats and stats.original_length > 0 %}
+    <div class="stats-line">
+        <span class="stats-icon">📊</span>
+        <span class="stats-label">转录统计</span>
+        <span class="stats-content">
+            原始转录 {{ "{:,}".format(stats.original_length) }} 字
+            {% if stats.calibrated_length > 0 %} | 校对文本 {{ "{:,}".format(stats.calibrated_length) }} 字{% endif %}
+            {% if stats.summary_length > 0 and stats.summary_length != stats.calibrated_length %} | 内容总结 {{ "{:,}".format(stats.summary_length) }} 字{% endif %}
+        </span>
+    </div>
+    {% endif %}
+
+    <!-- 校准质量警告 -->
+    {% if stats and stats.calibration_stats %}
+    {% set cal = stats.calibration_stats %}
+    {% if cal.failed_count == cal.total_chunks and cal.total_chunks > 0 %}
+    <div class="calibration-warning" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.9em;color:#991b1b;display:flex;align-items:center;gap:8px;">
+        <span>&#x26A0;&#xFE0F;</span>
+        <span><strong>校准失败</strong>：LLM API 超时，当前显示为未校准的原始语音识别文本，可能包含较多错别字。建议点击上方「重新校对」按钮。</span>
+    </div>
+    {% elif cal.failed_count > 0 or cal.fallback_count > 0 %}
+    <div class="calibration-warning" style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.9em;color:#92400e;display:flex;align-items:center;gap:8px;">
+        <span>&#x26A0;&#xFE0F;</span>
+        <span><strong>校准部分异常</strong>：{{ cal.success_count }}/{{ cal.total_chunks }} 段校准成功，{{ cal.fallback_count }} 段降级，{{ cal.failed_count }} 段失败。部分内容可能包含错别字。</span>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <!-- 模型配置信息（折叠展示） -->
+    {% if llm_config %}
+    <details class="llm-config-details">
+        <summary>
+            <span class="config-icon">⚙️</span>
+            <span class="config-label">处理信息</span>
+            {% if llm_config.has_risk %}<span class="risk-badge">风险降级</span>{% endif %}
+        </summary>
+        <div class="llm-config-grid">
+            {% if llm_config.calibrate_model %}
+            <div class="config-item">
+                <span class="config-key">校对模型</span>
+                <span class="config-value">{{ llm_config.calibrate_model }}{% if llm_config.calibrate_reasoning_effort %} <span class="reasoning-tag">reasoning: {{ llm_config.calibrate_reasoning_effort }}</span>{% endif %}</span>
+            </div>
+            {% endif %}
+            {% if llm_config.summary_model %}
+            <div class="config-item">
+                <span class="config-key">总结模型</span>
+                <span class="config-value">{{ llm_config.summary_model }}{% if llm_config.summary_reasoning_effort %} <span class="reasoning-tag">reasoning: {{ llm_config.summary_reasoning_effort }}</span>{% endif %}</span>
+            </div>
+            {% endif %}
+        </div>
+    </details>
+    {% endif %}
+
+    <!-- 一键复制常用链接 -->
+    {% if view_token %}
+    <div class="quick-copy-bar">
+        <button class="quick-copy-btn" data-path="/view/{{ view_token }}?raw=calibrated" title="复制 Raw 校对文本 URL">
+            <span class="quick-copy-label">Raw 校对文本</span>
+            <span class="quick-copy-action">复制 URL</span>
+            <span class="quick-copy-desc">纯文本，粘贴到 ChatGPT / Claude 直接读取</span>
+        </button>
+        <button class="quick-copy-btn" data-path="/view/{{ view_token }}?page=calibrated" title="复制 HTML 校对页面 URL">
+            <span class="quick-copy-label">HTML 校对页面</span>
+            <span class="quick-copy-action">复制 URL</span>
+            <span class="quick-copy-desc">带标题的 HTML，供 NotebookLM 等工具爬取</span>
+        </button>
+    </div>
+    {% endif %}
+
+    <!-- 导出链接栏 -->
+    {% if view_token %}
+    <details class="export-links-details">
+        <summary class="export-links-summary">
+            <span class="export-icon">📤</span>
+            <span class="export-summary-label">更多导出选项</span>
+        </summary>
+        <div class="export-links-content">
+            <div class="export-group">
+                <span class="export-group-label">Raw 纯文本</span>
+                <span class="export-group-items">
+                    <a href="/view/{{ view_token }}?raw=calibrated" title="导出校对文本（纯文本）">校对文本</a>
+                    <span class="export-sep">·</span>
+                    <a href="/view/{{ view_token }}?raw=summary" title="导出内容总结（纯文本）">总结</a>
+                    <span class="export-sep">·</span>
+                    <a href="/view/{{ view_token }}?raw=transcript" title="导出原始转录（纯文本）">原始转录</a>
+                </span>
+                <span class="export-hint">下载 TXT / 粘贴 URL 到 ChatGPT、Claude 等 LLM 直接读取</span>
+            </div>
+            <div class="export-group">
+                <span class="export-group-label">HTML 页面</span>
+                <span class="export-group-items">
+                    <a href="/view/{{ view_token }}?page=calibrated" title="导出校对文本（HTML 页面）">校对文本</a>
+                    <span class="export-sep">·</span>
+                    <a href="/view/{{ view_token }}?page=summary" title="导出内容总结（HTML 页面）">总结</a>
+                    <span class="export-sep">·</span>
+                    <a href="/view/{{ view_token }}?page=transcript" title="导出原始转录（HTML 页面）">原始转录</a>
+                </span>
+                <span class="export-hint">带标题与 Meta 标签，适合 NotebookLM 等工具爬取</span>
+            </div>
+        </div>
+    </details>
+    {% endif %}
+
+    <div class="section">
+        <h2>📝 内容总结</h2>
+        <div class="content">
+            {% if summary_html %}
+                {{ summary_html|safe }}
+            {% else %}
+                <p style="color: var(--text-secondary); font-style: italic;">总结处理中...</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% if calibrated_html %}
+    <div class="section">
+        <div class="section-header">
+            <h2>✨ 校对文本</h2>
+            {% if view_token %}
+            <span id="recalibrateArea">
+                <button class="recalibrate-btn" id="recalibrateBtn" onclick="document.getElementById('recalibrateDialog').showModal()">🔄 重新校对</button>
+            </span>
+            {% endif %}
+        </div>
+        {% if use_speaker_recognition %}
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">
+                🎤 本校对文本包含说话人识别信息
+            </p>
+        {% endif %}
+        <div class="content">
+            {{ calibrated_html|safe }}
+        </div>
+
+        {% if view_token %}
+        <dialog id="recalibrateDialog" class="recalibrate-dialog">
+            <form method="dialog">
+                <h3>重新校对</h3>
+                <p class="dialog-desc">将重新执行 LLM 校对（跳过下载、转录和总结），校对完成后刷新页面即可查看新结果。</p>
+                <label for="recalibrateApiKey">API Key</label>
+                <input type="password" id="recalibrateApiKey" placeholder="Bearer token" autocomplete="off">
+                <div class="dialog-actions">
+                    <button type="button" class="dialog-btn dialog-btn-cancel" onclick="document.getElementById('recalibrateDialog').close()">取消</button>
+                    <button type="button" class="dialog-btn dialog-btn-confirm" id="recalibrateConfirmBtn" onclick="submitRecalibrate()">确认</button>
+                </div>
+                <p id="recalibrateStatus" class="dialog-status" style="display:none;"></p>
+            </form>
+        </dialog>
+        {% endif %}
+    </div>
+    {% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/floating-toc.js"></script>
+{% if view_token %}
+<script>
+(function() {
+    // Auto-fill API key from localStorage (shared with /add_task_by_web)
+    var stored = localStorage.getItem('api_key') || '';
+    var input = document.getElementById('recalibrateApiKey');
+    if (input && stored) input.value = stored;
+})();
+
+function submitRecalibrate() {
+    var btn = document.getElementById('recalibrateConfirmBtn');
+    var status = document.getElementById('recalibrateStatus');
+    var dialog = document.getElementById('recalibrateDialog');
+    var area = document.getElementById('recalibrateArea');
+    var apiKey = document.getElementById('recalibrateApiKey').value.trim();
+
+    if (!apiKey) {
+        status.textContent = 'Please enter API Key';
+        status.className = 'dialog-status dialog-status-error';
+        status.style.display = 'block';
+        return;
+    }
+
+    // Save to localStorage for future use
+    localStorage.setItem('api_key', apiKey);
+
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+    status.style.display = 'none';
+
+    fetch('/api/recalibrate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey
+        },
+        body: JSON.stringify({ view_token: '{{ view_token }}' })
+    })
+    .then(function(resp) {
+        if (resp.status === 401) throw new Error('API Key invalid');
+        if (resp.status === 403) throw new Error('No recalibrate permission');
+        if (resp.status === 404) throw new Error('Transcript data not found');
+        if (!resp.ok) return resp.json().then(function(d) { throw new Error(d.detail || 'Request failed'); });
+        return resp.json();
+    })
+    .then(function(data) {
+        var taskId = data.data && data.data.task_id;
+        if (!taskId) throw new Error('No task_id returned');
+        // Close dialog, show inline status on the button area
+        dialog.close();
+        area.innerHTML = '<span class="recalibrate-status">校对中... (0s)</span>';
+        pollTask(taskId, apiKey, area);
+    })
+    .catch(function(err) {
+        status.textContent = err.message;
+        status.className = 'dialog-status dialog-status-error';
+        status.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Confirm';
+    });
+}
+
+function pollTask(taskId, apiKey, area) {
+    var elapsed = 0;
+    var interval = setInterval(function() {
+        elapsed += 3;
+        area.innerHTML = '<span class="recalibrate-status">校对中... (' + elapsed + 's)</span>';
+
+        fetch('/api/task/' + taskId, {
+            headers: { 'Authorization': 'Bearer ' + apiKey }
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+            var taskStatus = data.data && data.data.status;
+            if (data.code === 200 || taskStatus === 'success') {
+                clearInterval(interval);
+                area.innerHTML = '<span class="recalibrate-status recalibrate-done">校对完成，刷新中...</span>';
+                setTimeout(function() { location.reload(); }, 500);
+            } else if (taskStatus === 'failed') {
+                clearInterval(interval);
+                area.innerHTML = '<span class="recalibrate-status recalibrate-error">校对失败</span>';
+            }
+        })
+        .catch(function() {
+            // Network error, keep polling
+        });
+
+        if (elapsed > 600) {
+            clearInterval(interval);
+            area.innerHTML = '<span class="recalibrate-status recalibrate-error">超时，请手动刷新页面</span>';
+        }
+    }, 3000);
+}
+</script>
+{% endif %}
+{% endblock %}

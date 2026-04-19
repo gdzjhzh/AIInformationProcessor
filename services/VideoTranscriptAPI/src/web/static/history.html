@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务历史 - VideoTranscriptAPI</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+            min-height: 100vh;
+            color: var(--text-primary);
+            padding: 20px;
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; }
+
+        /* 顶部 */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .header h1 { font-size: 1.5rem; font-weight: 700; }
+        .header a {
+            color: var(--text-tertiary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            margin-left: auto; /* 返回主页靠右 */
+        }
+        .header a:hover { color: var(--accent-primary); }
+
+        /* API Key 输入区 */
+        .auth-bar {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .auth-bar label { font-size: 0.875rem; color: var(--text-secondary); white-space: nowrap; }
+        .auth-bar input {
+            flex: 1;
+            min-width: 200px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-family: monospace;
+        }
+        .auth-bar input:focus { outline: none; border-color: var(--accent-primary); }
+        .btn {
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: opacity 0.15s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn-primary { background: var(--accent-primary); color: #fff; }
+        .btn-ghost {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-primary);
+        }
+        .auth-status {
+            font-size: 0.8rem;
+            padding: 4px 12px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        .auth-status.ok { background: var(--success-bg); color: var(--success-text); }
+        .auth-status.err { background: var(--error-bg); color: var(--error-text); }
+        .remember-label {
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .remember-label input { cursor: pointer; }
+
+        /* Webhook 别名设置 */
+        .alias-panel {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .alias-panel.visible { display: block; }
+        .alias-panel h3 { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 12px; }
+        .alias-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .alias-url {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .alias-input {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 6px;
+            padding: 5px 10px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+            width: 180px;
+        }
+        .alias-input:focus { outline: none; border-color: var(--accent-primary); }
+        .alias-save-hint { font-size: 0.75rem; color: var(--text-tertiary); margin-top: 8px; }
+
+        /* 过滤栏 */
+        .filter-bar {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+        .filter-group label { font-size: 0.75rem; color: var(--text-tertiary); }
+        .filter-group select,
+        .filter-group input[type="date"] {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            padding: 7px 10px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+        .filter-group select:focus,
+        .filter-group input[type="date"]:focus { outline: none; border-color: var(--accent-primary); }
+        .filter-group select option { background: var(--bg-secondary); }
+        .filter-actions { display: flex; gap: 8px; align-items: flex-end; margin-left: auto; }
+
+        /* 统计条 */
+        .stats-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 0.8rem;
+            color: var(--text-tertiary);
+        }
+        .unread-badge {
+            background: var(--accent-primary);
+            color: #fff;
+            border-radius: 12px;
+            padding: 2px 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* 任务列表 */
+        .task-list { display: flex; flex-direction: column; gap: 6px; }
+
+        .task-row {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: grid;
+            grid-template-columns: 24px 130px 1fr 100px;
+            gap: 12px;
+            align-items: center;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            position: relative;
+        }
+        .task-row:hover { border-color: var(--accent-primary); background: var(--bg-secondary); }
+        .task-row.unclickable { cursor: default; opacity: 0.4; }
+        .task-row.unclickable:hover { border-color: var(--border-primary); background: var(--bg-primary); }
+        .task-row.selected { border-color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-primary)); }
+
+        /* 多选复选框 */
+        .row-checkbox {
+            width: 16px; height: 16px;
+            accent-color: var(--accent-primary);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .task-time { font-size: 0.75rem; color: var(--text-tertiary); white-space: nowrap; }
+
+        /* 标题列容器：min-width:0 是让 grid 1fr 内 ellipsis 生效的关键 */
+        .task-title-cell { min-width: 0; overflow: hidden; }
+
+        .task-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .task-author {
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .task-platform {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            text-align: center;
+            white-space: nowrap;
+        }
+        .task-webhook {
+            font-size: 0.7rem;
+            color: var(--text-tertiary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .task-status-badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .status-processing { background: var(--loading-bg); color: var(--loading-text); }
+        .status-failed { background: var(--error-bg); color: var(--error-text); }
+        .status-unknown { background: var(--bg-tertiary); color: var(--text-tertiary); }
+
+        /* 摘要预览卡片 */
+        .summary-tooltip {
+            position: fixed;
+            background: var(--bg-primary);
+            border: 1px solid var(--accent-primary);
+            border-radius: 10px;
+            padding: 14px 16px;
+            width: 340px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            z-index: 1000;
+            box-shadow: 0 8px 32px var(--shadow-medium);
+            pointer-events: none;
+            display: none;
+        }
+        .summary-tooltip.visible { display: block; }
+        .summary-tooltip-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+        }
+
+        /* 分页 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 20px;
+        }
+        .page-btn {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-primary);
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.15s;
+        }
+        .page-btn:hover:not(:disabled) { border-color: var(--accent-primary); color: var(--accent-primary); }
+        .page-btn:disabled { opacity: 0.35; cursor: default; }
+        .page-info { font-size: 0.8rem; color: var(--text-tertiary); }
+
+        /* 空态 / 加载 / 错误 */
+        .state-box {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 0.875rem;
+        }
+        .state-box .icon { font-size: 2rem; margin-bottom: 12px; }
+
+        /* 已读：仅降低标题行对比度，不影响整行点击 */
+        .task-row.read .task-title { opacity: 0.45; }
+        .task-row.read .task-author { opacity: 0.35; }
+
+        /* 未读蓝点 */
+        .read-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            position: absolute;
+            left: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>任务历史</h1>
+        <a href="/">← 返回主页</a>
+    </div>
+
+    <!-- API Key 输入 -->
+    <div class="auth-bar">
+        <label>API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="输入 API Key..." autocomplete="off">
+        <button class="btn btn-primary" onclick="loadHistory()">查询</button>
+        <label class="remember-label">
+            <input type="checkbox" id="rememberKey"> 记住
+        </label>
+        <span class="auth-status" id="authStatus" style="display:none"></span>
+        <span style="flex:1"></span>
+        <button class="btn btn-ghost" id="aliasToggle" onclick="toggleAliasPanel()" style="display:none; font-size:0.8rem; padding:6px 12px">
+            Webhook 别名
+        </button>
+    </div>
+
+    <!-- Webhook 别名设置面板 -->
+    <div class="alias-panel" id="aliasPanel">
+        <h3>Webhook 别名（保存在本地浏览器）</h3>
+        <div id="aliasRows"></div>
+        <button class="btn btn-primary" onclick="saveAliases()" style="margin-top:10px; font-size:0.8rem; padding:6px 14px">
+            保存别名
+        </button>
+        <div class="alias-save-hint">* 别名仅存储在本地，清除浏览器数据后会丢失</div>
+    </div>
+
+    <!-- 过滤栏 -->
+    <div class="filter-bar" id="filterBar" style="display:none">
+        <div class="filter-group">
+            <label>开始日期</label>
+            <input type="date" id="filterStartDate">
+        </div>
+        <div class="filter-group">
+            <label>结束日期</label>
+            <input type="date" id="filterEndDate">
+        </div>
+        <div class="filter-group">
+            <label>Webhook</label>
+            <select id="filterWebhook">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>平台</label>
+            <select id="filterPlatform">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>频道</label>
+            <select id="filterAuthor">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>状态</label>
+            <select id="filterStatus">
+                <option value="success">已完成</option>
+                <option value="all">全部</option>
+                <option value="processing">处理中</option>
+                <option value="failed">失败</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>已读</label>
+            <select id="filterRead" onchange="serializeFiltersToURL(); applyReadFilter()">
+                <option value="all">全部</option>
+                <option value="unread">未读</option>
+                <option value="read">已读</option>
+            </select>
+        </div>
+        <div class="filter-group" style="min-width:200px; flex:1">
+            <label>搜索</label>
+            <input type="text" id="filterQ" placeholder="标题 / 频道 / URL..."
+                   style="width:100%; background:var(--bg-secondary); border:1px solid var(--border-primary);
+                          border-radius:8px; padding:7px 10px; color:var(--text-primary); font-size:0.8rem;">
+        </div>
+        <div class="filter-actions">
+            <button class="btn btn-primary" onclick="applyFilter()">搜索</button>
+            <button class="btn btn-ghost" onclick="resetFilter()">重置</button>
+        </div>
+    </div>
+
+    <!-- 统计条 -->
+    <div class="stats-bar" id="statsBar" style="display:none">
+        <input type="checkbox" id="selectAllChk" class="row-checkbox" title="全选当页" onchange="toggleSelectAll(this.checked)">
+        <span id="totalCount"></span>
+        <span class="unread-badge" id="unreadBadge" style="display:none"></span>
+        <span id="selectedCount" style="display:none; color:var(--accent-primary); font-weight:600"></span>
+        <button class="btn btn-ghost" id="markSelectedBtn" onclick="markSelectedRead()" style="display:none; font-size:0.75rem; padding:3px 10px">
+            标记已读
+        </button>
+        <button class="btn btn-ghost" onclick="markAllRead()" style="font-size:0.75rem; padding:3px 10px">
+            全部标为已读
+        </button>
+    </div>
+
+    <!-- 列表区 -->
+    <div id="listArea">
+        <div class="state-box">
+            <div class="icon">🔑</div>
+            <div>输入 API Key 后点击查询</div>
+        </div>
+    </div>
+
+    <!-- 分页 -->
+    <div class="pagination" id="paginationBar" style="display:none">
+        <button class="page-btn" id="prevBtn" onclick="changePage(-1)" disabled>← 上一页</button>
+        <span class="page-info" id="pageInfo"></span>
+        <button class="page-btn" id="nextBtn" onclick="changePage(1)" disabled>下一页 →</button>
+    </div>
+</div>
+
+<!-- 摘要预览卡片 -->
+<div class="summary-tooltip" id="summaryTooltip">
+    <div class="summary-tooltip-title" id="tooltipTitle"></div>
+    <div id="tooltipContent"></div>
+</div>
+
+<script>
+// ===================== 状态 =====================
+const STORAGE_KEY_READ  = () => `vta_read_${getMasked()}`;
+const STORAGE_KEY_ALIAS = () => `vta_webhook_alias_${getMasked()}`;
+const PAGE_SIZE = 20;
+
+let currentPage = 0;
+let totalItems  = 0;
+let currentApiKey = '';
+let currentMasked = '';
+let filterOptions = { webhooks: [], platforms: [], authors: [] };
+let summaryDebounce = null;
+let summaryVisible  = false;
+let selectedSet = new Set();   // 当前选中的 view_token
+
+// ===================== 工具函数 =====================
+function getMasked() { return currentMasked || 'anon'; }
+
+function getReadSet() {
+    try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_READ()) || '[]')); }
+    catch { return new Set(); }
+}
+function saveReadSet(s) {
+    localStorage.setItem(STORAGE_KEY_READ(), JSON.stringify([...s]));
+}
+function markRead(viewToken) {
+    const s = getReadSet(); s.add(viewToken); saveReadSet(s);
+}
+function markAllRead() {
+    const rows = document.querySelectorAll('.task-row[data-vt]');
+    const s = getReadSet();
+    rows.forEach(r => s.add(r.dataset.vt));
+    saveReadSet(s);
+    renderReadState();
+    applyReadFilter();
+}
+
+// ===================== 多选 =====================
+function toggleSelect(vt, chkEl, rowEl) {
+    if (selectedSet.has(vt)) {
+        selectedSet.delete(vt);
+        chkEl.checked = false;
+        rowEl.classList.remove('selected');
+    } else {
+        selectedSet.add(vt);
+        chkEl.checked = true;
+        rowEl.classList.add('selected');
+    }
+    updateSelectionUI();
+}
+
+function toggleSelectAll(checked) {
+    const rows = document.querySelectorAll('.task-row[data-vt]');
+    rows.forEach(row => {
+        const vt = row.dataset.vt;
+        const chk = row.querySelector('.row-checkbox');
+        if (checked) {
+            selectedSet.add(vt);
+            if (chk) chk.checked = true;
+            row.classList.add('selected');
+        } else {
+            selectedSet.delete(vt);
+            if (chk) chk.checked = false;
+            row.classList.remove('selected');
+        }
+    });
+    updateSelectionUI();
+}
+
+function updateSelectionUI() {
+    const count = selectedSet.size;
+    const cntEl = document.getElementById('selectedCount');
+    const btnEl = document.getElementById('markSelectedBtn');
+    if (count > 0) {
+        cntEl.style.display = '';
+        cntEl.textContent = `已选 ${count} 条`;
+        btnEl.style.display = '';
+        btnEl.textContent = `标记已读 (${count})`;
+    } else {
+        cntEl.style.display = 'none';
+        btnEl.style.display = 'none';
+    }
+    // 更新全选框的状态
+    const allRows = document.querySelectorAll('.task-row[data-vt]');
+    const selAll = document.getElementById('selectAllChk');
+    if (allRows.length > 0 && count === allRows.length) {
+        selAll.checked = true; selAll.indeterminate = false;
+    } else if (count > 0) {
+        selAll.checked = false; selAll.indeterminate = true;
+    } else {
+        selAll.checked = false; selAll.indeterminate = false;
+    }
+}
+
+function markSelectedRead() {
+    const s = getReadSet();
+    selectedSet.forEach(vt => s.add(vt));
+    saveReadSet(s);
+    selectedSet.clear();
+    document.querySelectorAll('.task-row.selected').forEach(row => {
+        row.classList.remove('selected');
+        const chk = row.querySelector('.row-checkbox');
+        if (chk) chk.checked = false;
+    });
+    updateSelectionUI();
+    renderReadState();
+    applyReadFilter();
+}
+
+// ===================== 已读过滤（客户端，变更时实时写 URL）=====================
+function applyReadFilter() {
+    const filter = document.getElementById('filterRead')?.value || 'all';
+    const readSet = getReadSet();
+    const rows = document.querySelectorAll('.task-row[data-vt]');
+    rows.forEach(row => {
+        const vt = row.dataset.vt;
+        const isRead = readSet.has(vt);
+        if (filter === 'unread' && isRead) row.style.display = 'none';
+        else if (filter === 'read' && !isRead) row.style.display = 'none';
+        else row.style.display = '';
+    });
+}
+
+// ===================== 过滤偏好持久化 =====================
+// ===================== URL 参数过滤状态 =====================
+// 所有过滤条件存在 URL 里，刷新/分享均保留；API Key 不入 URL（安全）
+
+function serializeFiltersToURL() {
+    const params = new URLSearchParams();
+    const get = id => document.getElementById(id)?.value.trim() || '';
+
+    const q         = get('filterQ');
+    const startDate = get('filterStartDate');
+    const endDate   = get('filterEndDate');
+    const webhook   = get('filterWebhook');
+    const platform  = get('filterPlatform');
+    const author    = get('filterAuthor');
+    const status    = get('filterStatus');
+    const read      = get('filterRead');
+
+    if (q)         params.set('q', q);
+    if (startDate) params.set('start_date', startDate);
+    if (endDate)   params.set('end_date', endDate);
+    // webhook 含密钥，不写入 URL
+    if (platform)  params.set('platform', platform);
+    if (author)    params.set('author', author);
+    // 默认值不写入 URL，保持简洁
+    if (status && status !== 'success') params.set('status', status);
+    if (read   && read   !== 'all')     params.set('read', read);
+
+    const qs = params.toString();
+    history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+}
+
+function loadFiltersFromURL() {
+    // 必须在 populateFilterDropdowns() 之后调用，webhook 选项才存在
+    const params = new URLSearchParams(window.location.search);
+    const set = (id, key) => {
+        const val = params.get(key);
+        if (val !== null) { const el = document.getElementById(id); if (el) el.value = val; }
+    };
+    set('filterQ',          'q');
+    set('filterStartDate',  'start_date');
+    set('filterEndDate',    'end_date');
+    // webhook 不从 URL 读取
+    set('filterPlatform',   'platform');
+    set('filterAuthor',     'author');
+    set('filterStatus',     'status');
+    set('filterRead',       'read');
+}
+
+function getAliasMap() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY_ALIAS()) || '{}'); }
+    catch { return {}; }
+}
+function saveAliasMap(m) {
+    localStorage.setItem(STORAGE_KEY_ALIAS(), JSON.stringify(m));
+}
+function getAlias(url) { return getAliasMap()[url] || url; }
+function shortWebhook(url) {
+    const alias = getAlias(url);
+    if (alias !== url) return alias;
+    // 显示 URL 末尾片段
+    try {
+        const u = new URL(url);
+        const key = u.searchParams.get('key');
+        return key ? `key=…${key.slice(-6)}` : url.slice(-30);
+    } catch { return url.slice(-30); }
+}
+
+const PLATFORM_LABELS = {
+    youtube: '🎬 YouTube',
+    bilibili: '📺 Bilibili',
+    xiaoyuzhou: '🎵 小宇宙',
+    xiaohongshu: '📕 小红书',
+    douyin: '🎭 抖音',
+};
+
+// ===================== Auth =====================
+function loadSavedKey() {
+    const persisted = localStorage.getItem('vta_api_key_persist');
+    const session = sessionStorage.getItem('vta_api_key');
+    const saved = persisted || session;
+    if (saved) {
+        document.getElementById('apiKeyInput').value = saved;
+        if (persisted) document.getElementById('rememberKey').checked = true;
+    }
+}
+
+async function loadHistory(page = 0) {
+    const keyInput = document.getElementById('apiKeyInput').value.trim();
+    if (!keyInput) { showStatus('err', '请输入 API Key'); return; }
+
+    currentApiKey = keyInput;
+    sessionStorage.setItem('vta_api_key', keyInput);
+    if (document.getElementById('rememberKey').checked) {
+        localStorage.setItem('vta_api_key_persist', keyInput);
+    } else {
+        localStorage.removeItem('vta_api_key_persist');
+    }
+    currentPage = page;
+
+    showListLoading();
+
+    // 先拿过滤选项（首次加载）
+    if (page === 0) {
+        await loadFilterOptions();
+    }
+
+    await fetchHistory();
+}
+
+async function loadFilterOptions() {
+    try {
+        const res = await apiFetch('/api/audit/filter-options');
+        if (res.code === 200) {
+            filterOptions = res.data;
+            currentMasked = res.data.api_key_masked || '';
+            populateFilterDropdowns();
+            loadFiltersFromURL();   // 恢复 URL 里的过滤条件（必须在下拉填充后）
+            document.getElementById('filterBar').style.display = 'flex';
+            document.getElementById('statsBar').style.display = 'flex';
+            // 只在有 webhook 记录时才显示别名设置入口
+            if (filterOptions.webhooks && filterOptions.webhooks.length > 0) {
+                document.getElementById('aliasToggle').style.display = '';
+            }
+        }
+    } catch(e) {
+        console.error('filter-options error', e);
+    }
+}
+
+function populateFilterDropdowns() {
+    const aliasMap = getAliasMap();
+    const webhookSel = document.getElementById('filterWebhook');
+    webhookSel.innerHTML = '<option value="">全部</option>';
+    filterOptions.webhooks.forEach(w => {
+        const opt = document.createElement('option');
+        opt.value = w;
+        opt.textContent = aliasMap[w] || shortWebhook(w);
+        webhookSel.appendChild(opt);
+    });
+
+    const platformSel = document.getElementById('filterPlatform');
+    platformSel.innerHTML = '<option value="">全部</option>';
+    filterOptions.platforms.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = PLATFORM_LABELS[p] || p;
+        platformSel.appendChild(opt);
+    });
+
+    const authorSel = document.getElementById('filterAuthor');
+    authorSel.innerHTML = '<option value="">全部</option>';
+    filterOptions.authors.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a; opt.textContent = a;
+        authorSel.appendChild(opt);
+    });
+}
+
+// ===================== 过滤 =====================
+function applyFilter() { serializeFiltersToURL(); loadHistory(0); }
+function resetFilter() {
+    document.getElementById('filterStartDate').value = '';
+    document.getElementById('filterEndDate').value = '';
+    document.getElementById('filterWebhook').value = '';
+    document.getElementById('filterPlatform').value = '';
+    document.getElementById('filterAuthor').value = '';
+    document.getElementById('filterStatus').value = 'success';
+    document.getElementById('filterRead').value = 'all';
+    const qEl = document.getElementById('filterQ'); if (qEl) qEl.value = '';
+    history.replaceState(null, '', window.location.pathname);  // 清空 URL 参数
+    loadHistory(0);
+}
+function changePage(delta) {
+    const maxPage = Math.ceil(totalItems / PAGE_SIZE) - 1;
+    currentPage = Math.max(0, Math.min(maxPage, currentPage + delta));
+    fetchHistory();
+}
+
+// ===================== API 请求 =====================
+async function apiFetch(url, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const fullUrl = qs ? `${url}?${qs}` : url;
+    const res = await fetch(fullUrl, {
+        headers: { 'Authorization': `Bearer ${currentApiKey}` }
+    });
+    const json = await res.json();
+    if (res.status === 401) { showStatus('err', 'API Key 无效'); throw new Error('401'); }
+    return json;
+}
+
+async function fetchHistory() {
+    const params = { limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE };
+
+    const startDate = document.getElementById('filterStartDate').value;
+    const endDate   = document.getElementById('filterEndDate').value;
+    const webhook   = document.getElementById('filterWebhook').value;
+    const platform  = document.getElementById('filterPlatform').value;
+    const author    = document.getElementById('filterAuthor').value;
+    const status    = document.getElementById('filterStatus').value;
+
+    const q = document.getElementById('filterQ')?.value.trim() || '';
+
+    if (startDate) params.start_date = startDate;
+    if (endDate)   params.end_date = endDate;
+    if (webhook)   params.webhook = webhook;
+    if (platform)  params.platform = platform;
+    if (author)    params.author = author;
+    if (status)    params.status = status;
+    if (q)         params.q = q;
+
+    try {
+        const res = await apiFetch('/api/audit/history', params);
+        if (res.code !== 200) { showError(res.message || '查询失败'); return; }
+
+        currentMasked = res.data.api_key_masked || currentMasked;
+        totalItems = res.data.total;
+        showStatus('ok', '认证成功');
+        selectedSet.clear();
+        updateSelectionUI();
+        renderList(res.data.items);
+        applyReadFilter();
+        renderPagination();
+        updateUnreadBadge(res.data.items);
+    } catch(e) {
+        if (e.message !== '401') showError('网络错误，请稍后重试');
+    }
+}
+
+// ===================== 渲染 =====================
+function renderList(items) {
+    const area = document.getElementById('listArea');
+    if (!items.length) {
+        area.innerHTML = `<div class="state-box"><div class="icon">📭</div><div>暂无符合条件的任务记录</div></div>`;
+        return;
+    }
+
+    const readSet = getReadSet();
+    const rows = items.map(item => buildRow(item, readSet));
+    area.innerHTML = `<div class="task-list">${rows.join('')}</div>`;
+
+    // 绑定 hover 摘要 + checkbox
+    document.querySelectorAll('.task-row[data-vt]').forEach(row => {
+        row.addEventListener('mouseenter', onRowHover);
+        row.addEventListener('mousemove', onRowMove);
+        row.addEventListener('mouseleave', onRowLeave);
+        const chk = row.querySelector('.row-checkbox');
+        if (chk) {
+            chk.addEventListener('click', e => {
+                e.stopPropagation();   // 不触发行点击
+                toggleSelect(row.dataset.vt, chk, row);
+            });
+        }
+    });
+    document.getElementById('selectAllChk').checked = false;
+    document.getElementById('selectAllChk').indeterminate = false;
+}
+
+function buildRow(item, readSet) {
+    const isCompleted = item.status === 'success';
+    const isRead = isCompleted && item.view_token && readSet.has(item.view_token);
+    const canClick = isCompleted && item.view_token;
+
+    const time = item.request_time
+        ? item.request_time.replace('T', ' ').slice(0, 16)
+        : '—';
+
+    const titleHtml = item.title
+        ? `<div class="task-title">${esc(item.title)}</div><div class="task-author">${esc(item.author || '')}</div>`
+        : `<div class="task-title" style="color:var(--text-tertiary)">${esc(item.video_url || '(无标题)')}</div>
+           ${!isCompleted ? `<div class="task-author"><span class="task-status-badge status-${item.status}">${item.status}</span></div>` : ''}`;
+
+    const platformLabel = item.platform ? (PLATFORM_LABELS[item.platform] || item.platform) : '—';
+    const webhookLabel = item.wechat_webhook ? shortWebhook(item.wechat_webhook) : '—';
+
+    const classes = ['task-row'];
+    if (isRead) classes.push('read');
+    if (!canClick) classes.push('unclickable');
+
+    const vtAttr = canClick ? `data-vt="${esc(item.view_token)}"` : '';
+    const clickHandler = canClick
+        ? `onclick="openTask('${esc(item.view_token)}', this)"`
+        : '';
+
+    const checkboxHtml = canClick
+        ? `<input type="checkbox" class="row-checkbox" onclick="event.stopPropagation()">`
+        : `<span></span>`;
+
+    return `
+        <div class="${classes.join(' ')}" ${vtAttr} ${clickHandler}>
+            ${!isRead && canClick ? '<div class="read-dot"></div>' : ''}
+            ${checkboxHtml}
+            <div class="task-time">${time}</div>
+            <div class="task-title-cell">${titleHtml}</div>
+            <div class="task-platform">${platformLabel}</div>
+        </div>`;
+}
+
+function renderReadState() {
+    const readSet = getReadSet();
+    document.querySelectorAll('.task-row[data-vt]').forEach(row => {
+        const vt = row.dataset.vt;
+        if (readSet.has(vt)) {
+            row.classList.add('read');
+            const dot = row.querySelector('.read-dot');
+            if (dot) dot.remove();
+        }
+    });
+    updateUnreadBadgeFromDOM();
+}
+
+function updateUnreadBadge(items) {
+    const readSet = getReadSet();
+    const unread = items.filter(i => i.view_token && !readSet.has(i.view_token) && i.status === 'success').length;
+    const badge = document.getElementById('unreadBadge');
+    const total = document.getElementById('totalCount');
+    total.textContent = `共 ${totalItems} 条`;
+    if (unread > 0) {
+        badge.style.display = '';
+        badge.textContent = `${unread} 条未读`;
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function updateUnreadBadgeFromDOM() {
+    const readSet = getReadSet();
+    const rows = document.querySelectorAll('.task-row[data-vt]');
+    let unread = 0;
+    rows.forEach(r => { if (!readSet.has(r.dataset.vt)) unread++; });
+    const badge = document.getElementById('unreadBadge');
+    badge.style.display = unread > 0 ? '' : 'none';
+    badge.textContent = `${unread} 条未读`;
+}
+
+function renderPagination() {
+    const bar = document.getElementById('paginationBar');
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    if (totalPages <= 1) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    document.getElementById('pageInfo').textContent = `第 ${currentPage + 1} / ${totalPages} 页`;
+    document.getElementById('prevBtn').disabled = currentPage === 0;
+    document.getElementById('nextBtn').disabled = currentPage >= totalPages - 1;
+}
+
+// ===================== 交互 =====================
+function openTask(viewToken, rowEl) {
+    markRead(viewToken);
+    rowEl.classList.add('read');
+    const dot = rowEl.querySelector('.read-dot');
+    if (dot) dot.remove();
+    updateUnreadBadgeFromDOM();
+    window.open(`/view/${viewToken}`, '_blank');
+}
+
+// ===================== 摘要预览 =====================
+function onRowHover(e) {
+    const rowEl = e.currentTarget;   // 必须在 handler 内先存引用，setTimeout 后 currentTarget 会被置 null
+    const vt = rowEl.dataset.vt;
+    if (!vt) return;
+    summaryDebounce = setTimeout(() => fetchSummary(vt, rowEl), 300);
+}
+function onRowMove(e) {
+    const tooltip = document.getElementById('summaryTooltip');
+    if (summaryVisible) positionTooltip(e);
+}
+function onRowLeave() {
+    clearTimeout(summaryDebounce);
+    setTimeout(() => {
+        document.getElementById('summaryTooltip').classList.remove('visible');
+        summaryVisible = false;
+    }, 150);
+}
+
+async function fetchSummary(viewToken, rowEl) {
+    try {
+        const res = await apiFetch('/api/audit/summary', { view_token: viewToken });
+        if (res.code === 200) {
+            const title = rowEl.querySelector('.task-title')?.textContent || '';
+            document.getElementById('tooltipTitle').textContent = title;
+            document.getElementById('tooltipContent').textContent = res.data.summary || '（暂无摘要）';
+            const tooltip = document.getElementById('summaryTooltip');
+            tooltip.classList.add('visible');
+            summaryVisible = true;
+
+            // position:fixed 相对视口，不加 scrollY
+            const rect = rowEl.getBoundingClientRect();
+            const top = rect.bottom + 8;
+            const left = Math.min(rect.left, window.innerWidth - 360);
+            // 若下方空间不足，改为显示在行上方
+            const fitsBelow = top + 200 < window.innerHeight;
+            tooltip.style.top = fitsBelow ? top + 'px' : (rect.top - 8 - 200) + 'px';
+            tooltip.style.left = Math.max(0, left) + 'px';
+        }
+    } catch(e) { /* 静默失败 */ }
+}
+
+function positionTooltip(e) {
+    const tooltip = document.getElementById('summaryTooltip');
+    // clientY/clientX 对应 position:fixed 的视口坐标
+    tooltip.style.top = Math.min(e.clientY + 12, window.innerHeight - 220) + 'px';
+    tooltip.style.left = Math.min(e.clientX + 8, window.innerWidth - 360) + 'px';
+}
+
+// ===================== Webhook 别名 =====================
+function toggleAliasPanel() {
+    const panel = document.getElementById('aliasPanel');
+    panel.classList.toggle('visible');
+    if (panel.classList.contains('visible')) buildAliasRows();
+}
+
+function buildAliasRows() {
+    const aliasMap = getAliasMap();
+    const container = document.getElementById('aliasRows');
+    container.innerHTML = filterOptions.webhooks.map(w => `
+        <div class="alias-row">
+            <span class="alias-url" title="${esc(w)}">${esc(w)}</span>
+            <input class="alias-input" type="text" placeholder="设置别名..."
+                   data-url="${esc(w)}"
+                   value="${esc(aliasMap[w] || '')}">
+        </div>
+    `).join('');
+}
+
+function saveAliases() {
+    const inputs = document.querySelectorAll('.alias-input');
+    const map = {};
+    inputs.forEach(inp => {
+        const url = inp.dataset.url;
+        const alias = inp.value.trim();
+        if (alias) map[url] = alias;
+    });
+    saveAliasMap(map);
+    populateFilterDropdowns();
+    showStatus('ok', '别名已保存');
+}
+
+// ===================== UI 辅助 =====================
+function showListLoading() {
+    document.getElementById('listArea').innerHTML =
+        `<div class="state-box"><div class="icon">⏳</div><div>加载中...</div></div>`;
+}
+function showError(msg) {
+    document.getElementById('listArea').innerHTML =
+        `<div class="state-box"><div class="icon">⚠️</div><div>${esc(msg)}</div><br>
+         <button class="btn btn-ghost" onclick="loadHistory(0)" style="margin-top:8px">重试</button></div>`;
+}
+function showStatus(type, msg) {
+    const el = document.getElementById('authStatus');
+    el.style.display = '';
+    el.className = `auth-status ${type}`;
+    el.textContent = msg;
+}
+function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===================== 回车触发查询 =====================
+document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadHistory(0);
+});
+
+// 过滤栏任意子元素 change → 实时写入 URL（冒泡监听，无需逐一绑定）
+document.addEventListener('DOMContentLoaded', () => {
+    const bar = document.getElementById('filterBar');
+    if (bar) bar.addEventListener('change', serializeFiltersToURL);
+
+    // 搜索框：回车立即搜索，输入 500ms 防抖自动搜索
+    const qInput = document.getElementById('filterQ');
+    if (!qInput) return;
+    qInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { clearTimeout(searchDebounce); serializeFiltersToURL(); loadHistory(0); }
+    });
+    qInput.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => { serializeFiltersToURL(); loadHistory(0); }, 500);
+    });
+});
+let searchDebounce = null;
+
+// ===================== 从主页 localStorage 读取 Token（与主页共用同一 Key）=====================
+function tryLoadMainPageToken() {
+    // 主页用简单加密存在 vta_bearer_token，加密 key 是固定字符串
+    const ENCRYPT_KEY = 'vta_encrypt_key_2024';
+    function simpleDecrypt(encoded) {
+        if (!encoded) return '';
+        try {
+            const reversed = encoded.split('').reverse().join('');
+            const decoded = decodeURIComponent(escape(atob(reversed)));
+            return decoded.replace(ENCRYPT_KEY, '');
+        } catch (e) { return ''; }
+    }
+    const raw = localStorage.getItem('vta_bearer_token');
+    return raw ? simpleDecrypt(raw) : '';
+}
+
+// ===================== 初始化 =====================
+loadSavedKey();
+// 如果没有缓存的 key，尝试从主页自动填入
+if (!document.getElementById('apiKeyInput').value) {
+    const mainKey = tryLoadMainPageToken();
+    if (mainKey) document.getElementById('apiKeyInput').value = mainKey;
+}
+// 有 key 就自动查询，无需手动点击
+if (document.getElementById('apiKeyInput').value) {
+    loadHistory();
+}
+</script>
+</body>
+</html>
