@@ -1,0 +1,16 @@
+<service>
+  <id>CapsWriterService</id>
+  <name>CapsWriter Offline Server</name>
+  <description>Runs CapsWriter Offline Server as a Windows service for local ASR.</description>
+  <executable>__CAPSWRITER_EXE__</executable>
+  <workingdirectory>__CAPSWRITER_WORKDIR__</workingdirectory>
+  <startmode>Automatic</startmode>
+  <stoptimeout>15sec</stoptimeout>
+  <stopparentprocessfirst>true</stopparentprocessfirst>
+  <logpath>__CAPSWRITER_LOGPATH__</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+  <onfailure action="restart" delay="10 sec" />
+</service>

@@ -87,6 +87,55 @@ services:
       MAX_CONCURRENT_SESSIONS: "5"
       MAX_QUEUE_LENGTH: "10"
 
+  funasr-spk-server:
+    profiles:
+      - transcript
+    build:
+      context: ../services/funasr_spk_server
+      dockerfile: Dockerfile
+    image: ${FUNASR_SPK_IMAGE:-ai-information-processor-funasr-spk-server:local}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FUNASR_SPK_PORT:-8767}:8767"
+    volumes:
+      - ../services/funasr_spk_server/config.json:/app/config.json:ro
+      - ./data/funasr-spk-server/models:/app/models
+      - ./data/funasr-spk-server/uploads:/app/uploads
+      - ./data/funasr-spk-server/logs:/app/logs
+      - ./data/funasr-spk-server/data:/app/data
+      - ./data/funasr-spk-server/temp:/app/temp
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /app
+      FUNASR_SERVER_HOST: 0.0.0.0
+      FUNASR_SERVER_PORT: 8767
+      FUNASR_WEBHOOK_URL: ${FUNASR_WEBHOOK_URL:-}
+      FUNASR_AUTH_SECRET_KEY: ${FUNASR_AUTH_SECRET_KEY:-local-dev-secret-key}
+      FUNASR_AUTH_ENABLED: ${FUNASR_AUTH_ENABLED:-false}
+      FUNASR_NOTIFICATION_ENABLED: ${FUNASR_NOTIFICATION_ENABLED:-false}
+      FUNASR_LOG_LEVEL: ${FUNASR_LOG_LEVEL:-INFO}
+      FUNASR_MODEL_DIR: /app/models
+      FUNASR_UPLOAD_DIR: /app/uploads
+      FUNASR_TEMP_DIR: /app/temp
+      FUNASR_LOG_DIR: /app/logs
+      FUNASR_DATA_DIR: /app/data
+      FUNASR_DEVICE: ${FUNASR_DEVICE:-cpu}
+      FUNASR_DEVICE_PRIORITY: ${FUNASR_DEVICE_PRIORITY:-cpu}
+      FUNASR_NCPU: ${FUNASR_NCPU:-8}
+      FUNASR_BATCH_SIZE_S: ${FUNASR_BATCH_SIZE_S:-60}
+      FUNASR_MAX_CONCURRENT_TASKS: ${FUNASR_MAX_CONCURRENT_TASKS:-1}
+      FUNASR_TASK_TIMEOUT_MINUTES: ${FUNASR_TASK_TIMEOUT_MINUTES:-60}
+      FUNASR_TRANSCRIPTION_SPEED_RATIO: ${FUNASR_TRANSCRIPTION_SPEED_RATIO:-4}
+      OMP_NUM_THREADS: ${FUNASR_OMP_NUM_THREADS:-4}
+      PYTORCH_MPS_HIGH_WATERMARK_RATIO: ${PYTORCH_MPS_HIGH_WATERMARK_RATIO:-0.0}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8767), 5); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   video-transcript-api:
     profiles:
       - transcript
@@ -102,6 +151,8 @@ services:
       - ./data/video-transcript-api:/app/data
     environment:
       TZ: ${TZ:-America/New_York}
+    depends_on:
+      - funasr-spk-server
 
   rsshub:
     image: ${RSSHUB_IMAGE:-diygod/rsshub:latest}

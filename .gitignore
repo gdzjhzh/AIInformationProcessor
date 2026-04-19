@@ -1,4 +1,14 @@
 # Vendored service sources live under /services and are tracked by the main repo.
+/services/capswriter/runtime/
+/services/capswriter/windows-service/CapsWriterService.exe
+/services/capswriter/windows-service/CapsWriterService.xml
+/services/capswriter/windows-service/logs/
+/services/funasr_spk_server/.env
+/services/funasr_spk_server/models/
+/services/funasr_spk_server/uploads/
+/services/funasr_spk_server/logs/
+/services/funasr_spk_server/data/
+/services/funasr_spk_server/temp/
 
 # Local secrets
 /deploy/.env
