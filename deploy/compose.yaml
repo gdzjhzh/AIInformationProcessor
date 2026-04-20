@@ -17,6 +17,8 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:${N8N_PORT:-5678}:5678"
     volumes:
@@ -44,6 +46,7 @@ services:
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      EMBEDDING_INPUT_MAX_CHARS: ${EMBEDDING_INPUT_MAX_CHARS:-8000}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION}
       QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE}
       QDRANT_DIFF_THRESHOLD: ${QDRANT_DIFF_THRESHOLD}

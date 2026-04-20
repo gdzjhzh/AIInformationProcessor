@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: aip-contract-guard
+        name: AIP contract guard
+        entry: python deploy/n8n/scripts/precommit_guard.py --check contract
+        language: system
+        pass_filenames: true
+        files: ^(contracts/|deploy/n8n/workflows/|deploy/README\.md|deploy/n8n/WORKFLOW_NOTES\.md)$
+      - id: aip-smoke-guard
+        name: AIP qdrant smoke guard
+        entry: python deploy/n8n/scripts/precommit_guard.py --check smoke
+        language: system
+        pass_filenames: true
+        files: ^(deploy/n8n/workflows/|deploy/n8n/scripts/smoke_qdrant_gate\.py|deploy/compose\.yaml|deploy/\.env\.example)$

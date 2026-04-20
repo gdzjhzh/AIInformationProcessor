@@ -273,3 +273,23 @@ python deploy/n8n/scripts/smoke_qdrant_gate.py
 - 用合成向量验证 `full_push`、`diff_push`、`silent` 三种动作，以及“同一 `item_id` 内容更新”不会被误吞
 
 根目录 `DEBUG_LOG.md` 是总调试日志。后续 `publish / sync / smoke / verify / alignment check` 都会默认往这里追加。
+
+仓库根目录已经提供 `.pre-commit-config.yaml`，把这两层守门接到了本地提交前：
+
+```powershell
+python -m pip install --user pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+- `AIP contract guard` 会在改动 `contracts/` 或 `deploy/n8n/workflows/` 时运行 `python contracts/validate_contract.py`
+- `AIP qdrant smoke guard` 会在改动 workflow/runtime 相关文件时运行 `python deploy/n8n/scripts/smoke_qdrant_gate.py --no-debug-log`
+- 如需紧急跳过本地 smoke，可临时设置 `AIP_SKIP_SMOKE=1`，但这只应该用于与 runtime 无关的例外场景
+## Transcript Debug First
+
+如果是 transcript / `04_video_transcript_ingest` / `VideoTranscriptAPI` 排障，先读 `deploy/TRANSCRIPT_RUNTIME_INVARIANTS.md`，不要直接开始猜服务边界。
+
+- `CapsWriter` 是宿主机本地服务，`VideoTranscriptAPI` 访问它使用 `ws://host.docker.internal:6016`
+- `FunASR` 是 Docker 内服务，`VideoTranscriptAPI` 访问它使用 `ws://funasr-spk-server:8767`
+
+先区分这两个运行边界，再继续排障。

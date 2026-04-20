@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,9 +24,71 @@ def dumps_json(value: Any) -> str | None:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def load_workflows(workflow_dir: Path, include_ids: set[str] | None) -> list[tuple[Path, dict[str, Any]]]:
+def run_git_command(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        cwd=str(cwd),
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+
+def resolve_repo_root(path: Path) -> Path:
+    result = run_git_command(["git", "rev-parse", "--show-toplevel"], cwd=path)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Could not resolve git repo root from {path}: "
+            f"{result.stderr.strip() or result.stdout.strip() or 'git rev-parse failed'}"
+        )
+    return Path(result.stdout.strip()).resolve()
+
+
+def list_repo_managed_workflow_paths(
+    workflow_dir: Path,
+    *,
+    tracked_only: bool = True,
+) -> tuple[list[Path], list[Path]]:
+    all_paths = sorted(path.resolve() for path in workflow_dir.glob("*.json"))
+    if not tracked_only:
+        return all_paths, []
+
+    repo_root = resolve_repo_root(workflow_dir)
+    try:
+        pathspec = workflow_dir.resolve().relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Workflow directory {workflow_dir.resolve()} is not inside git repo {repo_root}"
+        ) from exc
+
+    result = run_git_command(["git", "ls-files", "--", pathspec], cwd=repo_root)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Could not list tracked workflow files under {workflow_dir}: "
+            f"{result.stderr.strip() or result.stdout.strip() or 'git ls-files failed'}"
+        )
+
+    tracked_paths = {
+        (repo_root / raw_line.strip()).resolve()
+        for raw_line in result.stdout.splitlines()
+        if raw_line.strip().endswith(".json")
+    }
+    managed = [path for path in all_paths if path in tracked_paths]
+    ignored = [path for path in all_paths if path not in tracked_paths]
+    return managed, ignored
+
+
+def load_workflows(
+    workflow_dir: Path,
+    include_ids: set[str] | None,
+    *,
+    tracked_only: bool = True,
+) -> list[tuple[Path, dict[str, Any]]]:
+    managed_paths, _ = list_repo_managed_workflow_paths(workflow_dir, tracked_only=tracked_only)
     workflows: list[tuple[Path, dict[str, Any]]] = []
-    for path in sorted(workflow_dir.glob("*.json")):
+    for path in managed_paths:
         data = json.loads(path.read_text(encoding="utf-8"))
         workflow_id = str(data.get("id", "")).strip()
         if not workflow_id:
@@ -35,8 +99,63 @@ def load_workflows(workflow_dir: Path, include_ids: set[str] | None) -> list[tup
     if include_ids:
         missing = include_ids - {workflow["id"] for _, workflow in workflows}
         if missing:
-            raise ValueError(f"Workflow ids not found in {workflow_dir}: {', '.join(sorted(missing))}")
+            scope = "tracked repo workflows" if tracked_only else "workflow_dir"
+            raise ValueError(f"Workflow ids not found in {scope} {workflow_dir}: {', '.join(sorted(missing))}")
     return workflows
+
+
+def workflow_definition_payload(workflow: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": str(workflow.get("name") or ""),
+        "active": bool(workflow.get("active")),
+        "nodes": workflow.get("nodes", []),
+        "connections": workflow.get("connections", {}),
+        "settings": workflow.get("settings", {}),
+        "staticData": workflow.get("staticData"),
+        "pinData": workflow.get("pinData", {}),
+        "meta": workflow.get("meta", {}),
+        "isArchived": bool(workflow.get("isArchived")),
+        "description": workflow.get("description"),
+    }
+
+
+def workflow_definition_hash(workflow: dict[str, Any]) -> str:
+    payload = workflow_definition_payload(workflow)
+    digest = hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return digest
+
+
+def parse_runtime_json(value: Any, fallback: Any) -> Any:
+    if value in (None, ""):
+        return fallback
+    if isinstance(value, (dict, list)):
+        return value
+    return json.loads(str(value))
+
+
+def workflow_entity_definition_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": str(row["name"] or ""),
+        "active": bool(row["active"]),
+        "nodes": parse_runtime_json(row["nodes"], []),
+        "connections": parse_runtime_json(row["connections"], {}),
+        "settings": parse_runtime_json(row["settings"], {}),
+        "staticData": parse_runtime_json(row["staticData"], None),
+        "pinData": parse_runtime_json(row["pinData"], {}),
+        "meta": parse_runtime_json(row["meta"], {}),
+        "isArchived": bool(row["isArchived"]),
+        "description": row["description"],
+    }
+
+
+def workflow_entity_definition_hash(row: sqlite3.Row | dict[str, Any]) -> str:
+    payload = workflow_entity_definition_payload(row)
+    digest = hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return digest
 
 
 def backup_database(conn: sqlite3.Connection, backup_dir: Path) -> Path:
@@ -170,6 +289,33 @@ def prune_webhook_rows(
     return removed
 
 
+def delete_runtime_workflow(cursor: sqlite3.Cursor, workflow_id: str) -> None:
+    if table_exists(cursor, "webhook_entity"):
+        cursor.execute("DELETE FROM webhook_entity WHERE workflowId = ?", (workflow_id,))
+    if table_exists(cursor, "workflow_published_version"):
+        cursor.execute("DELETE FROM workflow_published_version WHERE workflowId = ?", (workflow_id,))
+    if table_exists(cursor, "workflow_publish_history"):
+        cursor.execute("DELETE FROM workflow_publish_history WHERE workflowId = ?", (workflow_id,))
+    if table_exists(cursor, "shared_workflow"):
+        cursor.execute("DELETE FROM shared_workflow WHERE workflowId = ?", (workflow_id,))
+    cursor.execute("DELETE FROM workflow_entity WHERE id = ?", (workflow_id,))
+
+
+def set_workflow_active_version(
+    cursor: sqlite3.Cursor,
+    workflow_id: str,
+    version_id: str | None,
+) -> None:
+    cursor.execute(
+        """
+        UPDATE workflow_entity
+        SET activeVersionId = ?
+        WHERE id = ?
+        """,
+        (version_id, workflow_id),
+    )
+
+
 def ensure_published_version(
     cursor: sqlite3.Cursor,
     workflow_id: str,
@@ -286,7 +432,6 @@ def upsert_workflow_entity(
     pin_data_json = dumps_json(workflow.get("pinData", {}))
     meta_json = dumps_json(workflow.get("meta", {}))
     active = 1 if workflow.get("active") else 0
-    active_version_id = version_id if active else None
     is_archived = 1 if workflow.get("isArchived") else 0
     name = str(workflow.get("name") or workflow_id)
     description = workflow.get("description")
@@ -320,8 +465,7 @@ def upsert_workflow_entity(
                 updatedAt = ?,
                 isArchived = ?,
                 versionCounter = ?,
-                description = ?,
-                activeVersionId = ?
+                description = ?
             WHERE id = ?
             """,
             (
@@ -338,7 +482,6 @@ def upsert_workflow_entity(
                 is_archived,
                 version_counter,
                 description,
-                active_version_id,
                 workflow_id,
             ),
         )
@@ -368,7 +511,7 @@ def upsert_workflow_entity(
                 is_archived,
                 1,
                 description,
-                active_version_id,
+                None,
             ),
         )
         ensure_shared_workflow(cursor, workflow_id, project_id, now)
@@ -450,6 +593,8 @@ def run_sync(
     backup_dir: Path,
     backup_retain: int = 5,
     include_ids: set[str] | None = None,
+    tracked_only: bool = True,
+    prune_unmanaged: bool = True,
 ) -> dict[str, Any]:
     workflow_dir = workflow_dir.resolve()
     db_path = db_path.resolve()
@@ -459,13 +604,15 @@ def run_sync(
     if not db_path.is_file():
         raise FileNotFoundError(f"n8n database does not exist: {db_path}")
 
-    workflows = load_workflows(workflow_dir, include_ids)
+    managed_paths, ignored_paths = list_repo_managed_workflow_paths(workflow_dir, tracked_only=tracked_only)
+    workflows = load_workflows(workflow_dir, include_ids, tracked_only=tracked_only)
     if not workflows:
         raise ValueError(f"No workflow JSON files found in {workflow_dir}")
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
+        conn.execute("PRAGMA foreign_keys = ON")
         backup_path = backup_database(conn, backup_dir)
         cursor = conn.cursor()
         personal_project = fetch_one(
@@ -479,12 +626,15 @@ def run_sync(
         now = utc_now_sql()
         synced: list[str] = []
         pruned_webhook_rows: list[dict[str, Any]] = []
+        pruned_runtime_workflows: list[dict[str, Any]] = []
         for path, workflow in workflows:
             version_id = upsert_workflow_entity(cursor, workflow, personal_project["id"], now)
             upsert_workflow_history(cursor, workflow, version_id, now)
             if workflow.get("active"):
+                set_workflow_active_version(cursor, workflow["id"], version_id)
                 ensure_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
             else:
+                set_workflow_active_version(cursor, workflow["id"], None)
                 remove_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
             removed = prune_webhook_rows(cursor, workflow)
             if removed:
@@ -499,6 +649,31 @@ def run_sync(
                 f"{workflow['id']} | active={bool(workflow.get('active'))} | version={version_id} | {path.name}"
             )
 
+        expected_workflow_ids = {str(workflow["id"]) for _, workflow in workflows}
+        unmanaged_runtime_workflows: list[dict[str, Any]] = []
+        if include_ids is None:
+            cursor.execute(
+                """
+                SELECT id, name, active, updatedAt
+                FROM workflow_entity
+                ORDER BY updatedAt DESC, id ASC
+                """
+            )
+            unmanaged_runtime_workflows = [
+                {
+                    "workflow_id": str(row["id"]),
+                    "workflow_name": str(row["name"] or row["id"]),
+                    "active": bool(row["active"]),
+                    "updatedAt": str(row["updatedAt"] or ""),
+                }
+                for row in cursor.fetchall()
+                if str(row["id"]) not in expected_workflow_ids
+            ]
+            if prune_unmanaged:
+                for row in unmanaged_runtime_workflows:
+                    delete_runtime_workflow(cursor, row["workflow_id"])
+                    pruned_runtime_workflows.append(row)
+
         conn.commit()
     finally:
         conn.close()
@@ -512,8 +687,14 @@ def run_sync(
         "backup_retain": backup_retain,
         "pruned_backups": pruned_backups,
         "requested_workflow_ids": sorted(include_ids or []),
+        "tracked_only": tracked_only,
+        "ignored_workflow_files": [path.name for path in ignored_paths],
+        "managed_workflow_files": [path.name for path in managed_paths],
         "synced": synced,
         "pruned_webhook_rows": pruned_webhook_rows,
+        "unmanaged_runtime_workflows": unmanaged_runtime_workflows if include_ids is None else [],
+        "pruned_runtime_workflows": pruned_runtime_workflows,
+        "prune_unmanaged": bool(prune_unmanaged and include_ids is None),
     }
 
 
@@ -524,9 +705,31 @@ def print_sync_result(result: dict[str, Any]) -> None:
             f"Pruned {len(result['pruned_backups'])} old backup(s); "
             f"kept the most recent {result['backup_retain']}."
         )
+    if result["ignored_workflow_files"]:
+        print(
+            "Ignored local workflow files that are not tracked in git: "
+            + ", ".join(result["ignored_workflow_files"])
+        )
     print("Synced workflows:")
     for line in result["synced"]:
         print(f"  - {line}")
+    if result["prune_unmanaged"]:
+        if result["pruned_runtime_workflows"]:
+            print("Removed unmanaged runtime workflows:")
+            for row in result["pruned_runtime_workflows"]:
+                print(
+                    "  - "
+                    f"{row['workflow_id']} | active={row['active']} | {row['workflow_name']}"
+                )
+        else:
+            print("Removed unmanaged runtime workflows: none")
+    elif result["unmanaged_runtime_workflows"]:
+        print("Unmanaged runtime workflows remain (prune skipped):")
+        for row in result["unmanaged_runtime_workflows"]:
+            print(
+                "  - "
+                f"{row['workflow_id']} | active={row['active']} | {row['workflow_name']}"
+            )
 
 
 def main() -> int:
@@ -564,6 +767,19 @@ def main() -> int:
         help="Optional workflow id to sync. Repeat to sync multiple ids.",
     )
     parser.add_argument(
+        "--include-untracked",
+        action="store_true",
+        help="Treat untracked local workflow JSON files as part of the publish set. Default is tracked repo files only.",
+    )
+    parser.add_argument(
+        "--no-prune-unmanaged",
+        action="store_true",
+        help=(
+            "Do not remove runtime workflows that are outside the tracked repo-managed workflow set. "
+            "Default behavior prunes unmanaged runtime workflows during full publish."
+        ),
+    )
+    parser.add_argument(
         "--debug-log",
         type=Path,
         default=default_debug_log_path(),
@@ -579,6 +795,8 @@ def main() -> int:
             backup_dir=args.backup_dir,
             backup_retain=args.backup_retain,
             include_ids=include_ids,
+            tracked_only=not args.include_untracked,
+            prune_unmanaged=not args.no_prune_unmanaged,
         )
         print_sync_result(result)
         append_debug_log(

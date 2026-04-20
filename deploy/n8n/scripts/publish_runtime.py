@@ -141,6 +141,24 @@ def main() -> int:
         help="Optional workflow id to publish. Repeat to publish multiple ids.",
     )
     parser.add_argument(
+        "--include-untracked",
+        action="store_true",
+        help="Include untracked local workflow JSON files in the publish set. Default is tracked repo files only.",
+    )
+    parser.add_argument(
+        "--no-prune-unmanaged",
+        action="store_true",
+        help=(
+            "Do not remove runtime workflows that are outside the tracked repo-managed workflow set. "
+            "Default behavior prunes unmanaged runtime workflows during full publish."
+        ),
+    )
+    parser.add_argument(
+        "--allow-runtime-extras",
+        action="store_true",
+        help="Allow runtime workflows that are outside the tracked repo-managed workflow set during alignment checks.",
+    )
+    parser.add_argument(
         "--run-smoke-qdrant",
         action="store_true",
         help="Run smoke_qdrant_gate.py after runtime alignment succeeds.",
@@ -162,6 +180,7 @@ def main() -> int:
         help="Append a summary to this debug log file.",
     )
     args = parser.parse_args()
+    args.debug_log = args.debug_log.resolve()
 
     include_ids = [value.strip() for value in args.workflow_id if value.strip()]
     env_values = load_dotenv(args.env_file) if args.env_file.is_file() else {}
@@ -185,6 +204,9 @@ def main() -> int:
             "service_name": args.service_name,
             "base_url": base_url,
             "requested_workflow_ids": include_ids,
+            "include_untracked": args.include_untracked,
+            "prune_unmanaged": not args.no_prune_unmanaged,
+            "allow_runtime_extras": args.allow_runtime_extras,
             "run_smoke_qdrant": args.run_smoke_qdrant,
             "run_verify_transcript": args.run_verify_transcript,
             "restart_enabled": not args.no_restart,
@@ -206,6 +228,10 @@ def main() -> int:
         "--debug-log",
         str(args.debug_log),
     ]
+    if args.include_untracked:
+        sync_command.append("--include-untracked")
+    if args.no_prune_unmanaged:
+        sync_command.append("--no-prune-unmanaged")
     for workflow_id in include_ids:
         sync_command.extend(["--workflow-id", workflow_id])
 
@@ -292,6 +318,10 @@ def main() -> int:
         "--debug-log",
         str(args.debug_log),
     ]
+    if args.include_untracked:
+        alignment_command.append("--include-untracked")
+    if args.allow_runtime_extras:
+        alignment_command.append("--allow-runtime-extras")
     for workflow_id in include_ids:
         alignment_command.extend(["--workflow-id", workflow_id])
 
@@ -377,11 +407,14 @@ def main() -> int:
         script_name="publish_runtime.py",
         stage="publish_runtime",
         status="success",
-        summary="Publish flow completed: repo workflows synced, runtime refreshed, and alignment checked.",
+        summary=(
+            "Publish flow completed: tracked repo workflows synced, runtime refreshed, "
+            "and definition-hash alignment checked."
+        ),
         details={"steps": step_results, "debug_log": args.debug_log},
         log_path=args.debug_log,
     )
-    print("Publish flow completed.")
+    print("Publish flow completed with definition-hash alignment.")
     print(f"Central debug log: {args.debug_log.resolve()}")
     return 0
 

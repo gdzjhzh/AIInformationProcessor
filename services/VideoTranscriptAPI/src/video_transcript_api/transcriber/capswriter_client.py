@@ -489,7 +489,12 @@ class CapsWriterClient:
                 self.log(f"连接到服务器: {server_url} (尝试 {attempt}/{max_retries})")
 
                 self.websocket = await asyncio.wait_for(
-                    websockets.connect(server_url, max_size=None), timeout=10.0
+                    websockets.connect(
+                        server_url,
+                        max_size=None,
+                        subprotocols=["binary"],
+                    ),
+                    timeout=10.0,
                 )
 
                 self.log(f"已连接到服务器: {server_url}")

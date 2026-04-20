@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from debug_log import append_debug_log, default_debug_log_path
-from sync_workflows import fetch_one, load_workflows, table_exists
+from sync_workflows import (
+    fetch_one,
+    list_repo_managed_workflow_paths,
+    load_workflows,
+    table_exists,
+    workflow_definition_hash,
+    workflow_entity_definition_hash,
+)
 
 
 def webhook_node_names(workflow: dict[str, Any]) -> list[str]:
@@ -24,6 +31,8 @@ def run_alignment_check(
     workflow_dir: Path,
     db_path: Path,
     include_ids: set[str] | None = None,
+    tracked_only: bool = True,
+    allow_runtime_extras: bool = False,
 ) -> dict[str, Any]:
     workflow_dir = workflow_dir.resolve()
     db_path = db_path.resolve()
@@ -32,7 +41,11 @@ def run_alignment_check(
     if not db_path.is_file():
         raise FileNotFoundError(f"n8n database does not exist: {db_path}")
 
-    workflows = load_workflows(workflow_dir, include_ids)
+    managed_paths, ignored_paths = list_repo_managed_workflow_paths(
+        workflow_dir,
+        tracked_only=tracked_only,
+    )
+    workflows = load_workflows(workflow_dir, include_ids, tracked_only=tracked_only)
     if not workflows:
         raise ValueError(f"No workflow JSON files found in {workflow_dir}")
 
@@ -44,11 +57,44 @@ def run_alignment_check(
         checks: list[dict[str, Any]] = []
         errors: list[str] = []
         warnings: list[str] = []
+        expected_workflow_ids = {str(workflow["id"]) for _, workflow in workflows}
+
+        if ignored_paths:
+            warnings.append(
+                "Ignored local workflow files that are not tracked in git: "
+                + ", ".join(path.name for path in ignored_paths)
+            )
+
+        runtime_extra_workflows: list[dict[str, Any]] = []
+        if include_ids is None and not allow_runtime_extras:
+            cursor.execute(
+                """
+                SELECT id, name, active, updatedAt
+                FROM workflow_entity
+                ORDER BY updatedAt DESC, id ASC
+                """
+            )
+            runtime_extra_workflows = [
+                {
+                    "workflow_id": str(row["id"]),
+                    "workflow_name": str(row["name"] or row["id"]),
+                    "active": bool(row["active"]),
+                    "updatedAt": str(row["updatedAt"] or ""),
+                }
+                for row in cursor.fetchall()
+                if str(row["id"]) not in expected_workflow_ids
+            ]
+            for row in runtime_extra_workflows:
+                errors.append(
+                    f"{row['workflow_id']}: runtime contains unmanaged workflow "
+                    f"{row['workflow_name']}"
+                )
 
         for path, workflow in workflows:
             workflow_id = str(workflow["id"])
             expected_active = bool(workflow.get("active"))
             expected_version_id = str(workflow.get("versionId") or "").strip()
+            expected_definition_hash = workflow_definition_hash(workflow)
             if not expected_version_id:
                 raise ValueError(f"Workflow {workflow_id} is missing versionId")
 
@@ -58,12 +104,15 @@ def run_alignment_check(
                 "file": path.name,
                 "expected_active": expected_active,
                 "expected_version_id": expected_version_id,
+                "expected_definition_hash": expected_definition_hash,
             }
 
             row = fetch_one(
                 cursor,
                 """
-                SELECT active, versionId, activeVersionId
+                SELECT name, active, versionId, activeVersionId,
+                       nodes, connections, settings, staticData, pinData, meta,
+                       description, isArchived
                 FROM workflow_entity
                 WHERE id = ?
                 """,
@@ -78,11 +127,13 @@ def run_alignment_check(
             db_active = bool(row["active"])
             db_version_id = str(row["versionId"] or "").strip()
             db_active_version_id = str(row["activeVersionId"] or "").strip()
+            db_definition_hash = workflow_entity_definition_hash(row)
             check.update(
                 {
                     "db_active": db_active,
                     "db_version_id": db_version_id,
                     "db_active_version_id": db_active_version_id or None,
+                    "db_definition_hash": db_definition_hash,
                 }
             )
 
@@ -99,6 +150,11 @@ def run_alignment_check(
                 errors.append(
                     f"{workflow_id}: activeVersionId mismatch repo={expected_active_version or 'None'} "
                     f"runtime={db_active_version_id or 'None'}"
+                )
+            if db_definition_hash != expected_definition_hash:
+                errors.append(
+                    f"{workflow_id}: definition hash mismatch repo={expected_definition_hash} "
+                    f"runtime={db_definition_hash}"
                 )
 
             history_row = fetch_one(
@@ -184,9 +240,13 @@ def run_alignment_check(
             "workflow_dir": workflow_dir,
             "db_path": db_path,
             "requested_workflow_ids": sorted(include_ids or []),
+            "tracked_only": tracked_only,
+            "managed_workflow_files": [path.name for path in managed_paths],
+            "ignored_workflow_files": [path.name for path in ignored_paths],
             "checked": checks,
             "errors": errors,
             "warnings": warnings,
+            "runtime_extra_workflows": runtime_extra_workflows,
         }
     finally:
         conn.close()
@@ -201,8 +261,17 @@ def print_alignment_result(result: dict[str, Any]) -> None:
             f"repo_active={item.get('expected_active')} | "
             f"runtime_active={item.get('db_active', 'missing')} | "
             f"repo_version={item.get('expected_version_id')} | "
-            f"runtime_version={item.get('db_version_id', 'missing')}"
+            f"runtime_version={item.get('db_version_id', 'missing')} | "
+            f"repo_hash={item.get('expected_definition_hash', 'n/a')[:12]} | "
+            f"runtime_hash={item.get('db_definition_hash', 'missing')[:12] if item.get('db_definition_hash') else 'missing'}"
         )
+    if result["runtime_extra_workflows"]:
+        print("Extra runtime workflows:")
+        for row in result["runtime_extra_workflows"]:
+            print(
+                "  - "
+                f"{row['workflow_id']} | active={row['active']} | {row['workflow_name']}"
+            )
     if result["warnings"]:
         print("Warnings:")
         for warning in result["warnings"]:
@@ -238,6 +307,16 @@ def main() -> int:
         help="Optional workflow id to check. Repeat to check multiple ids.",
     )
     parser.add_argument(
+        "--include-untracked",
+        action="store_true",
+        help="Treat untracked local workflow JSON files as part of the repo comparison set.",
+    )
+    parser.add_argument(
+        "--allow-runtime-extras",
+        action="store_true",
+        help="Allow runtime workflows that are outside the tracked repo-managed workflow set.",
+    )
+    parser.add_argument(
         "--debug-log",
         type=Path,
         default=default_debug_log_path(),
@@ -251,6 +330,8 @@ def main() -> int:
             workflow_dir=args.workflow_dir,
             db_path=args.db_path,
             include_ids=include_ids,
+            tracked_only=not args.include_untracked,
+            allow_runtime_extras=args.allow_runtime_extras,
         )
         print_alignment_result(result)
         status = "success" if not result["warnings"] else "warning"

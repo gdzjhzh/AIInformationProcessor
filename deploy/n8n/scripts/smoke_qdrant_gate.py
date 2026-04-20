@@ -333,6 +333,11 @@ def main() -> int:
         default=default_debug_log_path(),
         help="Append a summary to this debug log file.",
     )
+    parser.add_argument(
+        "--no-debug-log",
+        action="store_true",
+        help="Do not append results to DEBUG_LOG.md. Useful for pre-commit and other no-side-effect checks.",
+    )
     args = parser.parse_args()
 
     try:
@@ -341,28 +346,30 @@ def main() -> int:
             qdrant_base_url=args.qdrant_base_url,
         )
         print_smoke_result(result)
-        append_debug_log(
-            script_name="smoke_qdrant_gate.py",
-            stage="smoke_qdrant_gate",
-            status="success",
-            summary=f"Synthetic gate smoke passed with {len(result['scenario_results'])} scenario(s).",
-            details=result,
-            log_path=args.debug_log,
-        )
+        if not args.no_debug_log:
+            append_debug_log(
+                script_name="smoke_qdrant_gate.py",
+                stage="smoke_qdrant_gate",
+                status="success",
+                summary=f"Synthetic gate smoke passed with {len(result['scenario_results'])} scenario(s).",
+                details=result,
+                log_path=args.debug_log,
+            )
         return 0
     except Exception as exc:
-        append_debug_log(
-            script_name="smoke_qdrant_gate.py",
-            stage="smoke_qdrant_gate",
-            status="failure",
-            summary=f"Smoke test failed: {exc}",
-            details={
-                "env_file": args.env_file,
-                "qdrant_base_url": args.qdrant_base_url,
-                "error": str(exc),
-            },
-            log_path=args.debug_log,
-        )
+        if not args.no_debug_log:
+            append_debug_log(
+                script_name="smoke_qdrant_gate.py",
+                stage="smoke_qdrant_gate",
+                status="failure",
+                summary=f"Smoke test failed: {exc}",
+                details={
+                    "env_file": args.env_file,
+                    "qdrant_base_url": args.qdrant_base_url,
+                    "error": str(exc),
+                },
+                log_path=args.debug_log,
+            )
         print(exc, file=sys.stderr)
         return 1
 

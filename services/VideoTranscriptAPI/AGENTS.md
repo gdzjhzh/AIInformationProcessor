@@ -73,3 +73,18 @@ Commit messages follow the current log style: concise, imperative Chinese summar
 
 ## Security & Configuration Notes
 Do not commit live credentials; extend `config.example.json` and document defaults instead. Keep generated artifacts in `data/` and `logs/` out of patches unless troubleshooting. When working with remote transcription servers, load tokens from environment variables and clear `data/temp` via `scripts/cleanup_cache.py` after tests so sensitive media does not linger.
+
+## Runtime Boundary Notes
+Before re-debugging transcript connectivity, keep these runtime boundaries fixed in mind:
+
+- `CapsWriter` is a host-local service, not a Docker service.
+- The current repo contract points `capswriter.server_url` to `ws://host.docker.internal:6016`.
+- `FunASR` is the Docker-side service, not the host-local service.
+- The current repo contract points `funasr_spk_server.server_url` to `ws://funasr-spk-server:8767`.
+
+Do not spend time treating them as interchangeable. Validate host-local `6016` and Docker-side `8767` separately.
+
+Additional note:
+
+- CapsWriter currently expects WebSocket subprotocol `binary`.
+- The repo client and `/health` probe already use that subprotocol; if a future change removes it, CapsWriter health can fail with a handshake rejection even when the port is open.

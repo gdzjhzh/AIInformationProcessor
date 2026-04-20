@@ -34,6 +34,7 @@ async def health_check():
     checks["capswriter"] = await _check_websocket_service(
         config.get("capswriter", {}).get("server_url", "ws://localhost:6016"),
         "CapsWriter",
+        subprotocols=["binary"],
     )
     checks["funasr"] = await _check_websocket_service(
         config.get("funasr_spk_server", {}).get("server_url", "ws://localhost:8767"),
@@ -65,7 +66,11 @@ def _check_sqlite() -> Dict[str, Any]:
         return {"healthy": False, "error": str(e)}
 
 
-async def _check_websocket_service(url: str, name: str) -> Dict[str, Any]:
+async def _check_websocket_service(
+    url: str,
+    name: str,
+    subprotocols: list[str] | None = None,
+) -> Dict[str, Any]:
     """检查 WebSocket 服务连通性
 
     Args:
@@ -78,7 +83,11 @@ async def _check_websocket_service(url: str, name: str) -> Dict[str, Any]:
     try:
         import websockets
         async with asyncio.timeout(5):
-            async with websockets.connect(url, close_timeout=3):
+            async with websockets.connect(
+                url,
+                close_timeout=3,
+                subprotocols=subprotocols,
+            ):
                 pass
         return {"healthy": True}
     except ImportError:

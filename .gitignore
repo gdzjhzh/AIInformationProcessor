@@ -30,3 +30,13 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 __pycache__/
+
+# Local Codex artifacts
+/.codex
+/ai_context_pack_generated/
+/ai_context_pack_generated.7z
+
+# Local verification scratch files
+/deploy/tmp-feed/
+/deploy/tmp-real-feed/
+/deploy/n8n/workflows/91_minute_schedule_smoke.json
