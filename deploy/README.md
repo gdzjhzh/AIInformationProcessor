@@ -243,6 +243,24 @@ python deploy/n8n/scripts/publish_runtime.py --run-verify-transcript
 
 这一步是 `01 -> 02 -> 03` 链路稳定运行的前提，因为 `Execute Workflow` 调子工作流时不会只看 `active` 标志，还会检查当前激活版本是否真的存在于版本历史中。
 
+## 契约校验
+
+`NormalizedTextObject` 现在不再只靠文档和 Code Node 约定。仓库根目录新增了：
+
+- `contracts/normalized_text_object.schema.json`
+- `contracts/examples/rss.normalized.json`
+- `contracts/examples/transcript.normalized.json`
+- `contracts/examples/manual.normalized.json`
+- `contracts/validate_contract.py`
+
+运行方式：
+
+```powershell
+python contracts/validate_contract.py
+```
+
+这层契约的 canonical 字段已经收口为 `obsidianInboxDir / content_text / content_html / dedupe_action`。像 `obsidian_inbox_dir / raw_text / raw_html / transcript_text / calibrated_transcript / action` 这类字段只允许停留在入口适配阶段，不能泄漏到 `00` 之后的主干对象里。
+
 发布后建议再跑一次：
 
 ```powershell

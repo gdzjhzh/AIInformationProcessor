@@ -50,6 +50,10 @@
 - `item_id` 优先由 `canonical_url` 或 `source_type + original_id` 生成。
 - `content_text` 是后续评分、摘要、embedding 唯一主文本。
 - `vault_path` 由统一 writer 生成，不允许各入口自行定义另一套命名。
+- 入口适配器在进入 `00_common_normalize_text_object` 之前可以暂时持有 `obsidian_inbox_dir / raw_text / raw_html / transcript_text / calibrated_transcript` 这类字段；一旦输出 `NormalizedTextObject`，必须统一折叠成 `obsidianInboxDir / content_text / content_html`。
+- 机器可读契约固定在 `contracts/normalized_text_object.schema.json`，示例固定在 `contracts/examples/*.normalized.json`，终端校验命令是 `python contracts/validate_contract.py`。
+- `source_host` 现在视为主干标准字段，不再是 `00` 内部顺手补出来但文档没收口的隐含字段。
+- `dedupe_action` 是主干唯一动作字段名；文档、示例和脚本都不应再使用泛化的 `action`。
 
 ### `01_rss_to_obsidian_raw`
 

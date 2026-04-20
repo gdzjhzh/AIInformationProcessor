@@ -1,0 +1,36 @@
+{
+  "item_id": "70db29a9387c457e2810c850f9094a8cf5c0e1d52b5c9e22e12c3de06fc17e18",
+  "source_type": "rss",
+  "source_name": "OpenAI Blog",
+  "source_host": "openai.com",
+  "original_id": "rss:openai-blog:2026-04-19-model-release",
+  "canonical_url": "https://openai.com/index/example-model-release/",
+  "title": "Example model release note",
+  "author": "OpenAI",
+  "published_at": "2026-04-19T08:30:00Z",
+  "ingested_at": "2026-04-19T08:35:00Z",
+  "media_type": "text",
+  "content_text": "OpenAI published a new model release and explained the operational differences between the old and new deployment path.",
+  "content_html": "<p>OpenAI published a new model release and explained the operational differences between the old and new deployment path.</p>",
+  "upstream_task_id": "",
+  "upstream_view_token": "",
+  "upstream_summary": "",
+  "content_hash": "sha256:8d893f1f369ba2ae53ebf339faabf7e2df4da3d14cc6d7c1811f0e4d262e7497",
+  "score": 0,
+  "category": "pending",
+  "tags": [
+    "inbox",
+    "ai-information-processor",
+    "openai-com",
+    "openai-blog",
+    "rss"
+  ],
+  "dedupe_action": "full_push",
+  "status": "raw",
+  "vault_path": "",
+  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "original_item": {
+    "feed_url": "https://openai.com/news/rss.xml",
+    "source": "rss"
+  }
+}

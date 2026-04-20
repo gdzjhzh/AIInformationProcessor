@@ -1,0 +1,41 @@
+{
+  "item_id": "95b7dc0a4f4cc0a6f8f76f293945bcc7d5c53166379f16de973a6f233ee086df",
+  "source_type": "transcript",
+  "source_name": "video-transcript-api",
+  "source_host": "youtube.com",
+  "original_id": "video-transcript:vt_example_token_001",
+  "canonical_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "title": "Example transcript item",
+  "author": "OpenAI",
+  "published_at": "2026-04-18T19:00:00Z",
+  "ingested_at": "2026-04-19T08:42:00Z",
+  "media_type": "video",
+  "content_text": "This transcript explains why adapter-only fields must be normalized before the content enters the mainline enrichment and dedupe pipeline.",
+  "content_html": "",
+  "upstream_task_id": "task_example_001",
+  "upstream_view_token": "vt_example_token_001",
+  "upstream_summary": "",
+  "content_hash": "sha256:83455d61bba5f32910e1749cb3238f79ea3f8182e7682e4fd4dc647564f03f79",
+  "score": 0,
+  "category": "pending",
+  "tags": [
+    "inbox",
+    "ai-information-processor",
+    "youtube-com",
+    "video-transcript-api",
+    "transcript"
+  ],
+  "dedupe_action": "full_push",
+  "status": "raw",
+  "vault_path": "",
+  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "original_item": {
+    "request": {
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    },
+    "task_status": {
+      "code": 200,
+      "message": "ok"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "item_id": "bd5f4997e3a09f6c2177c7c77f612b61d4e589f05436e81e83e9fce4f739d420",
+  "source_type": "podcast",
+  "source_name": "Xiaoyuzhou manual submit",
+  "source_host": "xiaoyuzhoufm.com",
+  "original_id": "video-transcript:vt_example_token_manual_001",
+  "canonical_url": "https://www.xiaoyuzhoufm.com/episode/661111111111111111111111",
+  "title": "Example manual podcast submit",
+  "author": "Manual submit",
+  "published_at": "2026-04-18T21:30:00Z",
+  "ingested_at": "2026-04-19T08:45:00Z",
+  "media_type": "audio",
+  "content_text": "A manually submitted podcast episode should still enter the shared NormalizedTextObject contract instead of inventing a separate manual-only field set.",
+  "content_html": "",
+  "upstream_task_id": "task_manual_001",
+  "upstream_view_token": "vt_example_token_manual_001",
+  "upstream_summary": "",
+  "content_hash": "sha256:8b52f5af73055f8297f9268caef1dfe8e629c7e081474808475dd07117c37c81",
+  "score": 0,
+  "category": "pending",
+  "tags": [
+    "inbox",
+    "ai-information-processor",
+    "xiaoyuzhoufm-com",
+    "xiaoyuzhou-manual-submit",
+    "podcast",
+    "manual-submit"
+  ],
+  "dedupe_action": "full_push",
+  "status": "raw",
+  "vault_path": "",
+  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "original_item": {
+    "source": "manual-media-submit",
+    "url": "https://www.xiaoyuzhoufm.com/episode/661111111111111111111111"
+  }
+}

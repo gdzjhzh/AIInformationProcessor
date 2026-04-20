@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiinformationprocessor.local/contracts/normalized_text_object.schema.json",
+  "title": "NormalizedTextObject",
+  "description": "Machine-readable contract for the shared object emitted by 00_common_normalize_text_object and consumed by the mainline workflows.",
+  "type": "object",
+  "additionalProperties": false,
+  "x-forbiddenProperties": [
+    "obsidian_inbox_dir",
+    "raw_text",
+    "raw_html",
+    "transcript_text",
+    "calibrated_transcript",
+    "action"
+  ],
+  "x-canonicalMappings": {
+    "obsidian_inbox_dir": "obsidianInboxDir",
+    "raw_text": "content_text",
+    "raw_html": "content_html",
+    "transcript_text": "content_text",
+    "calibrated_transcript": "content_text",
+    "action": "dedupe_action"
+  },
+  "required": [
+    "item_id",
+    "source_type",
+    "source_name",
+    "source_host",
+    "original_id",
+    "canonical_url",
+    "title",
+    "author",
+    "published_at",
+    "ingested_at",
+    "media_type",
+    "content_text",
+    "content_html",
+    "upstream_task_id",
+    "upstream_view_token",
+    "upstream_summary",
+    "content_hash",
+    "score",
+    "category",
+    "tags",
+    "dedupe_action",
+    "status",
+    "vault_path",
+    "obsidianInboxDir"
+  ],
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "original_id": {
+      "type": "string"
+    },
+    "canonical_url": {
+      "type": "string",
+      "minLength": 1,
+      "format": "uri"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "author": {
+      "type": "string"
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ingested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "media_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_html": {
+      "type": "string"
+    },
+    "upstream_task_id": {
+      "type": "string"
+    },
+    "upstream_view_token": {
+      "type": "string"
+    },
+    "upstream_summary": {
+      "type": "string"
+    },
+    "content_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "category": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "dedupe_action": {
+      "type": "string",
+      "enum": [
+        "full_push",
+        "diff_push",
+        "silent"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "raw",
+        "enriched",
+        "deduped"
+      ]
+    },
+    "vault_path": {
+      "type": "string"
+    },
+    "obsidianInboxDir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "enriched_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notification_mode": {
+      "type": "string",
+      "enum": [
+        "full",
+        "incremental",
+        "silent"
+      ]
+    },
+    "should_write_to_vault": {
+      "type": "boolean"
+    },
+    "should_notify": {
+      "type": "boolean"
+    },
+    "should_upsert_qdrant": {
+      "type": "boolean"
+    },
+    "matched_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "matched_same_item": {
+      "type": "boolean"
+    },
+    "matched_same_content": {
+      "type": "boolean"
+    },
+    "matched_payload": {
+      "type": "object"
+    },
+    "qdrant_point_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "qdrant_upsert_endpoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "qdrant_upsert_payload": {
+      "type": "object",
+      "required": [
+        "points"
+      ],
+      "properties": {
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "vector",
+              "payload"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "vector": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "payload": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "qdrant_operation": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "upserted",
+        "skipped"
+      ]
+    },
+    "qdrant_upsert_response": {},
+    "vault_write_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "written",
+        "skipped",
+        "error"
+      ]
+    },
+    "vault_write": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "written",
+        "skipped",
+        "error"
+      ]
+    },
+    "workflow_label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "original_item": {}
+  }
+}
