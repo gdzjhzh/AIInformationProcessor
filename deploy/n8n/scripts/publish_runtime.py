@@ -89,6 +89,12 @@ def main() -> int:
         help="Directory used for automatic SQLite backups before sync.",
     )
     parser.add_argument(
+        "--backup-retain",
+        type=int,
+        default=5,
+        help="Maximum number of SQLite backups to keep in --backup-dir. Use 0 to disable pruning.",
+    )
+    parser.add_argument(
         "--env-file",
         type=Path,
         default=script_dir.parents[1] / ".env",
@@ -173,6 +179,7 @@ def main() -> int:
             "workflow_dir": args.workflow_dir,
             "db_path": args.db_path,
             "backup_dir": args.backup_dir,
+            "backup_retain": args.backup_retain,
             "compose_file": args.compose_file,
             "compose_dir": args.compose_dir,
             "service_name": args.service_name,
@@ -194,6 +201,8 @@ def main() -> int:
         str(args.db_path),
         "--backup-dir",
         str(args.backup_dir),
+        "--backup-retain",
+        str(args.backup_retain),
         "--debug-log",
         str(args.debug_log),
     ]

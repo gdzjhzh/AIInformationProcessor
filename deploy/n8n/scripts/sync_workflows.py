@@ -50,6 +50,25 @@ def backup_database(conn: sqlite3.Connection, backup_dir: Path) -> Path:
     return backup_path
 
 
+def prune_backup_files(backup_dir: Path, retain: int) -> list[Path]:
+    if retain < 0:
+        raise ValueError(f"backup_retain must be >= 0, got {retain}")
+    if retain == 0 or not backup_dir.exists():
+        return []
+
+    backup_files = sorted(
+        (path for path in backup_dir.glob("n8n-main-*.sqlite") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+        reverse=True,
+    )
+
+    removed: list[Path] = []
+    for path in backup_files[retain:]:
+        path.unlink()
+        removed.append(path)
+    return removed
+
+
 def fetch_one(cursor: sqlite3.Cursor, query: str, params: tuple[Any, ...] = ()) -> sqlite3.Row | None:
     cursor.execute(query, params)
     return cursor.fetchone()
@@ -429,6 +448,7 @@ def run_sync(
     workflow_dir: Path,
     db_path: Path,
     backup_dir: Path,
+    backup_retain: int = 5,
     include_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     workflow_dir = workflow_dir.resolve()
@@ -483,10 +503,14 @@ def run_sync(
     finally:
         conn.close()
 
+    pruned_backups = prune_backup_files(backup_dir, backup_retain)
+
     return {
         "workflow_dir": workflow_dir,
         "db_path": db_path,
         "backup_path": backup_path,
+        "backup_retain": backup_retain,
+        "pruned_backups": pruned_backups,
         "requested_workflow_ids": sorted(include_ids or []),
         "synced": synced,
         "pruned_webhook_rows": pruned_webhook_rows,
@@ -495,6 +519,11 @@ def run_sync(
 
 def print_sync_result(result: dict[str, Any]) -> None:
     print(f"Backed up active n8n DB to: {result['backup_path']}")
+    if result["pruned_backups"]:
+        print(
+            f"Pruned {len(result['pruned_backups'])} old backup(s); "
+            f"kept the most recent {result['backup_retain']}."
+        )
     print("Synced workflows:")
     for line in result["synced"]:
         print(f"  - {line}")
@@ -523,6 +552,12 @@ def main() -> int:
         help="Directory used for automatic SQLite backups before sync.",
     )
     parser.add_argument(
+        "--backup-retain",
+        type=int,
+        default=5,
+        help="Maximum number of SQLite backups to keep in --backup-dir. Use 0 to disable pruning.",
+    )
+    parser.add_argument(
         "--workflow-id",
         action="append",
         default=[],
@@ -542,6 +577,7 @@ def main() -> int:
             workflow_dir=args.workflow_dir,
             db_path=args.db_path,
             backup_dir=args.backup_dir,
+            backup_retain=args.backup_retain,
             include_ids=include_ids,
         )
         print_sync_result(result)
@@ -564,6 +600,7 @@ def main() -> int:
                 "workflow_dir": args.workflow_dir,
                 "db_path": args.db_path,
                 "backup_dir": args.backup_dir,
+                "backup_retain": args.backup_retain,
                 "requested_workflow_ids": sorted(include_ids or []),
                 "error": str(exc),
             },
