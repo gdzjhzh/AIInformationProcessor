@@ -1,108 +1,108 @@
 {
-    "id":  "c1f91d1d6f5a4bb1",
-    "name":  "01a Rule Prefilter",
-    "description":  "Runnable sub-workflow: apply cheap deterministic checks, derive search_text for vector lookup, and short-circuit items that are too short for reliable Qdrant and LLM processing.",
-    "active":  true,
-    "isArchived":  false,
-    "nodes":  [
-                  {
-                      "parameters":  {
-
-                                     },
-                      "id":  "a4a405bb-6004-4420-8f55-6fc16e3a988a",
-                      "name":  "When clicking \u0027Execute workflow\u0027",
-                      "type":  "n8n-nodes-base.manualTrigger",
-                      "typeVersion":  1,
-                      "position":  [
-                                       260,
-                                       200
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "inputSource":  "passthrough"
-                                     },
-                      "id":  "a9c7da81-9195-4391-97b0-b8d32b643572",
-                      "name":  "When Executed by Another Workflow",
-                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
-                      "typeVersion":  1.1,
-                      "position":  [
-                                       260,
-                                       400
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForAllItems",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return [\n  {\n    json: {\n      item_id: \u00276d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1\u0027,\n      source_type: \u0027rss\u0027,\n      source_name: \u0027OpenAI YouTube\u0027,\n      title: \u0027Example normalized item before Qdrant gating\u0027,\n      content_text: \u0027This example item already passed 00_common_normalize_text_object and is about to enter the cheap deterministic prefilter before vector search.\u0027,\n      upstream_summary: \u0027\u0027,\n      dedupe_action: \u0027full_push\u0027,\n      status: \u0027raw\u0027\n    }\n  }\n];"
-                                     },
-                      "id":  "d591b26a-d35b-4dcc-9f98-27125ee920e9",
-                      "name":  "Example Normalized Item",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       520,
-                                       200
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const requiredFields = [\u0027item_id\u0027, \u0027source_type\u0027, \u0027source_name\u0027, \u0027title\u0027, \u0027content_text\u0027];\nconst missingFields = requiredFields.filter((field) =\u003e !String($json[field] || \u0027\u0027).trim());\nif (missingFields.length) {\n  throw new Error(`NormalizedTextObject missing required fields: ${missingFields.join(\u0027, \u0027)}`);\n}\n\nconst contentText = String($json.content_text || \u0027\u0027).replace(/\\r\\n/g, \u0027\\n\u0027).trim();\nconst upstreamSummary = String($json.upstream_summary || \u0027\u0027).replace(/\\r\\n/g, \u0027\\n\u0027).trim();\nconst title = String($json.title || \u0027\u0027).trim();\nconst searchTextMaxChars = Math.max(200, Number($env.EMBEDDING_INPUT_MAX_CHARS || 8000));\nconst searchTextMinChars = Math.max(40, Number($env.QDRANT_SEARCH_MIN_CHARS || 80));\nconst searchText = [title, upstreamSummary, contentText]\n  .filter(Boolean)\n  .join(\u0027\\n\\n\u0027)\n  .slice(0, searchTextMaxChars);\nconst shouldContinueToQdrant = searchText.length \u003e= searchTextMinChars;\nconst prefilterReason = shouldContinueToQdrant\n  ? \u0027\u0027\n  : `search_text shorter than ${searchTextMinChars} chars after deterministic prefilter`;\n\nreturn {\n  json: {\n    ...$json,\n    content_text: contentText,\n    search_text: searchText,\n    search_text_chars: searchText.length,\n    prefilter_action: shouldContinueToQdrant ? \u0027pass\u0027 : \u0027skip\u0027,\n    prefilter_reason: prefilterReason,\n    should_continue_to_qdrant: shouldContinueToQdrant,\n    dedupe_action: shouldContinueToQdrant ? String($json.dedupe_action || \u0027full_push\u0027).trim() || \u0027full_push\u0027 : \u0027silent\u0027,\n    notification_mode: shouldContinueToQdrant ? String($json.notification_mode || \u0027\u0027).trim() : \u0027silent\u0027,\n    should_write_to_vault: shouldContinueToQdrant ? $json.should_write_to_vault : false,\n    should_notify: shouldContinueToQdrant ? $json.should_notify : false,\n    should_upsert_qdrant: shouldContinueToQdrant ? $json.should_upsert_qdrant : false,\n    should_continue_to_llm: shouldContinueToQdrant ? true : false,\n    status: shouldContinueToQdrant ? String($json.status || \u0027raw\u0027).trim() || \u0027raw\u0027 : \u0027deduped\u0027,\n    qdrant_operation: shouldContinueToQdrant ? String($json.qdrant_operation || \u0027skipped\u0027).trim() || \u0027skipped\u0027 : \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
-                                     },
-                      "id":  "27758f16-3b9c-40f8-8f46-9f52f49b5531",
-                      "name":  "Apply Prefilter",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       780,
-                                       280
-                                   ]
-                  }
-              ],
-    "connections":  {
-                        "When clicking \u0027Execute workflow\u0027":  {
-                                                                           "main":  [
-                                                                                        {
-                                                                                            "node":  "Example Normalized Item",
-                                                                                            "type":  "main",
-                                                                                            "index":  0
-                                                                                        }
-                                                                                    ]
-                                                                       },
-                        "When Executed by Another Workflow":  {
-                                                                  "main":  [
-                                                                               {
-                                                                                   "node":  "Apply Prefilter",
-                                                                                   "type":  "main",
-                                                                                   "index":  0
-                                                                               }
-                                                                           ]
-                                                              },
-                        "Example Normalized Item":  {
-                                                        "main":  [
-                                                                     {
-                                                                         "node":  "Apply Prefilter",
-                                                                         "type":  "main",
-                                                                         "index":  0
-                                                                     }
-                                                                 ]
-                                                    }
-                    },
-    "settings":  {
-                     "executionOrder":  "v1"
-                 },
-    "staticData":  null,
-    "meta":  {
-                 "templateCredsSetupCompleted":  true
-             },
-    "pinData":  {
-
-                },
-    "versionId":  "f6fcd479-bb6e-402a-b51c-2cab2def5b01",
-    "tags":  [
-
-             ]
+  "id": "c1f91d1d6f5a4bb1",
+  "name": "01a Rule Prefilter",
+  "description": "Runnable sub-workflow: apply cheap deterministic checks, derive search_text for vector lookup, and short-circuit items that are too short for reliable Qdrant and LLM processing.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a4a405bb-6004-4420-8f55-6fc16e3a988a",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "a9c7da81-9195-4391-97b0-b8d32b643572",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [\n  {\n    json: {\n      item_id: '6d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1',\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      title: 'Example normalized item before Qdrant gating',\n      content_text: 'This example item already passed 00_common_normalize_text_object and is about to enter the cheap deterministic prefilter before vector search.',\n      upstream_summary: '',\n      dedupe_action: 'full_push',\n      status: 'raw'\n    }\n  }\n];"
+      },
+      "id": "d591b26a-d35b-4dcc-9f98-27125ee920e9",
+      "name": "Example Normalized Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const requiredFields = ['item_id', 'source_type', 'source_name', 'title', 'content_text'];\nconst missingFields = requiredFields.filter((field) => !String($json[field] || '').trim());\nif (missingFields.length) {\n  throw new Error(`NormalizedTextObject missing required fields: ${missingFields.join(', ')}`);\n}\n\nconst contentText = String($json.content_text || '').replace(/\\r\\n/g, '\\n').trim();\nconst upstreamSummary = String($json.upstream_summary || '').replace(/\\r\\n/g, '\\n').trim();\nconst title = String($json.title || '').trim();\nconst searchTextMaxChars = Math.max(200, Number($env.EMBEDDING_INPUT_MAX_CHARS || 8000));\nconst searchTextMinChars = Math.max(40, Number($env.QDRANT_SEARCH_MIN_CHARS || 80));\nconst searchText = [title, upstreamSummary, contentText]\n  .filter(Boolean)\n  .join('\\n\\n')\n  .slice(0, searchTextMaxChars);\nconst shouldContinueToQdrant = searchText.length >= searchTextMinChars;\nconst prefilterReason = shouldContinueToQdrant\n  ? ''\n  : `search_text shorter than ${searchTextMinChars} chars after deterministic prefilter`;\n\nreturn {\n  json: {\n    ...$json,\n    content_text: contentText,\n    search_text: searchText,\n    search_text_chars: searchText.length,\n    prefilter_action: shouldContinueToQdrant ? 'pass' : 'skip',\n    prefilter_reason: prefilterReason,\n    should_continue_to_qdrant: shouldContinueToQdrant,\n    dedupe_action: shouldContinueToQdrant ? String($json.dedupe_action || 'full_push').trim() || 'full_push' : 'silent',\n    notification_mode: shouldContinueToQdrant ? String($json.notification_mode || '').trim() : 'silent',\n    should_write_to_vault: shouldContinueToQdrant ? $json.should_write_to_vault : false,\n    should_notify: shouldContinueToQdrant ? $json.should_notify : false,\n    should_upsert_qdrant: shouldContinueToQdrant ? $json.should_upsert_qdrant : false,\n    should_continue_to_llm: shouldContinueToQdrant ? true : false,\n    status: shouldContinueToQdrant ? String($json.status || 'raw').trim() || 'raw' : 'deduped',\n    qdrant_operation: shouldContinueToQdrant ? String($json.qdrant_operation || 'skipped').trim() || 'skipped' : 'skipped',\n    qdrant_upsert_response: null\n  }\n};"
+      },
+      "id": "27758f16-3b9c-40f8-8f46-9f52f49b5531",
+      "name": "Apply Prefilter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Example Normalized Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Apply Prefilter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Example Normalized Item": {
+      "main": [
+        [
+          {
+            "node": "Apply Prefilter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "f6fcd479-bb6e-402a-b51c-2cab2def5b01",
+  "tags": []
 }

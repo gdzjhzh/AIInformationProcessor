@@ -1,284 +1,292 @@
 {
-    "id":  "a793499a65e344bc",
-    "name":  "03 Qdrant Gate",
-    "description":  "Runnable sub-workflow: apply embedding-based nearest-neighbour search before LLM enrichment, decide the coarse dedupe action, and only pass non-silent items forward to scoring and policy evaluation.",
-    "active":  true,
-    "isArchived":  false,
-    "nodes":  [
-                  {
-                      "parameters":  {
-
-                                     },
-                      "id":  "5fdd0eff-5818-4e9c-83cc-c14abd64c420",
-                      "name":  "When clicking \u0027Execute workflow\u0027",
-                      "type":  "n8n-nodes-base.manualTrigger",
-                      "typeVersion":  1,
-                      "position":  [
-                                       260,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "inputSource":  "passthrough"
-                                     },
-                      "id":  "a41cc956-2dd7-4c34-8d6c-1e4b85efc3ff",
-                      "name":  "When Executed by Another Workflow",
-                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
-                      "typeVersion":  1.1,
-                      "position":  [
-                                       260,
-                                       420
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForAllItems",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return [\n  {\n    json: {\n      item_id: \u00276d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1\u0027,\n      source_type: \u0027rss\u0027,\n      source_name: \u0027OpenAI YouTube\u0027,\n      canonical_url: \u0027https://example.com/post\u0027,\n      title: \u0027Example normalized item before LLM enrichment\u0027,\n      author: \u0027OpenAI\u0027,\n      published_at: \u00272026-04-17T09:00:00-04:00\u0027,\n      ingested_at: \u00272026-04-17T09:05:00-04:00\u0027,\n      media_type: \u0027text\u0027,\n      content_text: \u0027Normalized plain text content for vector search. The item explains why AIInformationProcessor should establish a stable text-object contract before adding more ingestion paths.\u0027,\n      content_hash: \u0027sha256:example\u0027,\n      upstream_summary: \u0027\u0027,\n      search_text: \u0027Example normalized item before LLM enrichment\\n\\nNormalized plain text content for vector search. The item explains why AIInformationProcessor should establish a stable text-object contract before adding more ingestion paths.\u0027,\n      dedupe_action: \u0027full_push\u0027,\n      status: \u0027raw\u0027\n    }\n  }\n];"
-                                     },
-                      "id":  "1ac5c46d-dace-4d4b-bce3-6978be3a3b8f",
-                      "name":  "Example Enriched Item",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       520,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const requiredFields = [\u0027item_id\u0027, \u0027source_type\u0027, \u0027source_name\u0027, \u0027title\u0027, \u0027content_text\u0027];\nconst missingFields = requiredFields.filter((field) =\u003e !String($json[field] || \u0027\u0027).trim());\nif (missingFields.length) {\n  throw new Error(`Normalized item missing required fields: ${missingFields.join(\u0027, \u0027)}`);\n}\n\nconst embeddingBaseUrl = String($env.EMBEDDING_BASE_URL || \u0027\u0027).trim().replace(/\\/*$/, \u0027\u0027);\nconst embeddingModel = String($env.EMBEDDING_MODEL || \u0027\u0027).trim();\nconst embeddingApiKey = String($env.EMBEDDING_API_KEY || \u0027\u0027).trim();\nconst embeddingInputMaxChars = Number($env.EMBEDDING_INPUT_MAX_CHARS || 8000);\nconst qdrantCollection = String($env.QDRANT_COLLECTION || \u0027article_embeddings\u0027).trim() || \u0027article_embeddings\u0027;\nconst qdrantVectorSize = Number($env.QDRANT_VECTOR_SIZE || 0);\nconst diffThreshold = Number($env.QDRANT_DIFF_THRESHOLD || 0.85);\nconst silentThreshold = Number($env.QDRANT_SILENT_THRESHOLD || 0.97);\nconst searchText = String($json.search_text || [\n  String($json.title || \u0027\u0027).trim(),\n  String($json.upstream_summary || \u0027\u0027).trim(),\n  String($json.content_text || \u0027\u0027).trim()\n].filter(Boolean).join(\u0027\\n\\n\u0027)).trim().slice(0, embeddingInputMaxChars);\n\nif (!embeddingBaseUrl) {\n  throw new Error(\u0027EMBEDDING_BASE_URL is required for 03_qdrant_gate\u0027);\n}\nif (!embeddingModel) {\n  throw new Error(\u0027EMBEDDING_MODEL is required for 03_qdrant_gate\u0027);\n}\nif (!embeddingApiKey) {\n  throw new Error(\u0027EMBEDDING_API_KEY is required for 03_qdrant_gate\u0027);\n}\nif (!Number.isInteger(embeddingInputMaxChars) || embeddingInputMaxChars \u003c 200) {\n  throw new Error(\u0027EMBEDDING_INPUT_MAX_CHARS must be an integer \u003e= 200\u0027);\n}\nif (!Number.isInteger(qdrantVectorSize) || qdrantVectorSize \u003c= 0) {\n  throw new Error(\u0027QDRANT_VECTOR_SIZE must be a positive integer\u0027);\n}\nif (!Number.isFinite(diffThreshold) || !Number.isFinite(silentThreshold)) {\n  throw new Error(\u0027QDRANT_DIFF_THRESHOLD and QDRANT_SILENT_THRESHOLD must be numeric\u0027);\n}\nif (!(diffThreshold \u003e 0 \u0026\u0026 diffThreshold \u003c silentThreshold \u0026\u0026 silentThreshold \u003c= 1)) {\n  throw new Error(\u0027Expected 0 \u003c QDRANT_DIFF_THRESHOLD \u003c QDRANT_SILENT_THRESHOLD \u003c= 1\u0027);\n}\nif (searchText.length \u003c 80) {\n  throw new Error(\u0027search_text is too short for reliable dedupe; expected at least 80 characters after prefilter\u0027);\n}\n\nreturn {\n  json: {\n    ...$json,\n    embedding_base_url: embeddingBaseUrl,\n    embedding_model: embeddingModel,\n    embedding_input_max_chars: embeddingInputMaxChars,\n    qdrant_base_url: \u0027http://qdrant:6333\u0027,\n    qdrant_collection: qdrantCollection,\n    qdrant_vector_size: qdrantVectorSize,\n    qdrant_diff_threshold: diffThreshold,\n    qdrant_silent_threshold: silentThreshold,\n    embedding_input: searchText,\n    search_text: searchText\n  }\n};"
-                                     },
-                      "id":  "50233033-8262-4376-a1a9-9e994a32ac6a",
-                      "name":  "Validate Gate Input",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       780,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return {\n  json: {\n    ...$json,\n    embedding_endpoint: `${$json.embedding_base_url}/embeddings`,\n    embedding_request: {\n      model: $json.embedding_model,\n      input: $json.embedding_input,\n      encoding_format: \u0027float\u0027\n    }\n  }\n};"
-                                     },
-                      "id":  "43de6981-8f89-4aef-904f-4242b0c8ef33",
-                      "name":  "Build Embedding Request",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1040,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "method":  "POST",
-                                         "url":  "={{$json.embedding_endpoint}}",
-                                         "sendHeaders":  true,
-                                         "headerParameters":  {
-                                                                  "parameters":  [
-                                                                                     {
-                                                                                         "name":  "Authorization",
-                                                                                         "value":  "={{\u0027Bearer \u0027 + $env.EMBEDDING_API_KEY}}"
-                                                                                     },
-                                                                                     {
-                                                                                         "name":  "Content-Type",
-                                                                                         "value":  "application/json"
-                                                                                     }
-                                                                                 ]
-                                                              },
-                                         "sendBody":  true,
-                                         "specifyBody":  "json",
-                                         "jsonBody":  "={{ JSON.stringify($json.embedding_request) }}",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "291bd405-133f-4f25-8640-393731c6885b",
-                      "name":  "Call Embedding API",
-                      "type":  "n8n-nodes-base.httpRequest",
-                      "typeVersion":  4.2,
-                      "position":  [
-                                       1300,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const original = $(\u0027Build Embedding Request\u0027).item.json || {};\nconst embedding = $json?.data?.[0]?.embedding;\nif (!Array.isArray(embedding)) {\n  throw new Error(\u0027Embedding response did not include data[0].embedding\u0027);\n}\nif (embedding.length !== Number(original.qdrant_vector_size)) {\n  throw new Error(`Embedding vector length ${embedding.length} does not match QDRANT_VECTOR_SIZE ${original.qdrant_vector_size}`);\n}\n\nreturn {\n  json: {\n    ...original,\n    embedding,\n    qdrant_search_endpoint: `${original.qdrant_base_url}/collections/${encodeURIComponent(original.qdrant_collection)}/points/search`,\n    qdrant_search_payload: {\n      vector: embedding,\n      limit: 1,\n      with_payload: true\n    }\n  }\n};"
-                                     },
-                      "id":  "6f6b40b9-2e7f-46ac-b070-149681be4938",
-                      "name":  "Build Qdrant Search Request",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1560,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "method":  "POST",
-                                         "url":  "={{$json.qdrant_search_endpoint}}",
-                                         "sendHeaders":  true,
-                                         "headerParameters":  {
-                                                                  "parameters":  [
-                                                                                     {
-                                                                                         "name":  "Content-Type",
-                                                                                         "value":  "application/json"
-                                                                                     }
-                                                                                 ]
-                                                              },
-                                         "sendBody":  true,
-                                         "specifyBody":  "json",
-                                         "jsonBody":  "={{ JSON.stringify($json.qdrant_search_payload) }}",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "6d6ac0dd-b8c4-4cb8-88d9-2fd319277ea3",
-                      "name":  "Qdrant Search",
-                      "type":  "n8n-nodes-base.httpRequest",
-                      "typeVersion":  4.2,
-                      "position":  [
-                                       1820,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const original = $(\u0027Build Qdrant Search Request\u0027).item.json || {};\nconst matches = Array.isArray($json?.result)\n  ? $json.result\n  : Array.isArray($json)\n    ? $json\n    : [];\nconst match = matches[0] || null;\nconst matchedPayload = match?.payload || null;\nconst matchedScore = Number(match?.score || 0);\nconst sameItem = Boolean(matchedPayload \u0026\u0026 matchedPayload.item_id === original.item_id);\nconst sameContent = Boolean(sameItem \u0026\u0026 matchedPayload.content_hash === original.content_hash);\n\nlet dedupeAction = \u0027full_push\u0027;\nif (sameContent) {\n  dedupeAction = \u0027silent\u0027;\n} else if (sameItem) {\n  dedupeAction = \u0027diff_push\u0027;\n} else if (match \u0026\u0026 matchedScore \u003e= Number(original.qdrant_silent_threshold)) {\n  dedupeAction = \u0027silent\u0027;\n} else if (match \u0026\u0026 matchedScore \u003e= Number(original.qdrant_diff_threshold)) {\n  dedupeAction = \u0027diff_push\u0027;\n}\n\nconst shouldContinueToLlm = dedupeAction !== \u0027silent\u0027;\nconst notificationMode = dedupeAction === \u0027silent\u0027\n  ? \u0027silent\u0027\n  : dedupeAction === \u0027diff_push\u0027\n    ? \u0027incremental\u0027\n    : \u0027full\u0027;\n\nreturn {\n  json: {\n    ...original,\n    dedupe_action: dedupeAction,\n    notification_mode: notificationMode,\n    should_continue_to_llm: shouldContinueToLlm,\n    should_write_to_vault: shouldContinueToLlm,\n    should_notify: shouldContinueToLlm,\n    should_upsert_qdrant: shouldContinueToLlm,\n    matched_payload: matchedPayload,\n    matched_score: matchedScore,\n    matched_same_item: sameItem,\n    matched_same_content: sameContent,\n    status: dedupeAction === \u0027silent\u0027 ? \u0027deduped\u0027 : (String(original.status || \u0027raw\u0027).trim() || \u0027raw\u0027),\n    qdrant_operation: shouldContinueToLlm ? \u0027pending\u0027 : \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
-                                     },
-                      "id":  "a7fafd3e-ef12-480e-b9c0-c9222adf57c7",
-                      "name":  "Decide Dedupe Action",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       2080,
-                                       240
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return {\n  json: {\n    ...$json,\n    matched_score: Number(Number($json.matched_score || 0).toFixed(4)),\n    qdrant_operation: String($json.qdrant_operation || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
-                                     },
-                      "id":  "684a1fb4-455b-4283-a99e-9e3cee04caab",
-                      "name":  "Return Gate Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       2600,
-                                       240
-                                   ]
-                  }
-              ],
-    "connections":  {
-                        "When clicking \u0027Execute workflow\u0027":  {
-                                                                           "main":  [
-                                                                                        {
-                                                                                            "node":  "Example Enriched Item",
-                                                                                            "type":  "main",
-                                                                                            "index":  0
-                                                                                        }
-                                                                                    ]
-                                                                       },
-                        "When Executed by Another Workflow":  {
-                                                                  "main":  [
-                                                                               {
-                                                                                   "node":  "Validate Gate Input",
-                                                                                   "type":  "main",
-                                                                                   "index":  0
-                                                                               }
-                                                                           ]
-                                                              },
-                        "Example Enriched Item":  {
-                                                      "main":  [
-                                                                   {
-                                                                       "node":  "Validate Gate Input",
-                                                                       "type":  "main",
-                                                                       "index":  0
-                                                                   }
-                                                               ]
-                                                  },
-                        "Validate Gate Input":  {
-                                                    "main":  [
-                                                                 {
-                                                                     "node":  "Build Embedding Request",
-                                                                     "type":  "main",
-                                                                     "index":  0
-                                                                 }
-                                                             ]
-                                                },
-                        "Build Embedding Request":  {
-                                                        "main":  [
-                                                                     {
-                                                                         "node":  "Call Embedding API",
-                                                                         "type":  "main",
-                                                                         "index":  0
-                                                                     }
-                                                                 ]
-                                                    },
-                        "Call Embedding API":  {
-                                                   "main":  [
-                                                                {
-                                                                    "node":  "Build Qdrant Search Request",
-                                                                    "type":  "main",
-                                                                    "index":  0
-                                                                }
-                                                            ]
-                                               },
-                        "Build Qdrant Search Request":  {
-                                                            "main":  [
-                                                                         {
-                                                                             "node":  "Qdrant Search",
-                                                                             "type":  "main",
-                                                                             "index":  0
-                                                                         }
-                                                                     ]
-                                                        },
-                        "Qdrant Search":  {
-                                              "main":  [
-                                                           {
-                                                               "node":  "Decide Dedupe Action",
-                                                               "type":  "main",
-                                                               "index":  0
-                                                           }
-                                                       ]
-                                          },
-                        "Decide Dedupe Action":  {
-                                                     "main":  [
-                                                                  {
-                                                                      "node":  "Return Gate Result",
-                                                                      "type":  "main",
-                                                                      "index":  0
-                                                                  }
-                                                              ]
-                                                 }
-                    },
-    "settings":  {
-                     "executionOrder":  "v1"
-                 },
-    "staticData":  null,
-    "meta":  {
-                 "templateCredsSetupCompleted":  true
-             },
-    "pinData":  {
-
-                },
-    "versionId":  "7de95a7b-846c-4ff4-adf3-1801fdc9059d",
-    "tags":  [
-
-             ]
+  "id": "a793499a65e344bc",
+  "name": "03 Qdrant Gate",
+  "description": "Runnable sub-workflow: apply embedding-based nearest-neighbour search before LLM enrichment, decide the coarse dedupe action, and only pass non-silent items forward to scoring and policy evaluation.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5fdd0eff-5818-4e9c-83cc-c14abd64c420",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "a41cc956-2dd7-4c34-8d6c-1e4b85efc3ff",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [\n  {\n    json: {\n      item_id: '6d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1',\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      canonical_url: 'https://example.com/post',\n      title: 'Example normalized item before LLM enrichment',\n      author: 'OpenAI',\n      published_at: '2026-04-17T09:00:00-04:00',\n      ingested_at: '2026-04-17T09:05:00-04:00',\n      media_type: 'text',\n      content_text: 'Normalized plain text content for vector search. The item explains why AIInformationProcessor should establish a stable text-object contract before adding more ingestion paths.',\n      content_hash: 'sha256:example',\n      upstream_summary: '',\n      search_text: 'Example normalized item before LLM enrichment\\n\\nNormalized plain text content for vector search. The item explains why AIInformationProcessor should establish a stable text-object contract before adding more ingestion paths.',\n      dedupe_action: 'full_push',\n      status: 'raw'\n    }\n  }\n];"
+      },
+      "id": "1ac5c46d-dace-4d4b-bce3-6978be3a3b8f",
+      "name": "Example Enriched Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const requiredFields = ['item_id', 'source_type', 'source_name', 'title', 'content_text'];\nconst missingFields = requiredFields.filter((field) => !String($json[field] || '').trim());\nif (missingFields.length) {\n  throw new Error(`Normalized item missing required fields: ${missingFields.join(', ')}`);\n}\n\nconst embeddingBaseUrl = String($env.EMBEDDING_BASE_URL || '').trim().replace(/\\/*$/, '');\nconst embeddingModel = String($env.EMBEDDING_MODEL || '').trim();\nconst embeddingApiKey = String($env.EMBEDDING_API_KEY || '').trim();\nconst embeddingInputMaxChars = Number($env.EMBEDDING_INPUT_MAX_CHARS || 8000);\nconst qdrantCollection = String($env.QDRANT_COLLECTION || 'article_embeddings').trim() || 'article_embeddings';\nconst qdrantVectorSize = Number($env.QDRANT_VECTOR_SIZE || 0);\nconst diffThreshold = Number($env.QDRANT_DIFF_THRESHOLD || 0.85);\nconst silentThreshold = Number($env.QDRANT_SILENT_THRESHOLD || 0.97);\nconst searchText = String($json.search_text || [\n  String($json.title || '').trim(),\n  String($json.upstream_summary || '').trim(),\n  String($json.content_text || '').trim()\n].filter(Boolean).join('\\n\\n')).trim().slice(0, embeddingInputMaxChars);\n\nif (!embeddingBaseUrl) {\n  throw new Error('EMBEDDING_BASE_URL is required for 03_qdrant_gate');\n}\nif (!embeddingModel) {\n  throw new Error('EMBEDDING_MODEL is required for 03_qdrant_gate');\n}\nif (!embeddingApiKey) {\n  throw new Error('EMBEDDING_API_KEY is required for 03_qdrant_gate');\n}\nif (!Number.isInteger(embeddingInputMaxChars) || embeddingInputMaxChars < 200) {\n  throw new Error('EMBEDDING_INPUT_MAX_CHARS must be an integer >= 200');\n}\nif (!Number.isInteger(qdrantVectorSize) || qdrantVectorSize <= 0) {\n  throw new Error('QDRANT_VECTOR_SIZE must be a positive integer');\n}\nif (!Number.isFinite(diffThreshold) || !Number.isFinite(silentThreshold)) {\n  throw new Error('QDRANT_DIFF_THRESHOLD and QDRANT_SILENT_THRESHOLD must be numeric');\n}\nif (!(diffThreshold > 0 && diffThreshold < silentThreshold && silentThreshold <= 1)) {\n  throw new Error('Expected 0 < QDRANT_DIFF_THRESHOLD < QDRANT_SILENT_THRESHOLD <= 1');\n}\nif (searchText.length < 80) {\n  throw new Error('search_text is too short for reliable dedupe; expected at least 80 characters after prefilter');\n}\n\nreturn {\n  json: {\n    ...$json,\n    embedding_base_url: embeddingBaseUrl,\n    embedding_model: embeddingModel,\n    embedding_input_max_chars: embeddingInputMaxChars,\n    qdrant_base_url: 'http://qdrant:6333',\n    qdrant_collection: qdrantCollection,\n    qdrant_vector_size: qdrantVectorSize,\n    qdrant_diff_threshold: diffThreshold,\n    qdrant_silent_threshold: silentThreshold,\n    embedding_input: searchText,\n    search_text: searchText\n  }\n};"
+      },
+      "id": "50233033-8262-4376-a1a9-9e994a32ac6a",
+      "name": "Validate Gate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    embedding_endpoint: `${$json.embedding_base_url}/embeddings`,\n    embedding_request: {\n      model: $json.embedding_model,\n      input: $json.embedding_input,\n      encoding_format: 'float'\n    }\n  }\n};"
+      },
+      "id": "43de6981-8f89-4aef-904f-4242b0c8ef33",
+      "name": "Build Embedding Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.embedding_endpoint}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.EMBEDDING_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.embedding_request) }}",
+        "options": {}
+      },
+      "id": "291bd405-133f-4f25-8640-393731c6885b",
+      "name": "Call Embedding API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const original = $('Build Embedding Request').item.json || {};\nconst embedding = $json?.data?.[0]?.embedding;\nif (!Array.isArray(embedding)) {\n  throw new Error('Embedding response did not include data[0].embedding');\n}\nif (embedding.length !== Number(original.qdrant_vector_size)) {\n  throw new Error(`Embedding vector length ${embedding.length} does not match QDRANT_VECTOR_SIZE ${original.qdrant_vector_size}`);\n}\n\nreturn {\n  json: {\n    ...original,\n    embedding,\n    qdrant_search_endpoint: `${original.qdrant_base_url}/collections/${encodeURIComponent(original.qdrant_collection)}/points/search`,\n    qdrant_search_payload: {\n      vector: embedding,\n      limit: 1,\n      with_payload: true\n    }\n  }\n};"
+      },
+      "id": "6f6b40b9-2e7f-46ac-b070-149681be4938",
+      "name": "Build Qdrant Search Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.qdrant_search_endpoint}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.qdrant_search_payload) }}",
+        "options": {}
+      },
+      "id": "6d6ac0dd-b8c4-4cb8-88d9-2fd319277ea3",
+      "name": "Qdrant Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const original = $('Build Qdrant Search Request').item.json || {};\nconst matches = Array.isArray($json?.result)\n  ? $json.result\n  : Array.isArray($json)\n    ? $json\n    : [];\nconst match = matches[0] || null;\nconst matchedPayload = match?.payload || null;\nconst matchedScore = Number(match?.score || 0);\nconst sameItem = Boolean(matchedPayload && matchedPayload.item_id === original.item_id);\nconst sameContent = Boolean(sameItem && matchedPayload.content_hash === original.content_hash);\n\nlet dedupeAction = 'full_push';\nif (sameContent) {\n  dedupeAction = 'silent';\n} else if (sameItem) {\n  dedupeAction = 'diff_push';\n} else if (match && matchedScore >= Number(original.qdrant_silent_threshold)) {\n  dedupeAction = 'silent';\n} else if (match && matchedScore >= Number(original.qdrant_diff_threshold)) {\n  dedupeAction = 'diff_push';\n}\n\nconst shouldContinueToLlm = dedupeAction !== 'silent';\nconst notificationMode = dedupeAction === 'silent'\n  ? 'silent'\n  : dedupeAction === 'diff_push'\n    ? 'incremental'\n    : 'full';\n\nreturn {\n  json: {\n    ...original,\n    dedupe_action: dedupeAction,\n    notification_mode: notificationMode,\n    should_continue_to_llm: shouldContinueToLlm,\n    should_write_to_vault: shouldContinueToLlm,\n    should_notify: shouldContinueToLlm,\n    should_upsert_qdrant: shouldContinueToLlm,\n    matched_payload: matchedPayload,\n    matched_score: matchedScore,\n    matched_same_item: sameItem,\n    matched_same_content: sameContent,\n    status: dedupeAction === 'silent' ? 'deduped' : (String(original.status || 'raw').trim() || 'raw'),\n    qdrant_operation: shouldContinueToLlm ? 'pending' : 'skipped',\n    qdrant_upsert_response: null\n  }\n};"
+      },
+      "id": "a7fafd3e-ef12-480e-b9c0-c9222adf57c7",
+      "name": "Decide Dedupe Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    matched_score: Number(Number($json.matched_score || 0).toFixed(4)),\n    qdrant_operation: String($json.qdrant_operation || 'skipped').trim() || 'skipped',\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
+      },
+      "id": "684a1fb4-455b-4283-a99e-9e3cee04caab",
+      "name": "Return Gate Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Example Enriched Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Validate Gate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Example Enriched Item": {
+      "main": [
+        [
+          {
+            "node": "Validate Gate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Gate Input": {
+      "main": [
+        [
+          {
+            "node": "Build Embedding Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Embedding Request": {
+      "main": [
+        [
+          {
+            "node": "Call Embedding API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Embedding API": {
+      "main": [
+        [
+          {
+            "node": "Build Qdrant Search Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Qdrant Search Request": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Search": {
+      "main": [
+        [
+          {
+            "node": "Decide Dedupe Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide Dedupe Action": {
+      "main": [
+        [
+          {
+            "node": "Return Gate Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "7de95a7b-846c-4ff4-adf3-1801fdc9059d",
+  "tags": []
 }

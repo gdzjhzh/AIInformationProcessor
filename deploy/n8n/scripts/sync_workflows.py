@@ -111,7 +111,7 @@ def workflow_definition_payload(workflow: dict[str, Any]) -> dict[str, Any]:
         "nodes": workflow.get("nodes", []),
         "connections": workflow.get("connections", {}),
         "settings": workflow.get("settings", {}),
-        "staticData": workflow.get("staticData"),
+        "staticData": normalize_static_data(workflow.get("staticData")),
         "pinData": workflow.get("pinData", {}),
         "meta": workflow.get("meta", {}),
         "isArchived": bool(workflow.get("isArchived")),
@@ -135,6 +135,21 @@ def parse_runtime_json(value: Any, fallback: Any) -> Any:
     return json.loads(str(value))
 
 
+def normalize_static_data(value: Any) -> Any:
+    if value in (None, "", {}):
+        return None
+    if not isinstance(value, dict):
+        return value
+
+    normalized: dict[str, Any] = {}
+    for key, item in value.items():
+        if isinstance(item, dict) and set(item.keys()) == {"recurrenceRules"} and item["recurrenceRules"] == []:
+            continue
+        normalized[key] = item
+
+    return normalized or None
+
+
 def workflow_entity_definition_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     return {
         "name": str(row["name"] or ""),
@@ -142,7 +157,7 @@ def workflow_entity_definition_payload(row: sqlite3.Row | dict[str, Any]) -> dic
         "nodes": parse_runtime_json(row["nodes"], []),
         "connections": parse_runtime_json(row["connections"], {}),
         "settings": parse_runtime_json(row["settings"], {}),
-        "staticData": parse_runtime_json(row["staticData"], None),
+        "staticData": normalize_static_data(parse_runtime_json(row["staticData"], None)),
         "pinData": parse_runtime_json(row["pinData"], {}),
         "meta": parse_runtime_json(row["meta"], {}),
         "isArchived": bool(row["isArchived"]),

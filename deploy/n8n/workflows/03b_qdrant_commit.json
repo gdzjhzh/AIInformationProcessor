@@ -1,279 +1,287 @@
 {
-    "id":  "6c65b02be56e4ea2",
-    "name":  "03b Qdrant Commit",
-    "description":  "Runnable sub-workflow: after Vault write succeeds, build the final Qdrant payload, upsert the vector, and return the committed indexing state.",
-    "active":  true,
-    "isArchived":  false,
-    "nodes":  [
-                  {
-                      "parameters":  {
-
-                                     },
-                      "id":  "3d72afa0-cf19-43e6-8e4d-b8b36af94030",
-                      "name":  "When clicking \u0027Execute workflow\u0027",
-                      "type":  "n8n-nodes-base.manualTrigger",
-                      "typeVersion":  1,
-                      "position":  [
-                                       260,
-                                       200
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "inputSource":  "passthrough"
-                                     },
-                      "id":  "e523b046-476b-4ffc-bff7-c13030199fa5",
-                      "name":  "When Executed by Another Workflow",
-                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
-                      "typeVersion":  1.1,
-                      "position":  [
-                                       260,
-                                       400
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForAllItems",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return [\n  {\n    json: {\n      item_id: \u00276d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1\u0027,\n      source_type: \u0027rss\u0027,\n      source_name: \u0027OpenAI YouTube\u0027,\n      canonical_url: \u0027https://example.com/post\u0027,\n      title: \u0027Example written item ready for Qdrant commit\u0027,\n      published_at: \u00272026-04-20T10:00:00-04:00\u0027,\n      content_hash: \u0027sha256:example\u0027,\n      score: 0.82,\n      category: \u0027AI Infra\u0027,\n      summary: \u0027The note has already been written and can now safely commit to Qdrant.\u0027,\n      tags: [\u0027inbox\u0027, \u0027ai-information-processor\u0027],\n      dedupe_action: \u0027full_push\u0027,\n      matched_score: 0,\n      vault_write_status: \u0027written\u0027,\n      should_upsert_qdrant: true,\n      qdrant_base_url: \u0027http://qdrant:6333\u0027,\n      qdrant_collection: \u0027article_embeddings\u0027,\n      embedding: [0.1, 0.2, 0.3]\n    }\n  }\n];"
-                                     },
-                      "id":  "61ac1231-8411-47f0-aa5b-4d9efed8f167",
-                      "name":  "Example Written Item",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       520,
-                                       200
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const toDeterministicUuid = (value) =\u003e {\n  const hex = String(value || \u0027\u0027).toLowerCase().replace(/[^0-9a-f]/g, \u0027\u0027);\n  const padded = (hex + \u002700000000000000000000000000000000\u0027).slice(0, 32);\n  return `${padded.slice(0, 8)}-${padded.slice(8, 12)}-${padded.slice(12, 16)}-${padded.slice(16, 20)}-${padded.slice(20, 32)}`;\n};\n\nconst vaultWriteStatus = String($json.vault_write_status || $json.vault_write || \u0027\u0027).trim();\nconst qdrantBaseUrl = String($json.qdrant_base_url || \u0027http://qdrant:6333\u0027).trim().replace(/\\/*$/, \u0027\u0027);\nconst qdrantCollection = String($json.qdrant_collection || \u0027\u0027).trim();\nconst embedding = Array.isArray($json.embedding) ? $json.embedding : [];\nconst shouldCommitQdrant = vaultWriteStatus === \u0027written\u0027\n  \u0026\u0026 Boolean($json.should_upsert_qdrant)\n  \u0026\u0026 qdrantBaseUrl\n  \u0026\u0026 qdrantCollection\n  \u0026\u0026 embedding.length \u003e 0;\nconst qdrantPointId = String($json.qdrant_point_id || \u0027\u0027).trim() || toDeterministicUuid($json.item_id);\n\nreturn {\n  json: {\n    ...$json,\n    qdrant_point_id: qdrantPointId,\n    qdrant_upsert_endpoint: shouldCommitQdrant\n      ? `${qdrantBaseUrl}/collections/${encodeURIComponent(qdrantCollection)}/points`\n      : String($json.qdrant_upsert_endpoint || \u0027\u0027).trim(),\n    qdrant_upsert_payload: shouldCommitQdrant\n      ? {\n          points: [\n            {\n              id: qdrantPointId,\n              vector: embedding,\n              payload: {\n                item_id: $json.item_id,\n                source_type: $json.source_type,\n                source_name: $json.source_name,\n                title: $json.title,\n                canonical_url: $json.canonical_url,\n                published_at: $json.published_at,\n                score: $json.score,\n                category: $json.category,\n                summary: $json.summary,\n                dedupe_action: $json.dedupe_action,\n                matched_score: $json.matched_score,\n                tags: $json.tags,\n                content_hash: $json.content_hash\n              }\n            }\n          ]\n        }\n      : ($json.qdrant_upsert_payload ?? null),\n    should_commit_qdrant: shouldCommitQdrant,\n    qdrant_operation: shouldCommitQdrant ? \u0027pending\u0027 : \u0027skipped\u0027,\n    qdrant_upsert_response: shouldCommitQdrant ? null : ($json.qdrant_upsert_response ?? null)\n  }\n};"
-                                     },
-                      "id":  "db165c8b-65a7-4b12-9565-8710c4bc9536",
-                      "name":  "Build Qdrant Commit Payload",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       780,
-                                       280
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "conditions":  {
-                                                            "string":  [
-                                                                           {
-                                                                               "value1":  "={{String($json.should_commit_qdrant || false)}}",
-                                                                               "operation":  "equal",
-                                                                               "value2":  "true"
-                                                                           }
-                                                                       ]
-                                                        }
-                                     },
-                      "id":  "45d364e9-7ab9-4edf-b349-43ec6c5bc1ba",
-                      "name":  "Should Commit Qdrant?",
-                      "type":  "n8n-nodes-base.if",
-                      "typeVersion":  1,
-                      "position":  [
-                                       1040,
-                                       280
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "method":  "PUT",
-                                         "url":  "={{$json.qdrant_upsert_endpoint}}",
-                                         "sendHeaders":  true,
-                                         "headerParameters":  {
-                                                                  "parameters":  [
-                                                                                     {
-                                                                                         "name":  "Content-Type",
-                                                                                         "value":  "application/json"
-                                                                                     }
-                                                                                 ]
-                                                              },
-                                         "sendBody":  true,
-                                         "specifyBody":  "json",
-                                         "jsonBody":  "={{ JSON.stringify($json.qdrant_upsert_payload) }}",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "d177042d-62b6-42f3-92e7-87e310bfecc2",
-                      "name":  "Qdrant Upsert",
-                      "type":  "n8n-nodes-base.httpRequest",
-                      "typeVersion":  4.2,
-                      "position":  [
-                                       1300,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const original = $(\u0027Build Qdrant Commit Payload\u0027).item.json || {};\nreturn {\n  json: {\n    ...original,\n    qdrant_operation: \u0027upserted\u0027,\n    qdrant_upsert_response: $json\n  }\n};"
-                                     },
-                      "id":  "fa15fc14-5eb1-419d-ae92-0aed476dcc72",
-                      "name":  "Finalize Commit Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1560,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return {\n  json: {\n    ...$json,\n    qdrant_operation: String($json.qdrant_operation || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
-                                     },
-                      "id":  "8e5c2afc-223e-45ce-a4ab-283648cb1912",
-                      "name":  "Finalize Skipped Commit",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1300,
-                                       380
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "append"
-                                     },
-                      "id":  "6dd6d8b1-45ff-4d2d-8134-5a1de1718996",
-                      "name":  "Merge Commit Result",
-                      "type":  "n8n-nodes-base.merge",
-                      "typeVersion":  3.2,
-                      "position":  [
-                                       1820,
-                                       280
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return {\n  json: {\n    ...$json,\n    qdrant_operation: String($json.qdrant_operation || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
-                                     },
-                      "id":  "e48f8cb3-452f-49bd-bc03-5969a99a5729",
-                      "name":  "Return Commit Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       2080,
-                                       280
-                                   ]
-                  }
-              ],
-    "connections":  {
-                        "When clicking \u0027Execute workflow\u0027":  {
-                                                                           "main":  [
-                                                                                        {
-                                                                                            "node":  "Example Written Item",
-                                                                                            "type":  "main",
-                                                                                            "index":  0
-                                                                                        }
-                                                                                    ]
-                                                                       },
-                        "When Executed by Another Workflow":  {
-                                                                  "main":  [
-                                                                               {
-                                                                                   "node":  "Build Qdrant Commit Payload",
-                                                                                   "type":  "main",
-                                                                                   "index":  0
-                                                                               }
-                                                                           ]
-                                                              },
-                        "Example Written Item":  {
-                                                     "main":  [
-                                                                  {
-                                                                      "node":  "Build Qdrant Commit Payload",
-                                                                      "type":  "main",
-                                                                      "index":  0
-                                                                  }
-                                                              ]
-                                                 },
-                        "Build Qdrant Commit Payload":  {
-                                                            "main":  [
-                                                                         {
-                                                                             "node":  "Should Commit Qdrant?",
-                                                                             "type":  "main",
-                                                                             "index":  0
-                                                                         }
-                                                                     ]
-                                                        },
-                        "Should Commit Qdrant?":  {
-                                                      "main":  [
-                                                                   [
-                                                                       {
-                                                                           "node":  "Qdrant Upsert",
-                                                                           "type":  "main",
-                                                                           "index":  0
-                                                                       }
-                                                                   ],
-                                                                   [
-                                                                       {
-                                                                           "node":  "Finalize Skipped Commit",
-                                                                           "type":  "main",
-                                                                           "index":  0
-                                                                       }
-                                                                   ]
-                                                               ]
-                                                  },
-                        "Qdrant Upsert":  {
-                                              "main":  [
-                                                           {
-                                                               "node":  "Finalize Commit Result",
-                                                               "type":  "main",
-                                                               "index":  0
-                                                           }
-                                                       ]
-                                          },
-                        "Finalize Commit Result":  {
-                                                       "main":  [
-                                                                    {
-                                                                        "node":  "Merge Commit Result",
-                                                                        "type":  "main",
-                                                                        "index":  0
-                                                                    }
-                                                                ]
-                                                   },
-                        "Finalize Skipped Commit":  {
-                                                        "main":  [
-                                                                     {
-                                                                         "node":  "Merge Commit Result",
-                                                                         "type":  "main",
-                                                                         "index":  1
-                                                                     }
-                                                                 ]
-                                                    },
-                        "Merge Commit Result":  {
-                                                    "main":  [
-                                                                 {
-                                                                     "node":  "Return Commit Result",
-                                                                     "type":  "main",
-                                                                     "index":  0
-                                                                 }
-                                                             ]
-                                                }
-                    },
-    "settings":  {
-                     "executionOrder":  "v1"
-                 },
-    "staticData":  null,
-    "meta":  {
-                 "templateCredsSetupCompleted":  true
-             },
-    "pinData":  {
-
-                },
-    "versionId":  "b8d965fe-5d60-4809-b9e4-0be500706c17",
-    "tags":  [
-
-             ]
+  "id": "6c65b02be56e4ea2",
+  "name": "03b Qdrant Commit",
+  "description": "Runnable sub-workflow: after Vault write succeeds, build the final Qdrant payload, upsert the vector, and return the committed indexing state.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "3d72afa0-cf19-43e6-8e4d-b8b36af94030",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "e523b046-476b-4ffc-bff7-c13030199fa5",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [\n  {\n    json: {\n      item_id: '6d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1',\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      canonical_url: 'https://example.com/post',\n      title: 'Example written item ready for Qdrant commit',\n      published_at: '2026-04-20T10:00:00-04:00',\n      content_hash: 'sha256:example',\n      score: 0.82,\n      category: 'AI Infra',\n      summary: 'The note has already been written and can now safely commit to Qdrant.',\n      tags: ['inbox', 'ai-information-processor'],\n      dedupe_action: 'full_push',\n      matched_score: 0,\n      vault_write_status: 'written',\n      should_upsert_qdrant: true,\n      qdrant_base_url: 'http://qdrant:6333',\n      qdrant_collection: 'article_embeddings',\n      embedding: [0.1, 0.2, 0.3]\n    }\n  }\n];"
+      },
+      "id": "61ac1231-8411-47f0-aa5b-4d9efed8f167",
+      "name": "Example Written Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const toDeterministicUuid = (value) => {\n  const hex = String(value || '').toLowerCase().replace(/[^0-9a-f]/g, '');\n  const padded = (hex + '00000000000000000000000000000000').slice(0, 32);\n  return `${padded.slice(0, 8)}-${padded.slice(8, 12)}-${padded.slice(12, 16)}-${padded.slice(16, 20)}-${padded.slice(20, 32)}`;\n};\n\nconst vaultWriteStatus = String($json.vault_write_status || $json.vault_write || '').trim();\nconst qdrantBaseUrl = String($json.qdrant_base_url || 'http://qdrant:6333').trim().replace(/\\/*$/, '');\nconst qdrantCollection = String($json.qdrant_collection || '').trim();\nconst embedding = Array.isArray($json.embedding) ? $json.embedding : [];\nconst shouldCommitQdrant = vaultWriteStatus === 'written'\n  && Boolean($json.should_upsert_qdrant)\n  && qdrantBaseUrl\n  && qdrantCollection\n  && embedding.length > 0;\nconst qdrantPointId = String($json.qdrant_point_id || '').trim() || toDeterministicUuid($json.item_id);\n\nreturn {\n  json: {\n    ...$json,\n    qdrant_point_id: qdrantPointId,\n    qdrant_upsert_endpoint: shouldCommitQdrant\n      ? `${qdrantBaseUrl}/collections/${encodeURIComponent(qdrantCollection)}/points`\n      : String($json.qdrant_upsert_endpoint || '').trim(),\n    qdrant_upsert_payload: shouldCommitQdrant\n      ? {\n          points: [\n            {\n              id: qdrantPointId,\n              vector: embedding,\n              payload: {\n                item_id: $json.item_id,\n                source_type: $json.source_type,\n                source_name: $json.source_name,\n                title: $json.title,\n                canonical_url: $json.canonical_url,\n                published_at: $json.published_at,\n                score: $json.score,\n                category: $json.category,\n                summary: $json.summary,\n                dedupe_action: $json.dedupe_action,\n                matched_score: $json.matched_score,\n                tags: $json.tags,\n                content_hash: $json.content_hash\n              }\n            }\n          ]\n        }\n      : ($json.qdrant_upsert_payload ?? null),\n    should_commit_qdrant: shouldCommitQdrant,\n    qdrant_operation: shouldCommitQdrant ? 'pending' : 'skipped',\n    qdrant_upsert_response: shouldCommitQdrant ? null : ($json.qdrant_upsert_response ?? null)\n  }\n};"
+      },
+      "id": "db165c8b-65a7-4b12-9565-8710c4bc9536",
+      "name": "Build Qdrant Commit Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.should_commit_qdrant || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "45d364e9-7ab9-4edf-b349-43ec6c5bc1ba",
+      "name": "Should Commit Qdrant?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{$json.qdrant_upsert_endpoint}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.qdrant_upsert_payload) }}",
+        "options": {}
+      },
+      "id": "d177042d-62b6-42f3-92e7-87e310bfecc2",
+      "name": "Qdrant Upsert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const original = $('Build Qdrant Commit Payload').item.json || {};\nreturn {\n  json: {\n    ...original,\n    qdrant_operation: 'upserted',\n    qdrant_upsert_response: $json\n  }\n};"
+      },
+      "id": "fa15fc14-5eb1-419d-ae92-0aed476dcc72",
+      "name": "Finalize Commit Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    qdrant_operation: String($json.qdrant_operation || 'skipped').trim() || 'skipped',\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
+      },
+      "id": "8e5c2afc-223e-45ce-a4ab-283648cb1912",
+      "name": "Finalize Skipped Commit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "6dd6d8b1-45ff-4d2d-8134-5a1de1718996",
+      "name": "Merge Commit Result",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1820,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    qdrant_operation: String($json.qdrant_operation || 'skipped').trim() || 'skipped',\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
+      },
+      "id": "e48f8cb3-452f-49bd-bc03-5969a99a5729",
+      "name": "Return Commit Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Example Written Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build Qdrant Commit Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Example Written Item": {
+      "main": [
+        [
+          {
+            "node": "Build Qdrant Commit Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Qdrant Commit Payload": {
+      "main": [
+        [
+          {
+            "node": "Should Commit Qdrant?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Commit Qdrant?": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Skipped Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Upsert": {
+      "main": [
+        [
+          {
+            "node": "Finalize Commit Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Commit Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Commit Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Skipped Commit": {
+      "main": [
+        [
+          {
+            "node": "Merge Commit Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Commit Result": {
+      "main": [
+        [
+          {
+            "node": "Return Commit Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "b8d965fe-5d60-4809-b9e4-0be500706c17",
+  "tags": []
 }

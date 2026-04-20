@@ -1,553 +1,569 @@
 {
-    "id":  "D3a7Kp9Lm4Qx2Rst",
-    "name":  "01 RSS to Obsidian Raw Inbox",
-    "description":  "Template workflow: RSS ingress -\u003e route transcript candidates into 04, send text items through 00 -\u003e 01a -\u003e 03 pre-LLM dedupe, skip LLM for silent duplicates, run 02 -\u003e 04a only when needed, then write Vault before deferred 03b index commit.",
-    "active":  true,
-    "isArchived":  false,
-    "nodes":  [
-                  {
-                      "parameters":  {
-
-                                     },
-                      "id":  "a5f9550a-bf22-48c6-a312-5cf700fe8fc1",
-                      "name":  "When clicking \u0027Execute workflow\u0027",
-                      "type":  "n8n-nodes-base.manualTrigger",
-                      "typeVersion":  1,
-                      "position":  [
-                                       260,
-                                       120
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "rule":  {
-                                                      "interval":  [
-                                                                       {
-                                                                           "field":  "hours",
-                                                                           "hoursInterval":  2
-                                                                       }
-                                                                   ]
-                                                  }
-                                     },
-                      "id":  "1ca63570-4561-453d-a1b0-7162a9ccfd6a",
-                      "name":  "Schedule Trigger",
-                      "type":  "n8n-nodes-base.scheduleTrigger",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       260,
-                                       300
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "assignments":  {
-                                                             "assignments":  [
-                                                                                 {
-                                                                                     "id":  "fef5ef5d-6a54-4b73-b35f-7ff9eec7fe0c",
-                                                                                     "name":  "rssSourcesJson",
-                                                                                     "value":  "={{$env.RSS_SOURCE_URLS_JSON}}",
-                                                                                     "type":  "string"
-                                                                                 },
-                                                                                 {
-                                                                                     "id":  "8fb75e0a-4105-42bc-9557-0a2c11c242c8",
-                                                                                     "name":  "obsidianInboxDir",
-                                                                                     "value":  "={{$env.OBSIDIAN_INBOX_DIR}}",
-                                                                                     "type":  "string"
-                                                                                 }
-                                                                             ]
-                                                         },
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "4f102b58-591b-4d18-bce7-5f4f59a94728",
-                      "name":  "Runtime Config",
-                      "type":  "n8n-nodes-base.set",
-                      "typeVersion":  3.4,
-                      "position":  [
-                                       500,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForAllItems",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const config = $input.first()?.json || {};\nconst rawSourcesJson = (config.rssSourcesJson || \u0027\u0027).trim();\nconst fallbackSources = [\n  {\n    feedUrl: \u0027http://rsshub:1200/xiaoyuzhou/podcast/648b0b641c48983391a63f98\u0027,\n    sourceName: \u002742绔犵粡\u0027,\n    sourceType: \u0027podcast\u0027\n  }\n];\n\nlet sources = fallbackSources;\nif (rawSourcesJson) {\n  try {\n    const parsed = JSON.parse(rawSourcesJson);\n    if (!Array.isArray(parsed)) {\n      throw new Error(\u0027RSS_SOURCE_URLS_JSON must be a JSON array\u0027);\n    }\n    sources = parsed;\n  } catch (error) {\n    throw new Error(`RSS_SOURCE_URLS_JSON parse failed: ${error.message}`);\n  }\n}\n\nconst obsidianInboxDir = (config.obsidianInboxDir || \u002700_Inbox/AI_Information_Processor\u0027).trim() || \u002700_Inbox/AI_Information_Processor\u0027;\n\nreturn sources.map((source, index) =\u003e {\n  const feedUrl = (source.feedUrl || source.url || \u0027\u0027).trim();\n  if (!feedUrl) {\n    throw new Error(`Source ${index + 1} is missing feedUrl/url`);\n  }\n\n  const transcriptPollIntervalMs = Number(source.transcriptPollIntervalMs || 0);\n  const transcriptMaxPolls = Number(source.transcriptMaxPolls || 0);\n\n  return {\n    json: {\n      feedUrl,\n      sourceName: source.sourceName || source.name || `source-${index + 1}`,\n      sourceType: source.sourceType || \u0027rss\u0027,\n      routeToTranscript: typeof source.routeToTranscript === \u0027boolean\u0027 ? source.routeToTranscript : null,\n      useSpeakerRecognition: Boolean(source.useSpeakerRecognition),\n      transcriptPollIntervalMs: Number.isFinite(transcriptPollIntervalMs) ? transcriptPollIntervalMs : 0,\n      transcriptMaxPolls: Number.isFinite(transcriptMaxPolls) ? transcriptMaxPolls : 0,\n      obsidianInboxDir\n    }\n  };\n});"
-                                     },
-                      "id":  "eb11ad43-31e8-4e95-9b84-a22f16b83b14",
-                      "name":  "Feed Sources",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       760,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "url":  "={{$json.feedUrl}}",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "38b97ff2-5e43-4a74-8561-976462f79f1a",
-                      "name":  "RSS Read",
-                      "type":  "n8n-nodes-base.rssFeedRead",
-                      "typeVersion":  1.2,
-                      "position":  [
-                                       1020,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const sourceContext = (() =\u003e {\n  try {\n    return $(\u0027Feed Sources\u0027).item.json || {};\n  } catch {\n    return {};\n  }\n})();\n\nconst rawHtml = [\n  $json[\u0027content:encoded\u0027],\n  $json.content,\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) =\u003e typeof value === \u0027string\u0027 \u0026\u0026 value.trim()) || \u0027\u0027;\nconst description = [\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) =\u003e typeof value === \u0027string\u0027 \u0026\u0026 value.trim()) || \u0027\u0027;\nconst sourceType = (sourceContext.sourceType || \u0027rss\u0027).trim() || \u0027rss\u0027;\nconst canonicalUrl = String($json.link || $json.guid || \u0027\u0027).trim();\nconst lowerSourceType = sourceType.toLowerCase();\n\nconst collectEnclosureCandidates = (value) =\u003e {\n  if (!value) {\n    return [];\n  }\n  if (typeof value === \u0027string\u0027) {\n    return [{ url: value.trim(), type: \u0027\u0027 }].filter((item) =\u003e item.url);\n  }\n  if (Array.isArray(value)) {\n    return value.flatMap(collectEnclosureCandidates);\n  }\n  if (typeof value === \u0027object\u0027) {\n    const url = [value.url, value.link, value.href, value.src]\n      .find((candidate) =\u003e typeof candidate === \u0027string\u0027 \u0026\u0026 candidate.trim()) || \u0027\u0027;\n    const type = [value.type, value.mimeType]\n      .find((candidate) =\u003e typeof candidate === \u0027string\u0027 \u0026\u0026 candidate.trim()) || \u0027\u0027;\n    return url ? [{ url: url.trim(), type: type.trim() }] : [];\n  }\n  return [];\n};\n\nconst enclosureCandidates = collectEnclosureCandidates($json.enclosure);\nconst audioEnclosure = enclosureCandidates.find((item) =\u003e /(^audio\\/)|\\.(mp3|m4a|aac|wav|ogg)(\\?|$)/i.test(`${item.type} ${item.url}`));\nconst transcriptSourceUrl = canonicalUrl || String(audioEnclosure?.url || \u0027\u0027).trim();\nconst isPodcastSource = [\u0027podcast\u0027, \u0027audio\u0027, \u0027podcast_rss\u0027].includes(lowerSourceType);\nconst isXiaoyuzhouEpisode = /https?:\\/\\/(?:www\\.)?xiaoyuzhoufm\\.com\\/episode\\//i.test(transcriptSourceUrl);\nconst explicitRouteToTranscript = typeof sourceContext.routeToTranscript === \u0027boolean\u0027\n  ? sourceContext.routeToTranscript\n  : null;\nconst routeToTranscript = explicitRouteToTranscript ?? Boolean(isPodcastSource || isXiaoyuzhouEpisode || audioEnclosure?.url);\nconst transcriptPollIntervalMs = Number(sourceContext.transcriptPollIntervalMs || 0);\nconst transcriptMaxPolls = Number(sourceContext.transcriptMaxPolls || 0);\nconst extraTags = [\u0027raw-ingest\u0027];\nif (routeToTranscript) {\n  extraTags.push(\u0027transcript-route\u0027);\n}\n\nreturn {\n  json: {\n    source_type: sourceType,\n    source_name: (sourceContext.sourceName || sourceContext.name || \u0027\u0027).trim(),\n    canonical_url: canonicalUrl,\n    original_id: String($json.guid || $json.id || $json.link || transcriptSourceUrl).trim(),\n    title: (($json.title || \u0027\u0027).trim() || \u0027untitled\u0027),\n    author: (($json.creator || $json.author || \u0027\u0027).trim()),\n    published_at: $json.isoDate || $json.pubDate || new Date().toISOString(),\n    media_type: routeToTranscript ? \u0027audio\u0027 : \u0027text\u0027,\n    raw_html: rawHtml,\n    raw_text: \u0027\u0027,\n    description,\n    transcript_source_url: transcriptSourceUrl,\n    download_url: String(audioEnclosure?.url || \u0027\u0027).trim(),\n    use_speaker_recognition: Boolean(sourceContext.useSpeakerRecognition),\n    obsidian_inbox_dir: sourceContext.obsidianInboxDir || $json.obsidianInboxDir || \u002700_Inbox/AI_Information_Processor\u0027,\n    extra_tags: extraTags,\n    route_to_transcript: routeToTranscript,\n    ...(transcriptPollIntervalMs \u003e 0 ? { poll_interval_ms: transcriptPollIntervalMs } : {}),\n    ...(transcriptMaxPolls \u003e 0 ? { max_polls: transcriptMaxPolls } : {}),\n    upstream_task_id: \u0027\u0027,\n    upstream_view_token: \u0027\u0027,\n    upstream_summary: \u0027\u0027,\n    original_item: $json\n  }\n};"
-                                     },
-                      "id":  "db259336-2d57-4f88-9387-9bc59a1d0dfd",
-                      "name":  "Build Normalize Input",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1280,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "conditions":  {
-                                                            "string":  [
-                                                                           {
-                                                                               "value1":  "={{String($json.route_to_transcript || false)}}",
-                                                                               "operation":  "equal",
-                                                                               "value2":  "true"
-                                                                           }
-                                                                       ]
-                                                        }
-                                     },
-                      "id":  "7ee24c1d-f844-4b39-9a55-c612c2d1d1e1",
-                      "name":  "Route Transcript Candidates",
-                      "type":  "n8n-nodes-base.if",
-                      "typeVersion":  1,
-                      "position":  [
-                                       1540,
-                                       20
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "acb525fca8ea4dc4",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "04 Video Transcript Ingest"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "e58c7957-2a6e-4d95-99d6-6f8d22c7ef67",
-                      "name":  "04 Video Transcript Ingest",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       1800,
-                                       20
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "d4f093a8e2f74e39",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "00 Common Normalize Text Object"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "192f08f6-c943-46df-9afb-abc74b123d87",
-                      "name":  "00 Common Normalize Text Object",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       1540,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "c1f91d1d6f5a4bb1",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "01a Rule Prefilter"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "30ce3ae4-910d-437e-a2c3-5d2e020f75f6",
-                      "name":  "01a Rule Prefilter",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       1800,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "conditions":  {
-                                                            "string":  [
-                                                                           {
-                                                                               "value1":  "={{String($json.should_continue_to_qdrant || false)}}",
-                                                                               "operation":  "equal",
-                                                                               "value2":  "true"
-                                                                           }
-                                                                       ]
-                                                        }
-                                     },
-                      "id":  "9a72ba3a-a71d-4f60-b34e-3734e20b6056",
-                      "name":  "Should Continue To Qdrant?",
-                      "type":  "n8n-nodes-base.if",
-                      "typeVersion":  1,
-                      "position":  [
-                                       2060,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "a793499a65e344bc",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "03 Qdrant Gate"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "47be42ab-f7f1-4f56-98ef-68856e3dc0c7",
-                      "name":  "03 Qdrant Gate",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       2320,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "conditions":  {
-                                                            "string":  [
-                                                                           {
-                                                                               "value1":  "={{String($json.should_continue_to_llm || false)}}",
-                                                                               "operation":  "equal",
-                                                                               "value2":  "true"
-                                                                           }
-                                                                       ]
-                                                        }
-                                     },
-                      "id":  "f91b2c32-fcf5-4d04-97c9-b9ee3beb3a2f",
-                      "name":  "Should Continue To LLM?",
-                      "type":  "n8n-nodes-base.if",
-                      "typeVersion":  1,
-                      "position":  [
-                                       2580,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "828e50ae98c24f31",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "02 Enrich With LLM"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "ebad17a2-e7ba-4414-9c37-2b113c549d1d",
-                      "name":  "02 Enrich With LLM",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       2320,
-                                       390
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "e7847c3145f4432d",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "04a Action Policy"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "ebd33027-92d0-442a-9579-96777543b7f7",
-                      "name":  "04a Action Policy",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       2580,
-                                       390
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "5d53f72296534f1c",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "05 Common Vault Writer"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "9a55db36-3d7b-4dd8-8e97-67b5f2aa8d20",
-                      "name":  "05 Common Vault Writer",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       2840,
-                                       210
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "source":  "database",
-                                         "workflowId":  {
-                                                            "__rl":  true,
-                                                            "value":  "6c65b02be56e4ea2",
-                                                            "mode":  "list",
-                                                            "cachedResultName":  "03b Qdrant Commit"
-                                                        },
-                                         "mode":  "each",
-                                         "options":  {
-                                                         "waitForSubWorkflow":  true
-                                                     }
-                                     },
-                      "id":  "4edfa440-e200-472f-b1fa-3fd64d00bb56",
-                      "name":  "03b Qdrant Commit",
-                      "type":  "n8n-nodes-base.executeWorkflow",
-                      "typeVersion":  1.3,
-                      "position":  [
-                                       3100,
-                                       210
-                                   ]
-                  }
-              ],
-    "connections":  {
-                        "Schedule Trigger":  {
-                                                 "main":  [
-                                                              {
-                                                                  "node":  "Runtime Config",
-                                                                  "type":  "main",
-                                                                  "index":  0
-                                                              }
-                                                          ]
-                                             },
-                        "When clicking \u0027Execute workflow\u0027":  {
-                                                                           "main":  [
-                                                                                        {
-                                                                                            "node":  "Runtime Config",
-                                                                                            "type":  "main",
-                                                                                            "index":  0
-                                                                                        }
-                                                                                    ]
-                                                                       },
-                        "Runtime Config":  {
-                                               "main":  [
-                                                            {
-                                                                "node":  "Feed Sources",
-                                                                "type":  "main",
-                                                                "index":  0
-                                                            }
-                                                        ]
-                                           },
-                        "Feed Sources":  {
-                                             "main":  [
-                                                          {
-                                                              "node":  "RSS Read",
-                                                              "type":  "main",
-                                                              "index":  0
-                                                          }
-                                                      ]
-                                         },
-                        "RSS Read":  {
-                                         "main":  [
-                                                      {
-                                                          "node":  "Build Normalize Input",
-                                                          "type":  "main",
-                                                          "index":  0
-                                                      }
-                                                  ]
-                                     },
-                        "Build Normalize Input":  {
-                                                      "main":  [
-                                                                   {
-                                                                       "node":  "Route Transcript Candidates",
-                                                                       "type":  "main",
-                                                                       "index":  0
-                                                                   }
-                                                               ]
-                                                  },
-                        "Route Transcript Candidates":  {
-                                                            "main":  [
-                                                                         [
-                                                                             {
-                                                                                 "node":  "04 Video Transcript Ingest",
-                                                                                 "type":  "main",
-                                                                                 "index":  0
-                                                                             }
-                                                                         ],
-                                                                         [
-                                                                             {
-                                                                                 "node":  "00 Common Normalize Text Object",
-                                                                                 "type":  "main",
-                                                                                 "index":  0
-                                                                             }
-                                                                         ]
-                                                                     ]
-                                                        },
-                        "04 Video Transcript Ingest":  {
-                                                           "main":  [
-                                                                        {
-                                                                            "node":  "05 Common Vault Writer",
-                                                                            "type":  "main",
-                                                                            "index":  0
-                                                                        }
-                                                                    ]
-                                                       },
-                        "00 Common Normalize Text Object":  {
-                                                                "main":  [
-                                                                             {
-                                                                                 "node":  "01a Rule Prefilter",
-                                                                                 "type":  "main",
-                                                                                 "index":  0
-                                                                             }
-                                                                         ]
-                                                            },
-                        "01a Rule Prefilter":  {
-                                                   "main":  [
-                                                                {
-                                                                    "node":  "Should Continue To Qdrant?",
-                                                                    "type":  "main",
-                                                                    "index":  0
-                                                                }
-                                                            ]
-                                               },
-                        "Should Continue To Qdrant?":  {
-                                                           "main":  [
-                                                                        [
-                                                                            {
-                                                                                "node":  "03 Qdrant Gate",
-                                                                                "type":  "main",
-                                                                                "index":  0
-                                                                            }
-                                                                        ],
-                                                                        [
-                                                                            {
-                                                                                "node":  "05 Common Vault Writer",
-                                                                                "type":  "main",
-                                                                                "index":  0
-                                                                            }
-                                                                        ]
-                                                                    ]
-                                                       },
-                        "03 Qdrant Gate":  {
-                                               "main":  [
-                                                            {
-                                                                "node":  "Should Continue To LLM?",
-                                                                "type":  "main",
-                                                                "index":  0
-                                                            }
-                                                        ]
-                                           },
-                        "Should Continue To LLM?":  {
-                                                        "main":  [
-                                                                     [
-                                                                         {
-                                                                             "node":  "02 Enrich With LLM",
-                                                                             "type":  "main",
-                                                                             "index":  0
-                                                                         }
-                                                                     ],
-                                                                     [
-                                                                         {
-                                                                             "node":  "05 Common Vault Writer",
-                                                                             "type":  "main",
-                                                                             "index":  0
-                                                                         }
-                                                                     ]
-                                                                 ]
-                                                    },
-                        "02 Enrich With LLM":  {
-                                                   "main":  [
-                                                                {
-                                                                    "node":  "04a Action Policy",
-                                                                    "type":  "main",
-                                                                    "index":  0
-                                                                }
-                                                            ]
-                                               },
-                        "04a Action Policy":  {
-                                                  "main":  [
-                                                               {
-                                                                   "node":  "05 Common Vault Writer",
-                                                                   "type":  "main",
-                                                                   "index":  0
-                                                               }
-                                                           ]
-                                              },
-                        "05 Common Vault Writer":  {
-                                                       "main":  [
-                                                                    {
-                                                                        "node":  "03b Qdrant Commit",
-                                                                        "type":  "main",
-                                                                        "index":  0
-                                                                    }
-                                                                ]
-                                                   }
-                    },
-    "settings":  {
-                     "executionOrder":  "v1"
-                 },
-    "staticData":  null,
-    "meta":  {
-                 "templateCredsSetupCompleted":  true
-             },
-    "pinData":  {
-
-                },
-    "versionId":  "1fd114cf-619b-44de-aac4-2f5f9e02771c",
-    "tags":  [
-
-             ]
+  "id": "D3a7Kp9Lm4Qx2Rst",
+  "name": "01 RSS to Obsidian Raw Inbox",
+  "description": "Template workflow: RSS ingress -> route transcript candidates into 04, send text items through 00 -> 01a -> 03 pre-LLM dedupe, skip LLM for silent duplicates, run 02 -> 04a only when needed, then write Vault before deferred 03b index commit.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a5f9550a-bf22-48c6-a312-5cf700fe8fc1",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "1ca63570-4561-453d-a1b0-7162a9ccfd6a",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fef5ef5d-6a54-4b73-b35f-7ff9eec7fe0c",
+              "name": "rssSourcesJson",
+              "value": "={{$env.RSS_SOURCE_URLS_JSON}}",
+              "type": "string"
+            },
+            {
+              "id": "8fb75e0a-4105-42bc-9557-0a2c11c242c8",
+              "name": "obsidianInboxDir",
+              "value": "={{$env.OBSIDIAN_INBOX_DIR}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4f102b58-591b-4d18-bce7-5f4f59a94728",
+      "name": "Runtime Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const config = $input.first()?.json || {};\nconst rawSourcesJson = (config.rssSourcesJson || '').trim();\nconst fallbackSources = [\n  {\n    feedUrl: 'http://rsshub:1200/xiaoyuzhou/podcast/648b0b641c48983391a63f98',\n    sourceName: '42绔犵粡',\n    sourceType: 'podcast'\n  }\n];\n\nlet sources = fallbackSources;\nif (rawSourcesJson) {\n  try {\n    const parsed = JSON.parse(rawSourcesJson);\n    if (!Array.isArray(parsed)) {\n      throw new Error('RSS_SOURCE_URLS_JSON must be a JSON array');\n    }\n    sources = parsed;\n  } catch (error) {\n    throw new Error(`RSS_SOURCE_URLS_JSON parse failed: ${error.message}`);\n  }\n}\n\nconst obsidianInboxDir = (config.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\n\nreturn sources.map((source, index) => {\n  const feedUrl = (source.feedUrl || source.url || '').trim();\n  if (!feedUrl) {\n    throw new Error(`Source ${index + 1} is missing feedUrl/url`);\n  }\n\n  const transcriptPollIntervalMs = Number(source.transcriptPollIntervalMs || 0);\n  const transcriptMaxPolls = Number(source.transcriptMaxPolls || 0);\n\n  return {\n    json: {\n      feedUrl,\n      sourceName: source.sourceName || source.name || `source-${index + 1}`,\n      sourceType: source.sourceType || 'rss',\n      routeToTranscript: typeof source.routeToTranscript === 'boolean' ? source.routeToTranscript : null,\n      useSpeakerRecognition: Boolean(source.useSpeakerRecognition),\n      transcriptPollIntervalMs: Number.isFinite(transcriptPollIntervalMs) ? transcriptPollIntervalMs : 0,\n      transcriptMaxPolls: Number.isFinite(transcriptMaxPolls) ? transcriptMaxPolls : 0,\n      obsidianInboxDir\n    }\n  };\n});"
+      },
+      "id": "eb11ad43-31e8-4e95-9b84-a22f16b83b14",
+      "name": "Feed Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.feedUrl}}",
+        "options": {}
+      },
+      "id": "38b97ff2-5e43-4a74-8561-976462f79f1a",
+      "name": "RSS Read",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        1020,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const sourceContext = (() => {\n  try {\n    return $('Feed Sources').item.json || {};\n  } catch {\n    return {};\n  }\n})();\n\nconst rawHtml = [\n  $json['content:encoded'],\n  $json.content,\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) => typeof value === 'string' && value.trim()) || '';\nconst description = [\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) => typeof value === 'string' && value.trim()) || '';\nconst sourceType = (sourceContext.sourceType || 'rss').trim() || 'rss';\nconst canonicalUrl = String($json.link || $json.guid || '').trim();\nconst lowerSourceType = sourceType.toLowerCase();\n\nconst collectEnclosureCandidates = (value) => {\n  if (!value) {\n    return [];\n  }\n  if (typeof value === 'string') {\n    return [{ url: value.trim(), type: '' }].filter((item) => item.url);\n  }\n  if (Array.isArray(value)) {\n    return value.flatMap(collectEnclosureCandidates);\n  }\n  if (typeof value === 'object') {\n    const url = [value.url, value.link, value.href, value.src]\n      .find((candidate) => typeof candidate === 'string' && candidate.trim()) || '';\n    const type = [value.type, value.mimeType]\n      .find((candidate) => typeof candidate === 'string' && candidate.trim()) || '';\n    return url ? [{ url: url.trim(), type: type.trim() }] : [];\n  }\n  return [];\n};\n\nconst enclosureCandidates = collectEnclosureCandidates($json.enclosure);\nconst audioEnclosure = enclosureCandidates.find((item) => /(^audio\\/)|\\.(mp3|m4a|aac|wav|ogg)(\\?|$)/i.test(`${item.type} ${item.url}`));\nconst transcriptSourceUrl = canonicalUrl || String(audioEnclosure?.url || '').trim();\nconst isPodcastSource = ['podcast', 'audio', 'podcast_rss'].includes(lowerSourceType);\nconst isXiaoyuzhouEpisode = /https?:\\/\\/(?:www\\.)?xiaoyuzhoufm\\.com\\/episode\\//i.test(transcriptSourceUrl);\nconst explicitRouteToTranscript = typeof sourceContext.routeToTranscript === 'boolean'\n  ? sourceContext.routeToTranscript\n  : null;\nconst routeToTranscript = explicitRouteToTranscript ?? Boolean(isPodcastSource || isXiaoyuzhouEpisode || audioEnclosure?.url);\nconst transcriptPollIntervalMs = Number(sourceContext.transcriptPollIntervalMs || 0);\nconst transcriptMaxPolls = Number(sourceContext.transcriptMaxPolls || 0);\nconst extraTags = ['raw-ingest'];\nif (routeToTranscript) {\n  extraTags.push('transcript-route');\n}\n\nreturn {\n  json: {\n    source_type: sourceType,\n    source_name: (sourceContext.sourceName || sourceContext.name || '').trim(),\n    canonical_url: canonicalUrl,\n    original_id: String($json.guid || $json.id || $json.link || transcriptSourceUrl).trim(),\n    title: (($json.title || '').trim() || 'untitled'),\n    author: (($json.creator || $json.author || '').trim()),\n    published_at: $json.isoDate || $json.pubDate || new Date().toISOString(),\n    media_type: routeToTranscript ? 'audio' : 'text',\n    raw_html: rawHtml,\n    raw_text: '',\n    description,\n    transcript_source_url: transcriptSourceUrl,\n    download_url: String(audioEnclosure?.url || '').trim(),\n    use_speaker_recognition: Boolean(sourceContext.useSpeakerRecognition),\n    obsidian_inbox_dir: sourceContext.obsidianInboxDir || $json.obsidianInboxDir || '00_Inbox/AI_Information_Processor',\n    extra_tags: extraTags,\n    route_to_transcript: routeToTranscript,\n    ...(transcriptPollIntervalMs > 0 ? { poll_interval_ms: transcriptPollIntervalMs } : {}),\n    ...(transcriptMaxPolls > 0 ? { max_polls: transcriptMaxPolls } : {}),\n    upstream_task_id: '',\n    upstream_view_token: '',\n    upstream_summary: '',\n    original_item: $json\n  }\n};"
+      },
+      "id": "db259336-2d57-4f88-9387-9bc59a1d0dfd",
+      "name": "Build Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.route_to_transcript || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "7ee24c1d-f844-4b39-9a55-c612c2d1d1e1",
+      "name": "Route Transcript Candidates",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "acb525fca8ea4dc4",
+          "mode": "list",
+          "cachedResultName": "04 Video Transcript Ingest"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "e58c7957-2a6e-4d95-99d6-6f8d22c7ef67",
+      "name": "04 Video Transcript Ingest",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1800,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "d4f093a8e2f74e39",
+          "mode": "list",
+          "cachedResultName": "00 Common Normalize Text Object"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "192f08f6-c943-46df-9afb-abc74b123d87",
+      "name": "00 Common Normalize Text Object",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1540,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "c1f91d1d6f5a4bb1",
+          "mode": "list",
+          "cachedResultName": "01a Rule Prefilter"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "30ce3ae4-910d-437e-a2c3-5d2e020f75f6",
+      "name": "01a Rule Prefilter",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1800,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.should_continue_to_qdrant || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "9a72ba3a-a71d-4f60-b34e-3734e20b6056",
+      "name": "Should Continue To Qdrant?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "a793499a65e344bc",
+          "mode": "list",
+          "cachedResultName": "03 Qdrant Gate"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "47be42ab-f7f1-4f56-98ef-68856e3dc0c7",
+      "name": "03 Qdrant Gate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2320,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.should_continue_to_llm || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "f91b2c32-fcf5-4d04-97c9-b9ee3beb3a2f",
+      "name": "Should Continue To LLM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2580,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "828e50ae98c24f31",
+          "mode": "list",
+          "cachedResultName": "02 Enrich With LLM"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "ebad17a2-e7ba-4414-9c37-2b113c549d1d",
+      "name": "02 Enrich With LLM",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2320,
+        390
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "e7847c3145f4432d",
+          "mode": "list",
+          "cachedResultName": "04a Action Policy"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "ebd33027-92d0-442a-9579-96777543b7f7",
+      "name": "04a Action Policy",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2580,
+        390
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "5d53f72296534f1c",
+          "mode": "list",
+          "cachedResultName": "05 Common Vault Writer"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "9a55db36-3d7b-4dd8-8e97-67b5f2aa8d20",
+      "name": "05 Common Vault Writer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2840,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "6c65b02be56e4ea2",
+          "mode": "list",
+          "cachedResultName": "03b Qdrant Commit"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4edfa440-e200-472f-b1fa-3fd64d00bb56",
+      "name": "03b Qdrant Commit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3100,
+        210
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Runtime Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Runtime Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runtime Config": {
+      "main": [
+        [
+          {
+            "node": "Feed Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Feed Sources": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Build Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Route Transcript Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Transcript Candidates": {
+      "main": [
+        [
+          {
+            "node": "04 Video Transcript Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "00 Common Normalize Text Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 Video Transcript Ingest": {
+      "main": [
+        [
+          {
+            "node": "05 Common Vault Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "00 Common Normalize Text Object": {
+      "main": [
+        [
+          {
+            "node": "01a Rule Prefilter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "01a Rule Prefilter": {
+      "main": [
+        [
+          {
+            "node": "Should Continue To Qdrant?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue To Qdrant?": {
+      "main": [
+        [
+          {
+            "node": "03 Qdrant Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "05 Common Vault Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 Qdrant Gate": {
+      "main": [
+        [
+          {
+            "node": "Should Continue To LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue To LLM?": {
+      "main": [
+        [
+          {
+            "node": "02 Enrich With LLM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "05 Common Vault Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 Enrich With LLM": {
+      "main": [
+        [
+          {
+            "node": "04a Action Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04a Action Policy": {
+      "main": [
+        [
+          {
+            "node": "05 Common Vault Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 Common Vault Writer": {
+      "main": [
+        [
+          {
+            "node": "03b Qdrant Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1fd114cf-619b-44de-aac4-2f5f9e02771c",
+  "tags": []
 }
