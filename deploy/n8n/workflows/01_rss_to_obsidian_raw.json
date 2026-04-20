@@ -1,7 +1,7 @@
 {
   "id": "D3a7Kp9Lm4Qx2Rst",
   "name": "01 RSS to Obsidian Raw Inbox",
-  "description": "Template workflow: RSS ingress -> shared 00 normalizer -> 02 enrich sub-workflow -> 03 Qdrant gate -> Obsidian inbox writer.",
+  "description": "Template workflow: RSS ingress -> route podcast/audio items into 04 transcript ingest, keep text items on the shared 00 -> 02 -> 03 path, then hand every gate result to the shared 05 vault writer.",
   "active": false,
   "isArchived": false,
   "nodes": [
@@ -69,7 +69,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const config = $input.first()?.json || {};\nconst rawSourcesJson = (config.rssSourcesJson || '').trim();\nconst fallbackSources = [\n  {\n    feedUrl: 'http://rsshub:1200/xiaoyuzhou/podcast/648b0b641c48983391a63f98',\n    sourceName: '42章经',\n    sourceType: 'podcast'\n  }\n];\n\nlet sources = fallbackSources;\nif (rawSourcesJson) {\n  try {\n    const parsed = JSON.parse(rawSourcesJson);\n    if (!Array.isArray(parsed)) {\n      throw new Error('RSS_SOURCE_URLS_JSON must be a JSON array');\n    }\n    sources = parsed;\n  } catch (error) {\n    throw new Error(`RSS_SOURCE_URLS_JSON parse failed: ${error.message}`);\n  }\n}\n\nconst obsidianInboxDir = (config.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\n\nreturn sources.map((source, index) => {\n  const feedUrl = (source.feedUrl || source.url || '').trim();\n  if (!feedUrl) {\n    throw new Error(`Source ${index + 1} is missing feedUrl/url`);\n  }\n\n  return {\n    json: {\n      feedUrl,\n      sourceName: source.sourceName || source.name || `source-${index + 1}`,\n      sourceType: source.sourceType || 'rss',\n      obsidianInboxDir\n    }\n  };\n});"
+        "jsCode": "const config = $input.first()?.json || {};\nconst rawSourcesJson = (config.rssSourcesJson || '').trim();\nconst fallbackSources = [\n  {\n    feedUrl: 'http://rsshub:1200/xiaoyuzhou/podcast/648b0b641c48983391a63f98',\n    sourceName: '42章经',\n    sourceType: 'podcast'\n  }\n];\n\nlet sources = fallbackSources;\nif (rawSourcesJson) {\n  try {\n    const parsed = JSON.parse(rawSourcesJson);\n    if (!Array.isArray(parsed)) {\n      throw new Error('RSS_SOURCE_URLS_JSON must be a JSON array');\n    }\n    sources = parsed;\n  } catch (error) {\n    throw new Error(`RSS_SOURCE_URLS_JSON parse failed: ${error.message}`);\n  }\n}\n\nconst obsidianInboxDir = (config.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\n\nreturn sources.map((source, index) => {\n  const feedUrl = (source.feedUrl || source.url || '').trim();\n  if (!feedUrl) {\n    throw new Error(`Source ${index + 1} is missing feedUrl/url`);\n  }\n\n  const transcriptPollIntervalMs = Number(source.transcriptPollIntervalMs || 0);\n  const transcriptMaxPolls = Number(source.transcriptMaxPolls || 0);\n\n  return {\n    json: {\n      feedUrl,\n      sourceName: source.sourceName || source.name || `source-${index + 1}`,\n      sourceType: source.sourceType || 'rss',\n      routeToTranscript: typeof source.routeToTranscript === 'boolean' ? source.routeToTranscript : null,\n      useSpeakerRecognition: Boolean(source.useSpeakerRecognition),\n      transcriptPollIntervalMs: Number.isFinite(transcriptPollIntervalMs) ? transcriptPollIntervalMs : 0,\n      transcriptMaxPolls: Number.isFinite(transcriptMaxPolls) ? transcriptMaxPolls : 0,\n      obsidianInboxDir\n    }\n  };\n});"
       },
       "id": "eb11ad43-31e8-4e95-9b84-a22f16b83b14",
       "name": "Feed Sources",
@@ -98,7 +98,7 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const sourceContext = (() => {\n  try {\n    return $('Feed Sources').item.json || {};\n  } catch {\n    return {};\n  }\n})();\n\nconst rawHtml = [\n  $json['content:encoded'],\n  $json.content,\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) => typeof value === 'string' && value.trim()) || '';\n\nreturn {\n  json: {\n    source_type: (sourceContext.sourceType || 'rss').trim() || 'rss',\n    source_name: (sourceContext.sourceName || sourceContext.name || '').trim(),\n    canonical_url: String($json.link || $json.guid || '').trim(),\n    original_id: String($json.guid || $json.id || $json.link || '').trim(),\n    title: (($json.title || '').trim() || 'untitled'),\n    author: (($json.creator || $json.author || '').trim()),\n    published_at: $json.isoDate || $json.pubDate || new Date().toISOString(),\n    media_type: 'text',\n    raw_html: rawHtml,\n    raw_text: '',\n    obsidian_inbox_dir: sourceContext.obsidianInboxDir || $json.obsidianInboxDir || '00_Inbox/AI_Information_Processor',\n    extra_tags: ['raw-ingest'],\n    upstream_task_id: '',\n    upstream_view_token: '',\n    upstream_summary: '',\n    original_item: $json\n  }\n};"
+        "jsCode": "const sourceContext = (() => {\n  try {\n    return $('Feed Sources').item.json || {};\n  } catch {\n    return {};\n  }\n})();\n\nconst rawHtml = [\n  $json['content:encoded'],\n  $json.content,\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) => typeof value === 'string' && value.trim()) || '';\nconst description = [\n  $json.contentSnippet,\n  $json.summary,\n  $json.description\n].find((value) => typeof value === 'string' && value.trim()) || '';\nconst sourceType = (sourceContext.sourceType || 'rss').trim() || 'rss';\nconst canonicalUrl = String($json.link || $json.guid || '').trim();\nconst lowerSourceType = sourceType.toLowerCase();\n\nconst collectEnclosureCandidates = (value) => {\n  if (!value) {\n    return [];\n  }\n  if (typeof value === 'string') {\n    return [{ url: value.trim(), type: '' }].filter((item) => item.url);\n  }\n  if (Array.isArray(value)) {\n    return value.flatMap(collectEnclosureCandidates);\n  }\n  if (typeof value === 'object') {\n    const url = [value.url, value.link, value.href, value.src]\n      .find((candidate) => typeof candidate === 'string' && candidate.trim()) || '';\n    const type = [value.type, value.mimeType]\n      .find((candidate) => typeof candidate === 'string' && candidate.trim()) || '';\n    return url ? [{ url: url.trim(), type: type.trim() }] : [];\n  }\n  return [];\n};\n\nconst enclosureCandidates = collectEnclosureCandidates($json.enclosure);\nconst audioEnclosure = enclosureCandidates.find((item) => /(^audio\\/)|\\.(mp3|m4a|aac|wav|ogg)(\\?|$)/i.test(`${item.type} ${item.url}`));\nconst transcriptSourceUrl = canonicalUrl || String(audioEnclosure?.url || '').trim();\nconst isPodcastSource = ['podcast', 'audio', 'podcast_rss'].includes(lowerSourceType);\nconst isXiaoyuzhouEpisode = /https?:\\/\\/(?:www\\.)?xiaoyuzhoufm\\.com\\/episode\\//i.test(transcriptSourceUrl);\nconst explicitRouteToTranscript = typeof sourceContext.routeToTranscript === 'boolean'\n  ? sourceContext.routeToTranscript\n  : null;\nconst routeToTranscript = explicitRouteToTranscript ?? Boolean(isPodcastSource || isXiaoyuzhouEpisode || audioEnclosure?.url);\nconst transcriptPollIntervalMs = Number(sourceContext.transcriptPollIntervalMs || 0);\nconst transcriptMaxPolls = Number(sourceContext.transcriptMaxPolls || 0);\nconst extraTags = ['raw-ingest'];\nif (routeToTranscript) {\n  extraTags.push('transcript-route');\n}\n\nreturn {\n  json: {\n    source_type: sourceType,\n    source_name: (sourceContext.sourceName || sourceContext.name || '').trim(),\n    canonical_url: canonicalUrl,\n    original_id: String($json.guid || $json.id || $json.link || transcriptSourceUrl).trim(),\n    title: (($json.title || '').trim() || 'untitled'),\n    author: (($json.creator || $json.author || '').trim()),\n    published_at: $json.isoDate || $json.pubDate || new Date().toISOString(),\n    media_type: routeToTranscript ? 'audio' : 'text',\n    raw_html: rawHtml,\n    raw_text: '',\n    description,\n    transcript_source_url: transcriptSourceUrl,\n    download_url: String(audioEnclosure?.url || '').trim(),\n    use_speaker_recognition: Boolean(sourceContext.useSpeakerRecognition),\n    obsidian_inbox_dir: sourceContext.obsidianInboxDir || $json.obsidianInboxDir || '00_Inbox/AI_Information_Processor',\n    extra_tags: extraTags,\n    route_to_transcript: routeToTranscript,\n    ...(transcriptPollIntervalMs > 0 ? { poll_interval_ms: transcriptPollIntervalMs } : {}),\n    ...(transcriptMaxPolls > 0 ? { max_polls: transcriptMaxPolls } : {}),\n    upstream_task_id: '',\n    upstream_view_token: '',\n    upstream_summary: '',\n    original_item: $json\n  }\n};"
       },
       "id": "db259336-2d57-4f88-9387-9bc59a1d0dfd",
       "name": "Build Normalize Input",
@@ -107,6 +107,50 @@
       "position": [
         1280,
         210
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.route_to_transcript || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "7ee24c1d-f844-4b39-9a55-c612c2d1d1e1",
+      "name": "Route Transcript Candidates",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "acb525fca8ea4dc4",
+          "mode": "list",
+          "cachedResultName": "04 Video Transcript Ingest"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "e58c7957-2a6e-4d95-99d6-6f8d22c7ef67",
+      "name": "04 Video Transcript Ingest",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1800,
+        20
       ]
     },
     {
@@ -180,62 +224,25 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const slugify = (value = '') => String(value)\n  .normalize('NFKD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9\\u4e00-\\u9fa5]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .toLowerCase();\n\nconst yamlEscape = (value = '') => String(value)\n  .replace(/\\\\/g, '\\\\\\\\')\n  .replace(/\"/g, '\\\\\"');\n\nconst yamlBlock = (key, value = '') => {\n  const normalized = String(value || '').replace(/\\r\\n/g, '\\n').trim();\n  if (!normalized) {\n    return '';\n  }\n  const indented = normalized\n    .split('\\n')\n    .map((line) => `  ${line}`)\n    .join('\\n');\n  return `${key}: |-\\n${indented}\\n`;\n};\n\nconst inboxDir = ($json.obsidianInboxDir || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\nconst dateForFile = new Date($json.published_at || Date.now());\nconst yyyy = dateForFile.getFullYear();\nconst mm = String(dateForFile.getMonth() + 1).padStart(2, '0');\nconst dd = String(dateForFile.getDate()).padStart(2, '0');\nconst datePrefix = `${yyyy}-${mm}-${dd}`;\nconst sourceType = slugify($json.source_type || 'rss') || 'rss';\nconst itemIdShort = String($json.item_id || 'unknown').slice(0, 10);\nconst titleSlug = slugify($json.title).slice(0, 80) || 'untitled';\nconst fileBaseName = `${datePrefix}_${sourceType}_${itemIdShort}_${titleSlug}`;\nconst relativeFilePath = `${inboxDir}/${fileBaseName}.md`;\nconst summary = String($json.summary || '').trim();\nconst reason = String($json.reason || '').trim();\nconst excerpt = (summary || ($json.content_text || '').slice(0, 280)).trim();\nconst dedupeAction = String($json.dedupe_action || 'full_push').trim() || 'full_push';\nconst notificationMode = String($json.notification_mode || '').trim();\nconst matchedPayload = $json.matched_payload && typeof $json.matched_payload === 'object' ? $json.matched_payload : null;\nconst matchedScore = Number($json.matched_score || 0);\nconst matchedTitle = matchedPayload ? String(matchedPayload.title || '').trim() : '';\nconst matchedItemId = matchedPayload ? String(matchedPayload.item_id || '').trim() : '';\nconst matchedCanonicalUrl = matchedPayload ? String(matchedPayload.canonical_url || '').trim() : '';\nconst tags = Array.isArray($json.tags) && $json.tags.length\n  ? $json.tags.filter(Boolean)\n  : ['inbox', 'ai-information-processor'];\nconst normalizedTags = [...new Set([...tags, `dedupe-${dedupeAction}`].filter(Boolean))];\nconst tagLines = normalizedTags.map((tag) => `  - ${tag}`).join('\\n');\nconst authorLine = $json.author ? `author: \\\"${yamlEscape($json.author)}\\\"\\n` : '';\nconst originalIdLine = $json.original_id ? `original_id: \\\"${yamlEscape($json.original_id)}\\\"\\n` : '';\nconst sourceHostLine = $json.source_host ? `source_host: \\\"${yamlEscape($json.source_host)}\\\"\\n` : '';\nconst enrichedAtLine = $json.enriched_at ? `enriched_at: \\\"${yamlEscape($json.enriched_at)}\\\"\\n` : '';\nconst notificationModeLine = notificationMode ? `notification_mode: \\\"${yamlEscape(notificationMode)}\\\"\\n` : '';\nconst matchedScoreLine = Number.isFinite(matchedScore) && matchedScore > 0 ? `matched_score: ${matchedScore}\\n` : '';\nconst matchedItemIdLine = matchedItemId ? `matched_item_id: \\\"${yamlEscape(matchedItemId)}\\\"\\n` : '';\nconst matchedCanonicalUrlLine = matchedCanonicalUrl ? `matched_canonical_url: \\\"${yamlEscape(matchedCanonicalUrl)}\\\"\\n` : '';\nconst matchedSameItemLine = $json.matched_same_item ? 'matched_same_item: true\\n' : '';\nconst summaryLine = yamlBlock('summary', summary);\nconst reasonLine = yamlBlock('reason', reason);\nconst summarySection = summary ? `## Summary\\n\\n${summary}\\n\\n` : '';\nconst reasonSection = reason ? `## Reason\\n\\n${reason}\\n\\n` : '';\nconst dedupeLines = matchedPayload ? [\n  `- Action: ${dedupeAction}`,\n  `- Notification Mode: ${notificationMode || 'n/a'}`,\n  Number.isFinite(matchedScore) && matchedScore > 0 ? `- Matched Score: ${matchedScore.toFixed(4)}` : '',\n  matchedItemId ? `- Matched Item ID: ${matchedItemId}` : '',\n  matchedTitle ? `- Matched Title: ${matchedTitle}` : '',\n  matchedCanonicalUrl ? `- Matched Canonical URL: ${matchedCanonicalUrl}` : '',\n  $json.matched_same_item ? '- Same Item ID Match: true' : ''\n].filter(Boolean).join('\\n') : '';\nconst dedupeSection = dedupeLines ? `## Dedupe Context\\n\\n${dedupeLines}\\n\\n` : '';\nconst canonicalUrl = $json.canonical_url || '';\nconst workflowName = $json.enriched_at ? 'rss-to-obsidian-mainline-qdrant' : 'rss-to-obsidian-raw';\nconst markdown = `---\\ntitle: \\\"${yamlEscape($json.title)}\\\"\\nitem_id: \\\"${yamlEscape($json.item_id)}\\\"\\nsource_type: \\\"${yamlEscape($json.source_type)}\\\"\\nsource_name: \\\"${yamlEscape($json.source_name)}\\\"\\n${sourceHostLine}${originalIdLine}canonical_url: \\\"${yamlEscape(canonicalUrl)}\\\"\\npublished_at: \\\"${yamlEscape($json.published_at)}\\\"\\ningested_at: \\\"${yamlEscape($json.ingested_at)}\\\"\\n${enrichedAtLine}media_type: \\\"${yamlEscape($json.media_type)}\\\"\\ncontent_hash: \\\"${yamlEscape($json.content_hash)}\\\"\\nworkflow: \\\"${workflowName}\\\"\\nscore: ${Number($json.score || 0)}\\ncategory: \\\"${yamlEscape($json.category || 'pending')}\\\"\\ndedupe_action: \\\"${yamlEscape(dedupeAction)}\\\"\\nstatus: \\\"${yamlEscape($json.status || 'raw')}\\\"\\n${notificationModeLine}${matchedScoreLine}${matchedItemIdLine}${matchedCanonicalUrlLine}${matchedSameItemLine}${authorLine}${summaryLine}${reasonLine}tags:\\n${tagLines}\\n---\\n\\n# ${$json.title}\\n\\n> Source Name: ${$json.source_name || 'unknown-source'}\\n> Canonical URL: ${canonicalUrl || 'N/A'}\\n\\n## Excerpt\\n\\n${excerpt || 'No text excerpt extracted.'}\\n\\n${summarySection}${reasonSection}${dedupeSection}## Raw Content\\n\\n${$json.content_text || 'No text content extracted from this feed item.'}\\n`;\n\nreturn {\n  json: {\n    ...$json,\n    fileBaseName,\n    relativeFilePath,\n    vault_path: relativeFilePath,\n    vault_write: 'written'\n  },\n  binary: {\n    data: {\n      data: Buffer.from(markdown, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: `${fileBaseName}.md`,\n      fileExtension: 'md'\n    }\n  }\n};"
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "5d53f72296534f1c",
+          "mode": "list",
+          "cachedResultName": "05 Common Vault Writer"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
       },
-      "id": "ceb0e5d2-bd1c-4731-9db4-3a9f4ccfe60f",
-      "name": "Build Markdown",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2580,
-        120
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "return $input.all()\n  .filter((item) => Boolean(item.json?.should_write_to_vault))\n  .map((item) => ({\n    json: item.json,\n    binary: item.binary\n  }));"
-      },
-      "id": "261c2164-0622-441e-b5eb-c65abf84f5d3",
-      "name": "Should Write To Vault",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "9a55db36-3d7b-4dd8-8e97-67b5f2aa8d20",
+      "name": "05 Common Vault Writer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
       "position": [
         2320,
         210
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "return {\n  json: {\n    ...$json,\n    vault_write: 'skipped',\n    relativeFilePath: $json.vault_path || ''\n  }\n};"
-      },
-      "id": "3eb72950-1f2d-40aa-8ccb-31ffd3ef0a6f",
-      "name": "Skip Vault Write",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2580,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "fileName": "={{'/vault/' + $json.relativeFilePath}}",
-        "dataPropertyName": "data",
-        "options": {}
-      },
-      "id": "14ba2b32-f344-4567-aef7-e89e60f59d7f",
-      "name": "Write Binary File",
-      "type": "n8n-nodes-base.writeBinaryFile",
-      "typeVersion": 1,
-      "position": [
-        2840,
-        120
       ]
     }
   ],
@@ -299,6 +306,24 @@
       "main": [
         [
           {
+            "node": "Route Transcript Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Transcript Candidates": {
+      "main": [
+        [
+          {
+            "node": "04 Video Transcript Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "00 Common Normalize Text Object",
             "type": "main",
             "index": 0
@@ -332,29 +357,18 @@
       "main": [
         [
           {
-            "node": "Should Write To Vault",
+            "node": "05 Common Vault Writer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Should Write To Vault": {
+    "04 Video Transcript Ingest": {
       "main": [
         [
           {
-            "node": "Build Markdown",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Markdown": {
-      "main": [
-        [
-          {
-            "node": "Write Binary File",
+            "node": "05 Common Vault Writer",
             "type": "main",
             "index": 0
           }

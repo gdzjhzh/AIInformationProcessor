@@ -11,6 +11,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from debug_log import append_debug_log, default_debug_log_path
+
 VERIFY_WORKFLOW_ID = "918c7f6da45023eb"
 TRANSCRIPT_WORKFLOW_ID = "acb525fca8ea4dc4"
 NORMALIZE_WORKFLOW_ID = "d4f093a8e2f74e39"
@@ -23,6 +25,12 @@ EXPECTED_WORKFLOW_IDS = [
     ENRICH_WORKFLOW_ID,
     GATE_WORKFLOW_ID,
 ]
+
+
+class VerificationError(RuntimeError):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.details = details or {}
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -90,6 +98,17 @@ def print_response_summary(payload: dict[str, Any]) -> None:
     print("Webhook response summary:")
     for key, value in summary_fields:
         print(f"  - {key}: {value}")
+
+
+def response_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "item_id": payload.get("item_id"),
+        "title": payload.get("title"),
+        "status": payload.get("status"),
+        "dedupe_action": payload.get("dedupe_action"),
+        "matched_score": payload.get("matched_score"),
+        "vault_path": payload.get("vault_path"),
+    }
 
 
 def fetch_execution_rows(db_path: Path, min_id: int) -> list[sqlite3.Row]:
@@ -160,6 +179,24 @@ def print_execution_summary(rows: list[sqlite3.Row]) -> None:
         )
 
 
+def execution_summary(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    latest = latest_by_workflow(rows)
+    summary: list[dict[str, Any]] = []
+    for workflow_id in EXPECTED_WORKFLOW_IDS:
+        row = latest.get(workflow_id)
+        summary.append(
+            {
+                "workflow_id": workflow_id,
+                "status": str(row["status"]) if row is not None else "missing",
+                "mode": str(row["mode"]) if row is not None else None,
+                "execution_id": int(row["id"]) if row is not None else None,
+                "startedAt": str(row["startedAt"]) if row is not None else None,
+                "stoppedAt": str(row["stoppedAt"]) if row is not None else None,
+            }
+        )
+    return summary
+
+
 def parse_bool_arg(raw_value: str) -> bool:
     value = raw_value.strip().lower()
     if value in {"1", "true", "yes", "y", "on"}:
@@ -167,6 +204,160 @@ def parse_bool_arg(raw_value: str) -> bool:
     if value in {"0", "false", "no", "n", "off"}:
         return False
     raise argparse.ArgumentTypeError(f"invalid boolean value: {raw_value!r}")
+
+
+def run_verification(
+    *,
+    env_file: Path,
+    db_path: Path,
+    base_url: str,
+    transcript_source_url: str,
+    media_type: str,
+    use_speaker_recognition: bool,
+    transcript_poll_interval_ms: int,
+    transcript_max_polls: int,
+    timeout_seconds: int,
+    poll_interval_seconds: float,
+    execution_row_wait_seconds: int,
+) -> dict[str, Any]:
+    env_file = env_file.resolve()
+    db_path = db_path.resolve()
+    env_values = load_dotenv(env_file)
+    resolved_base_url = base_url.rstrip("/")
+    if base_url == "http://127.0.0.1:5678" and env_values.get("N8N_PORT"):
+        resolved_base_url = f"http://127.0.0.1:{env_values['N8N_PORT']}"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COALESCE(MAX(id), 0) FROM execution_entity")
+        baseline_execution_id = int(cursor.fetchone()[0])
+    finally:
+        conn.close()
+
+    payload = {
+        "transcript_source_url": transcript_source_url,
+        "source_name": f"Local Transcript Verify {int(time.time())}",
+        "source_type": "transcript",
+        "media_type": media_type,
+        "use_speaker_recognition": use_speaker_recognition,
+        "poll_interval_ms": transcript_poll_interval_ms,
+        "max_polls": transcript_max_polls,
+        "obsidian_inbox_dir": env_values.get("OBSIDIAN_INBOX_DIR", "00_Inbox/AI_Information_Processor"),
+    }
+
+    webhook_path = fetch_verify_webhook_path(db_path)
+    webhook_url = f"{resolved_base_url}/webhook/{webhook_path}"
+    details: dict[str, Any] = {
+        "env_file": env_file,
+        "db_path": db_path,
+        "base_url": resolved_base_url,
+        "webhook_url": webhook_url,
+        "payload": payload,
+        "baseline_execution_id": baseline_execution_id,
+    }
+
+    try:
+        response_status, response_body = post_json(webhook_url, payload, timeout_seconds)
+    except urllib.error.HTTPError as exc:
+        response_body = exc.read().decode("utf-8", errors="replace")
+        details.update(
+            {
+                "response_status": f"HTTP {exc.code}",
+                "response_body": response_body,
+            }
+        )
+        raise VerificationError(f"Webhook responded with HTTP {exc.code}", details) from exc
+    except Exception as exc:
+        details["request_error"] = f"{type(exc).__name__}: {exc}"
+        raise VerificationError(f"Webhook request failed: {exc}", details) from exc
+
+    details.update(
+        {
+            "response_status": response_status,
+            "response_body": response_body,
+        }
+    )
+
+    try:
+        response_payload = parse_response_body(response_body)
+        validate_mainline_response(response_payload)
+    except RuntimeError as exc:
+        details["response_validation_error"] = str(exc)
+        raise VerificationError(f"Webhook response validation failed: {exc}", details) from exc
+
+    details["response_summary"] = response_summary(response_payload)
+
+    row_wait_seconds = max(0, min(execution_row_wait_seconds, timeout_seconds))
+    deadline = time.time() + row_wait_seconds
+    final_rows: list[sqlite3.Row] = []
+
+    while time.time() < deadline:
+        rows = fetch_execution_rows(db_path, baseline_execution_id)
+        latest = latest_by_workflow(rows)
+        final_rows = rows
+
+        failing = [
+            row
+            for row in latest.values()
+            if str(row["status"]).lower() not in {"success", "running", "new", "waiting"}
+        ]
+        if failing:
+            details["execution_summary"] = execution_summary(rows)
+            raise VerificationError("Failing executions detected.", details)
+
+        if latest and all(workflow_id in latest for workflow_id in EXPECTED_WORKFLOW_IDS):
+            if all(
+                str(latest[workflow_id]["status"]).lower() == "success"
+                for workflow_id in EXPECTED_WORKFLOW_IDS
+            ):
+                details["execution_summary"] = execution_summary(rows)
+                details["execution_wait_result"] = "all_expected_workflows_succeeded"
+                return details
+
+        time.sleep(poll_interval_seconds)
+
+    if final_rows:
+        details["execution_summary"] = execution_summary(final_rows)
+        details["execution_wait_result"] = (
+            "webhook_succeeded_but_execution_rows_were_partial_during_poll_window"
+        )
+        return details
+
+    details["execution_summary"] = []
+    details["execution_wait_result"] = (
+        "webhook_succeeded_without_persisted_execution_rows_during_poll_window"
+    )
+    return details
+
+
+def print_verification_result(result: dict[str, Any]) -> None:
+    print(f"POST {result['webhook_url']}")
+    print(f"Webhook response status: {result['response_status']}")
+    print("Webhook response summary:")
+    for key, value in result["response_summary"].items():
+        print(f"  - {key}: {value}")
+    if result["execution_summary"]:
+        print("Execution summary:")
+        for row in result["execution_summary"]:
+            print(
+                "  - "
+                f"{row['workflow_id']}: status={row['status']} mode={row['mode']} "
+                f"execution_id={row['execution_id']} startedAt={row['startedAt']} "
+                f"stoppedAt={row['stoppedAt']}"
+            )
+    if result["execution_wait_result"] == "all_expected_workflows_succeeded":
+        return
+    if result["execution_summary"]:
+        print(
+            "Webhook response proved the mainline completed, but n8n did not persist a full "
+            "set of new execution rows during the polling window."
+        )
+    else:
+        print(
+            "Webhook response proved the mainline completed. No new execution rows were "
+            "persisted for the expected workflow IDs during the polling window."
+        )
 
 
 def main() -> int:
@@ -239,103 +430,59 @@ def main() -> int:
         default=20,
         help="How long to wait for optional execution_entity rows after the webhook already returned a valid mainline response.",
     )
+    parser.add_argument(
+        "--debug-log",
+        type=Path,
+        default=default_debug_log_path(),
+        help="Append a summary to this debug log file.",
+    )
     args = parser.parse_args()
 
-    env_values = load_dotenv(args.env_file)
-    base_url = args.base_url.rstrip("/")
-    if args.base_url == "http://127.0.0.1:5678" and env_values.get("N8N_PORT"):
-        base_url = f"http://127.0.0.1:{env_values['N8N_PORT']}"
-
-    conn = sqlite3.connect(args.db_path)
     try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COALESCE(MAX(id), 0) FROM execution_entity")
-        baseline_execution_id = int(cursor.fetchone()[0])
-    finally:
-        conn.close()
-
-    payload = {
-        "transcript_source_url": args.transcript_source_url,
-        "source_name": f"Local Transcript Verify {int(time.time())}",
-        "source_type": "transcript",
-        "media_type": args.media_type,
-        "use_speaker_recognition": args.use_speaker_recognition,
-        "poll_interval_ms": args.transcript_poll_interval_ms,
-        "max_polls": args.transcript_max_polls,
-        "obsidian_inbox_dir": env_values.get("OBSIDIAN_INBOX_DIR", "00_Inbox/AI_Information_Processor"),
-    }
-
-    response_body = ""
-    webhook_path = fetch_verify_webhook_path(args.db_path)
-    webhook_url = f"{base_url}/webhook/{webhook_path}"
-    print(f"POST {webhook_url}")
-    try:
-        response_status, response_body = post_json(webhook_url, payload, args.timeout_seconds)
-        print(f"Webhook response status: {response_status}")
-    except urllib.error.HTTPError as exc:
-        response_body = exc.read().decode("utf-8", errors="replace")
-        print(f"Webhook response status: HTTP {exc.code}")
-        print(response_body)
-        return 1
-    except Exception as exc:
-        print(f"Webhook request raised {type(exc).__name__}: {exc}")
-        return 1
-
-    try:
-        response_payload = parse_response_body(response_body)
-        validate_mainline_response(response_payload)
-    except RuntimeError as exc:
-        print(f"Webhook response validation failed: {exc}")
-        print(response_body)
-        return 1
-
-    print_response_summary(response_payload)
-
-    row_wait_seconds = max(0, min(args.execution_row_wait_seconds, args.timeout_seconds))
-    deadline = time.time() + row_wait_seconds
-    final_rows: list[sqlite3.Row] = []
-    latest: dict[str, sqlite3.Row] = {}
-    while time.time() < deadline:
-        rows = fetch_execution_rows(args.db_path, baseline_execution_id)
-        latest = latest_by_workflow(rows)
-        final_rows = rows
-
-        failing = [
-            row
-            for row in latest.values()
-            if str(row["status"]).lower() not in {"success", "running", "new", "waiting"}
-        ]
-        if failing:
-            print("Execution summary:")
-            print_execution_summary(rows)
-            print("Failing executions detected.")
-            return 1
-
-        if latest:
-            if all(workflow_id in latest for workflow_id in EXPECTED_WORKFLOW_IDS):
-                if all(
-                    str(latest[workflow_id]["status"]).lower() == "success"
-                    for workflow_id in EXPECTED_WORKFLOW_IDS
-                ):
-                    print("Execution summary:")
-                    print_execution_summary(rows)
-                    return 0
-
-        time.sleep(args.poll_interval_seconds)
-
-    if final_rows:
-        print("Execution summary:")
-        print_execution_summary(final_rows)
-        print(
-            "Webhook response proved the mainline completed, but n8n did not persist a full "
-            "set of new execution rows during the polling window."
+        result = run_verification(
+            env_file=args.env_file,
+            db_path=args.db_path,
+            base_url=args.base_url,
+            transcript_source_url=args.transcript_source_url,
+            media_type=args.media_type,
+            use_speaker_recognition=args.use_speaker_recognition,
+            transcript_poll_interval_ms=args.transcript_poll_interval_ms,
+            transcript_max_polls=args.transcript_max_polls,
+            timeout_seconds=args.timeout_seconds,
+            poll_interval_seconds=args.poll_interval_seconds,
+            execution_row_wait_seconds=args.execution_row_wait_seconds,
         )
-    else:
-        print(
-            "Webhook response proved the mainline completed. No new execution rows were "
-            "persisted for the expected workflow IDs during the polling window."
+        print_verification_result(result)
+        append_debug_log(
+            script_name="verify_transcript_mainline.py",
+            stage="verify_transcript_mainline",
+            status="success",
+            summary=(
+                "Verification webhook completed and the mainline returned a valid response."
+            ),
+            details=result,
+            log_path=args.debug_log,
         )
-    return 0
+        return 0
+    except VerificationError as exc:
+        details = exc.details or {
+            "env_file": args.env_file,
+            "db_path": args.db_path,
+            "base_url": args.base_url,
+        }
+        append_debug_log(
+            script_name="verify_transcript_mainline.py",
+            stage="verify_transcript_mainline",
+            status="failure",
+            summary=str(exc),
+            details=details,
+            log_path=args.debug_log,
+        )
+        print(exc, file=sys.stderr)
+        response_body = details.get("response_body")
+        if response_body:
+            print(response_body, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

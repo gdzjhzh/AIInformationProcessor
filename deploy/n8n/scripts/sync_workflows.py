@@ -4,9 +4,12 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from debug_log import append_debug_log, default_debug_log_path
 
 
 def utc_now_sql() -> str:
@@ -90,6 +93,62 @@ def ensure_shared_workflow(
         """,
         (workflow_id, project_id, "workflow:owner", now, now),
     )
+
+
+def webhook_node_names(workflow: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for node in workflow.get("nodes", []):
+        if node.get("type") == "n8n-nodes-base.webhook":
+            name = str(node.get("name") or "").strip()
+            if name:
+                names.append(name)
+    return names
+
+
+def prune_webhook_rows(
+    cursor: sqlite3.Cursor,
+    workflow: dict[str, Any],
+) -> list[dict[str, str]]:
+    if not table_exists(cursor, "webhook_entity"):
+        return []
+
+    workflow_id = str(workflow["id"])
+    expected_nodes = set(webhook_node_names(workflow))
+    cursor.execute(
+        """
+        SELECT rowid, node, webhookPath, method
+        FROM webhook_entity
+        WHERE workflowId = ?
+        ORDER BY rowid DESC
+        """,
+        (workflow_id,),
+    )
+    rows = cursor.fetchall()
+
+    seen_nodes: set[str] = set()
+    removed: list[dict[str, str]] = []
+    for row in rows:
+        node_name = str(row["node"] or "").strip()
+        keep = bool(
+            workflow.get("active")
+            and node_name
+            and node_name in expected_nodes
+            and node_name not in seen_nodes
+        )
+        if keep:
+            seen_nodes.add(node_name)
+            continue
+
+        cursor.execute("DELETE FROM webhook_entity WHERE rowid = ?", (row["rowid"],))
+        removed.append(
+            {
+                "node": node_name,
+                "webhookPath": str(row["webhookPath"] or ""),
+                "method": str(row["method"] or ""),
+            }
+        )
+
+    return removed
 
 
 def ensure_published_version(
@@ -365,6 +424,82 @@ def upsert_workflow_history(
     )
 
 
+def run_sync(
+    *,
+    workflow_dir: Path,
+    db_path: Path,
+    backup_dir: Path,
+    include_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    workflow_dir = workflow_dir.resolve()
+    db_path = db_path.resolve()
+    backup_dir = backup_dir.resolve()
+    if not workflow_dir.is_dir():
+        raise FileNotFoundError(f"Workflow directory does not exist: {workflow_dir}")
+    if not db_path.is_file():
+        raise FileNotFoundError(f"n8n database does not exist: {db_path}")
+
+    workflows = load_workflows(workflow_dir, include_ids)
+    if not workflows:
+        raise ValueError(f"No workflow JSON files found in {workflow_dir}")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        backup_path = backup_database(conn, backup_dir)
+        cursor = conn.cursor()
+        personal_project = fetch_one(
+            cursor,
+            "SELECT * FROM project WHERE type = 'personal' ORDER BY createdAt ASC LIMIT 1",
+        )
+        if not personal_project:
+            raise RuntimeError("Could not find a personal project in the active n8n database.")
+        project_owner_id = personal_project["creatorId"] if "creatorId" in personal_project.keys() else None
+
+        now = utc_now_sql()
+        synced: list[str] = []
+        pruned_webhook_rows: list[dict[str, Any]] = []
+        for path, workflow in workflows:
+            version_id = upsert_workflow_entity(cursor, workflow, personal_project["id"], now)
+            upsert_workflow_history(cursor, workflow, version_id, now)
+            if workflow.get("active"):
+                ensure_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
+            else:
+                remove_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
+            removed = prune_webhook_rows(cursor, workflow)
+            if removed:
+                pruned_webhook_rows.append(
+                    {
+                        "workflow_id": str(workflow["id"]),
+                        "workflow_name": str(workflow.get("name") or workflow["id"]),
+                        "removed_rows": removed,
+                    }
+                )
+            synced.append(
+                f"{workflow['id']} | active={bool(workflow.get('active'))} | version={version_id} | {path.name}"
+            )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "workflow_dir": workflow_dir,
+        "db_path": db_path,
+        "backup_path": backup_path,
+        "requested_workflow_ids": sorted(include_ids or []),
+        "synced": synced,
+        "pruned_webhook_rows": pruned_webhook_rows,
+    }
+
+
+def print_sync_result(result: dict[str, Any]) -> None:
+    print(f"Backed up active n8n DB to: {result['backup_path']}")
+    print("Synced workflows:")
+    for line in result["synced"]:
+        print(f"  - {line}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Sync repo-managed n8n workflow JSON files into the active runtime database."
@@ -393,57 +528,49 @@ def main() -> int:
         default=[],
         help="Optional workflow id to sync. Repeat to sync multiple ids.",
     )
+    parser.add_argument(
+        "--debug-log",
+        type=Path,
+        default=default_debug_log_path(),
+        help="Append a summary to this debug log file.",
+    )
     args = parser.parse_args()
-
-    workflow_dir = args.workflow_dir.resolve()
-    db_path = args.db_path.resolve()
     include_ids = {value.strip() for value in args.workflow_id if value.strip()} or None
 
-    if not workflow_dir.is_dir():
-        raise SystemExit(f"Workflow directory does not exist: {workflow_dir}")
-    if not db_path.is_file():
-        raise SystemExit(f"n8n database does not exist: {db_path}")
-
-    workflows = load_workflows(workflow_dir, include_ids)
-    if not workflows:
-        raise SystemExit(f"No workflow JSON files found in {workflow_dir}")
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
     try:
-        backup_path = backup_database(conn, args.backup_dir.resolve())
-        cursor = conn.cursor()
-        personal_project = fetch_one(
-            cursor,
-            "SELECT * FROM project WHERE type = 'personal' ORDER BY createdAt ASC LIMIT 1",
+        result = run_sync(
+            workflow_dir=args.workflow_dir,
+            db_path=args.db_path,
+            backup_dir=args.backup_dir,
+            include_ids=include_ids,
         )
-        if not personal_project:
-            raise SystemExit("Could not find a personal project in the active n8n database.")
-        project_owner_id = personal_project["creatorId"] if "creatorId" in personal_project.keys() else None
-
-        now = utc_now_sql()
-        synced: list[str] = []
-        for path, workflow in workflows:
-            version_id = upsert_workflow_entity(cursor, workflow, personal_project["id"], now)
-            upsert_workflow_history(cursor, workflow, version_id, now)
-            if workflow.get("active"):
-                ensure_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
-            else:
-                remove_published_version(cursor, workflow["id"], version_id, now, project_owner_id)
-            synced.append(
-                f"{workflow['id']} | active={bool(workflow.get('active'))} | version={version_id} | {path.name}"
-            )
-
-        conn.commit()
-    finally:
-        conn.close()
-
-    print(f"Backed up active n8n DB to: {backup_path}")
-    print("Synced workflows:")
-    for line in synced:
-        print(f"  - {line}")
-    return 0
-
+        print_sync_result(result)
+        append_debug_log(
+            script_name="sync_workflows.py",
+            stage="sync_workflows",
+            status="success",
+            summary=f"Synced {len(result['synced'])} workflow(s) into the active runtime database.",
+            details=result,
+            log_path=args.debug_log,
+        )
+        return 0
+    except Exception as exc:
+        append_debug_log(
+            script_name="sync_workflows.py",
+            stage="sync_workflows",
+            status="failure",
+            summary=f"Workflow sync failed: {exc}",
+            details={
+                "workflow_dir": args.workflow_dir,
+                "db_path": args.db_path,
+                "backup_dir": args.backup_dir,
+                "requested_workflow_ids": sorted(include_ids or []),
+                "error": str(exc),
+            },
+            log_path=args.debug_log,
+        )
+        print(exc, file=sys.stderr)
+        return 1
 
 if __name__ == "__main__":
     raise SystemExit(main())

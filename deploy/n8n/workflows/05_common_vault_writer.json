@@ -1,0 +1,454 @@
+{
+  "id": "5d53f72296534f1c",
+  "name": "05 Common Vault Writer",
+  "description": "Runnable sub-workflow: accept a gate-processed NormalizedTextObject, handle skip/write internally, generate deterministic Markdown, write into /vault, and only then update Qdrant so the index cannot get ahead of Vault state.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a4b7188d-b982-4ebf-bdf0-7e00fc198c3a",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "3b2401ca-7c43-4ae1-a663-c697f2113ebd",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [\n  {\n    json: {\n      item_id: '6d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1',\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      source_host: 'youtube.com',\n      original_id: 'yt:abc123',\n      canonical_url: 'https://example.com/post',\n      title: 'Example gate result',\n      author: 'OpenAI',\n      published_at: '2026-04-17T09:00:00.000Z',\n      ingested_at: '2026-04-17T09:05:00.000Z',\n      media_type: 'text',\n      content_text: 'Normalized plain text content for the shared vault writer smoke item.',\n      content_html: '<p>Normalized plain text content for the shared vault writer smoke item.</p>',\n      content_hash: 'sha256:example',\n      score: 0.82,\n      category: 'AI Infra',\n      summary: 'A concise summary that should be written into a shared Obsidian note.',\n      reason: 'This proves the vault writer can run as a reusable sub-workflow.',\n      tags: ['inbox', 'ai-information-processor', 'openai'],\n      dedupe_action: 'full_push',\n      notification_mode: 'full',\n      should_write_to_vault: true,\n      status: 'enriched',\n      obsidianInboxDir: '00_Inbox/AI_Information_Processor',\n      workflow_label: 'ai-information-processor-mainline'\n    }\n  }\n];"
+      },
+      "id": "8a527e7d-f0f3-47d8-8364-6cceb5a465d9",
+      "name": "Example Gate Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const slugify = (value = '') => String(value)\n  .normalize('NFKD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9\\u4e00-\\u9fa5]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .toLowerCase();\n\nconst shouldWriteToVault = Boolean($json.should_write_to_vault);\nconst existingVaultPath = String($json.vault_path || '').trim();\nconst existingWriteStatus = String($json.vault_write_status || $json.vault_write || '').trim();\nconst obsidianInboxDir = String($json.obsidianInboxDir || $json.obsidian_inbox_dir || $env.OBSIDIAN_INBOX_DIR || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\nconst workflowLabel = String($json.workflow_label || $json.workflow_name || $json.workflow || 'ai-information-processor-mainline').trim() || 'ai-information-processor-mainline';\n\nlet fileBaseName = '';\nlet relativeFilePath = existingVaultPath;\nconst itemId = String($json.item_id || '').trim();\nconst title = String($json.title || '').trim();\nif (itemId && title) {\n  const dateForFile = new Date($json.published_at || Date.now());\n  const safeDate = Number.isNaN(dateForFile.getTime()) ? new Date() : dateForFile;\n  const yyyy = safeDate.getUTCFullYear();\n  const mm = String(safeDate.getUTCMonth() + 1).padStart(2, '0');\n  const dd = String(safeDate.getUTCDate()).padStart(2, '0');\n  const datePrefix = `${yyyy}-${mm}-${dd}`;\n  const sourceType = slugify($json.source_type || 'item') || 'item';\n  const itemIdShort = itemId.slice(0, 10) || 'unknown';\n  const titleSlug = slugify(title).slice(0, 80) || 'untitled';\n  fileBaseName = `${datePrefix}_${sourceType}_${itemIdShort}_${titleSlug}`;\n  relativeFilePath = `${obsidianInboxDir}/${fileBaseName}.md`;\n}\n\nif (shouldWriteToVault && !relativeFilePath) {\n  throw new Error('05_common_vault_writer requires item_id/title/published_at to build a deterministic vault path');\n}\n\nconst vaultWriteStatus = shouldWriteToVault ? 'pending' : (existingWriteStatus || 'skipped');\n\nreturn {\n  json: {\n    ...$json,\n    obsidianInboxDir,\n    workflow_label: workflowLabel,\n    fileBaseName,\n    relativeFilePath,\n    vault_path: relativeFilePath,\n    vault_write_status: vaultWriteStatus,\n    vault_write: vaultWriteStatus\n  }\n};"
+      },
+      "id": "b9c75ba9-b7b6-4e80-b4a2-0e3aa380360d",
+      "name": "Prepare Vault Write Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.should_write_to_vault || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "ce67ce84-a65d-4d2e-b991-8ba7e16b791d",
+      "name": "Should Write To Vault?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const yamlEscape = (value = '') => String(value)\n  .replace(/\\\\/g, '\\\\\\\\')\n  .replace(/\"/g, '\\\\\"');\n\nconst yamlBlock = (key, value = '') => {\n  const normalized = String(value || '').replace(/\\r\\n/g, '\\n').trim();\n  if (!normalized) {\n    return '';\n  }\n  const indented = normalized\n    .split('\\n')\n    .map((line) => `  ${line}`)\n    .join('\\n');\n  return `${key}: |-\\n${indented}\\n`;\n};\n\nconst fileBaseName = String($json.fileBaseName || '').trim();\nconst relativeFilePath = String($json.relativeFilePath || '').trim();\nif (!fileBaseName || !relativeFilePath) {\n  throw new Error('05_common_vault_writer is missing fileBaseName/relativeFilePath before Markdown generation');\n}\n\nconst summary = String($json.summary || '').trim();\nconst reason = String($json.reason || '').trim();\nconst excerpt = (summary || String($json.content_text || '').slice(0, 280)).trim();\nconst dedupeAction = String($json.dedupe_action || 'full_push').trim() || 'full_push';\nconst notificationMode = String($json.notification_mode || '').trim();\nconst matchedPayload = $json.matched_payload && typeof $json.matched_payload === 'object' ? $json.matched_payload : null;\nconst matchedScore = Number($json.matched_score || 0);\nconst matchedTitle = matchedPayload ? String(matchedPayload.title || '').trim() : '';\nconst matchedItemId = matchedPayload ? String(matchedPayload.item_id || '').trim() : '';\nconst matchedCanonicalUrl = matchedPayload ? String(matchedPayload.canonical_url || '').trim() : '';\nconst tags = Array.isArray($json.tags) && $json.tags.length\n  ? $json.tags.filter(Boolean)\n  : ['inbox', 'ai-information-processor'];\nconst normalizedTags = [...new Set([...tags, `dedupe-${dedupeAction}`].filter(Boolean))];\nconst tagLines = normalizedTags.map((tag) => `  - ${tag}`).join('\\n');\nconst authorLine = $json.author ? `author: \\\"${yamlEscape($json.author)}\\\"\\n` : '';\nconst originalIdLine = $json.original_id ? `original_id: \\\"${yamlEscape($json.original_id)}\\\"\\n` : '';\nconst sourceHostLine = $json.source_host ? `source_host: \\\"${yamlEscape($json.source_host)}\\\"\\n` : '';\nconst enrichedAtLine = $json.enriched_at ? `enriched_at: \\\"${yamlEscape($json.enriched_at)}\\\"\\n` : '';\nconst notificationModeLine = notificationMode ? `notification_mode: \\\"${yamlEscape(notificationMode)}\\\"\\n` : '';\nconst matchedScoreLine = Number.isFinite(matchedScore) && matchedScore > 0 ? `matched_score: ${matchedScore}\\n` : '';\nconst matchedItemIdLine = matchedItemId ? `matched_item_id: \\\"${yamlEscape(matchedItemId)}\\\"\\n` : '';\nconst matchedCanonicalUrlLine = matchedCanonicalUrl ? `matched_canonical_url: \\\"${yamlEscape(matchedCanonicalUrl)}\\\"\\n` : '';\nconst matchedSameItemLine = $json.matched_same_item ? 'matched_same_item: true\\n' : '';\nconst summaryLine = yamlBlock('summary', summary);\nconst reasonLine = yamlBlock('reason', reason);\nconst summarySection = summary ? `## Summary\\n\\n${summary}\\n\\n` : '';\nconst reasonSection = reason ? `## Reason\\n\\n${reason}\\n\\n` : '';\nconst dedupeLines = matchedPayload ? [\n  `- Action: ${dedupeAction}`,\n  `- Notification Mode: ${notificationMode || 'n/a'}`,\n  Number.isFinite(matchedScore) && matchedScore > 0 ? `- Matched Score: ${matchedScore.toFixed(4)}` : '',\n  matchedItemId ? `- Matched Item ID: ${matchedItemId}` : '',\n  matchedTitle ? `- Matched Title: ${matchedTitle}` : '',\n  matchedCanonicalUrl ? `- Matched Canonical URL: ${matchedCanonicalUrl}` : '',\n  $json.matched_same_item ? '- Same Item ID Match: true' : ''\n].filter(Boolean).join('\\n') : '';\nconst dedupeSection = dedupeLines ? `## Dedupe Context\\n\\n${dedupeLines}\\n\\n` : '';\nconst canonicalUrl = String($json.canonical_url || '').trim();\nconst workflowLabel = String($json.workflow_label || 'ai-information-processor-mainline').trim() || 'ai-information-processor-mainline';\nconst markdown = `---\\ntitle: \\\"${yamlEscape($json.title)}\\\"\\nitem_id: \\\"${yamlEscape($json.item_id)}\\\"\\nsource_type: \\\"${yamlEscape($json.source_type)}\\\"\\nsource_name: \\\"${yamlEscape($json.source_name)}\\\"\\n${sourceHostLine}${originalIdLine}canonical_url: \\\"${yamlEscape(canonicalUrl)}\\\"\\npublished_at: \\\"${yamlEscape($json.published_at)}\\\"\\ningested_at: \\\"${yamlEscape($json.ingested_at)}\\\"\\n${enrichedAtLine}media_type: \\\"${yamlEscape($json.media_type)}\\\"\\ncontent_hash: \\\"${yamlEscape($json.content_hash)}\\\"\\nworkflow: \\\"${yamlEscape(workflowLabel)}\\\"\\nscore: ${Number($json.score || 0)}\\ncategory: \\\"${yamlEscape($json.category || 'pending')}\\\"\\ndedupe_action: \\\"${yamlEscape(dedupeAction)}\\\"\\nstatus: \\\"${yamlEscape($json.status || 'raw')}\\\"\\n${notificationModeLine}${matchedScoreLine}${matchedItemIdLine}${matchedCanonicalUrlLine}${matchedSameItemLine}${authorLine}${summaryLine}${reasonLine}tags:\\n${tagLines}\\n---\\n\\n# ${$json.title}\\n\\n> Source Name: ${$json.source_name || 'unknown-source'}\\n> Canonical URL: ${canonicalUrl || 'N/A'}\\n\\n## Excerpt\\n\\n${excerpt || 'No text excerpt extracted.'}\\n\\n${summarySection}${reasonSection}${dedupeSection}## Raw Content\\n\\n${$json.content_text || 'No text content extracted from this item.'}\\n`;\n\nreturn {\n  json: {\n    ...$json,\n    vault_path: relativeFilePath,\n    vault_write_status: 'pending',\n    vault_write: 'pending'\n  },\n  binary: {\n    data: {\n      data: Buffer.from(markdown, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: `${fileBaseName}.md`,\n      fileExtension: 'md'\n    }\n  }\n};"
+      },
+      "id": "5fd04268-bda8-4f55-ab39-f4677708b1ee",
+      "name": "Build Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{'/vault/' + $json.relativeFilePath}}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "9ccb6d4f-f77c-45e6-b6be-0db44240f919",
+      "name": "Write Binary File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const vaultPath = String($json.relativeFilePath || $json.vault_path || '').trim();\nconst shouldUpsert = Boolean($json.should_upsert_qdrant)\n  && typeof $json.qdrant_upsert_endpoint === 'string'\n  && $json.qdrant_upsert_endpoint.trim()\n  && $json.qdrant_upsert_payload\n  && Array.isArray($json.qdrant_upsert_payload.points)\n  && $json.qdrant_upsert_payload.points.length > 0;\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: 'written',\n    vault_write: 'written',\n    qdrant_operation: shouldUpsert ? 'pending' : 'skipped',\n    qdrant_upsert_response: null\n  }\n};"
+      },
+      "id": "058fae12-5fd6-4e02-b0b1-4501577ff4e6",
+      "name": "Finalize Written Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.qdrant_operation || '')}}",
+              "operation": "equal",
+              "value2": "pending"
+            }
+          ]
+        }
+      },
+      "id": "e8e7b49d-0a59-4967-953d-1ae2ae7865e8",
+      "name": "Should Upsert Qdrant?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{$json.qdrant_upsert_endpoint}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.qdrant_upsert_payload) }}",
+        "options": {}
+      },
+      "id": "45fce9c5-b492-45a5-a42a-162a95f7124f",
+      "name": "Qdrant Upsert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2340,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const original = $('Finalize Written Result').item.json || {};\nreturn {\n  json: {\n    ...original,\n    qdrant_operation: 'upserted',\n    qdrant_upsert_response: $json\n  }\n};"
+      },
+      "id": "a0a2d935-8c82-4f74-bab1-4b369be7a0da",
+      "name": "Finalize Upsert Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    qdrant_operation: String($json.qdrant_operation || 'skipped').trim() || 'skipped',\n    qdrant_upsert_response: null\n  }\n};"
+      },
+      "id": "bb29f3eb-11db-42c6-8e0e-c4162f8c2786",
+      "name": "Finalize Written Without Upsert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const status = String($json.vault_write_status || $json.vault_write || '').trim() || 'skipped';\nconst vaultPath = String($json.relativeFilePath || $json.vault_path || '').trim();\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: status,\n    vault_write: status,\n    qdrant_operation: 'skipped',\n    qdrant_upsert_response: null\n  }\n};"
+      },
+      "id": "7527fe17-2da7-4a13-900d-451d5e15a69c",
+      "name": "Finalize Skipped Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "3f6ef6a6-0db7-4f7b-af7d-eb2bf272fcd8",
+      "name": "Merge Written Result",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2860,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "ef1a9d76-a634-4ef9-af25-aa4773ec9bda",
+      "name": "Merge Vault Result",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3120,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    vault_path: String($json.vault_path || $json.relativeFilePath || '').trim(),\n    vault_write_status: String($json.vault_write_status || $json.vault_write || 'skipped').trim() || 'skipped',\n    vault_write: String($json.vault_write || $json.vault_write_status || 'skipped').trim() || 'skipped',\n    qdrant_operation: String($json.qdrant_operation || 'skipped').trim() || 'skipped',\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
+      },
+      "id": "14fa83d2-1465-4f4f-a68b-c95dc2d44f6d",
+      "name": "Return Vault Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Example Gate Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Vault Write Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Example Gate Result": {
+      "main": [
+        [
+          {
+            "node": "Prepare Vault Write Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Vault Write Context": {
+      "main": [
+        [
+          {
+            "node": "Should Write To Vault?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Write To Vault?": {
+      "main": [
+        [
+          {
+            "node": "Build Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Skipped Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Markdown": {
+      "main": [
+        [
+          {
+            "node": "Write Binary File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Binary File": {
+      "main": [
+        [
+          {
+            "node": "Finalize Written Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Written Result": {
+      "main": [
+        [
+          {
+            "node": "Should Upsert Qdrant?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Upsert Qdrant?": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Written Without Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Upsert": {
+      "main": [
+        [
+          {
+            "node": "Finalize Upsert Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Upsert Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Written Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Written Without Upsert": {
+      "main": [
+        [
+          {
+            "node": "Merge Written Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Finalize Skipped Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Vault Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Written Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Vault Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Vault Result": {
+      "main": [
+        [
+          {
+            "node": "Return Vault Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "5a53904d-ca41-4239-9187-98eabaf7a999",
+  "tags": []
+}

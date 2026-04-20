@@ -16,6 +16,7 @@
 # Runtime data
 /deploy/data/
 /backups/
+/DEBUG_LOG.md
 
 # Obsidian runtime content; keep scaffold docs and placeholders
 /deploy/vault/**
@@ -28,3 +29,4 @@
 Thumbs.db
 Desktop.ini
 .DS_Store
+__pycache__/

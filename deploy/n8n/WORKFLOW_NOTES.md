@@ -60,18 +60,20 @@
 1. `Schedule Trigger`
 2. `Feed Sources`
 3. `RSS Feed Read`
-4. `00_common_normalize_text_object`
-5. `02_enrich_with_llm`
-6. `03_qdrant_gate`
-7. `IF should_write_to_vault`
-8. `Vault Writer`
+4. `Build Normalize Input`
+5. `IF route_to_transcript`
+6. `04_video_transcript_ingest`（播客 / 音频候选）或 `00_common_normalize_text_object`（普通文本）
+7. `02_enrich_with_llm`
+8. `03_qdrant_gate`
+9. `05_common_vault_writer`
 
 说明：
 
-- 当前仓库里的 `deploy/n8n/workflows/01_rss_to_obsidian_raw.json` 已串联 `02_enrich_with_llm` 和 `03_qdrant_gate`，应视为“RSS -> enrich -> gate -> Vault”的主干基线模板。
+- 当前仓库里的 `deploy/n8n/workflows/01_rss_to_obsidian_raw.json` 已串联 `02_enrich_with_llm`、`03_qdrant_gate` 和共享 `05_common_vault_writer`，应视为“RSS -> enrich -> gate -> Vault”的主干基线模板。
+- 播客类 RSS item 应在 `Build Normalize Input` 后直接分流到 `04_video_transcript_ingest`，不要把节目简介当正文直接送进 `00 -> 02 -> 03`。
 - 若仓库继续保留 `active=false`，文档中要明确它是导入模板，不是默认生产态工作流。
 - 空配置时允许保留演示 RSS，但只作为 smoke test，不作为长期默认源。
-- `Build Markdown` 应写回 `summary / reason / enriched_at`，不要让 enrich 结果停留在临时执行数据里。
+- `Build Markdown` 现在属于 `05_common_vault_writer` 内部职责，应写回 `summary / reason / enriched_at`，不要让 enrich 结果停留在临时执行数据里。
 - `silent` 必须真正跳过写库；`diff_push` 则应把匹配上下文一起写入 note，便于核对实际降噪结果。
 
 ### `02_enrich_with_llm`
@@ -125,9 +127,7 @@
 6. `Qdrant Search -> http://qdrant:6333/collections/{collection}/points/search`
 7. `Code: Decide Action`
 8. `Build Qdrant Upsert Payload`
-9. `IF dedupe_action != silent`
-10. `Qdrant Upsert`
-11. `Vault Writer` 与 `Notifier` 分支
+9. `Return Gate Result`
 
 判定规则：
 
@@ -137,16 +137,19 @@
 
 默认应通过环境变量显式收口为：
 
+- `EMBEDDING_INPUT_MAX_CHARS=8000`
 - `QDRANT_DIFF_THRESHOLD=0.85`
 - `QDRANT_SILENT_THRESHOLD=0.97`
 
 约束：
 
 - `EMBEDDING_MODEL` 与 `QDRANT_VECTOR_SIZE` 必须绑定，不能留一个空模型配一个写死维度。
+- `EMBEDDING_INPUT_MAX_CHARS` 应作为 provider 兼容层参数，而不是继续硬编码在 workflow 里。
 - `Qdrant` 在主干里是写入前判定器，不是事后增强件。
 - `03_qdrant_gate` 的输入应来自 `02_enrich_with_llm`，至少带上 `summary`，不要回退成只看 raw 文本。
 - 工作流应输出 `should_write_to_vault`、`should_notify`、`should_upsert_qdrant` 和 `notification_mode`，让下游分支而不是把判断硬编码进别的节点。
 - `item_id` 是业务幂等主键，不要直接拿去当 Qdrant 点 ID；应生成稳定的 `qdrant_point_id` UUID。
+- `03_qdrant_gate` 现在只负责 `search / decide / build deferred upsert payload`；真正的 Qdrant upsert 必须等 `05_common_vault_writer` 写库成功后再执行，避免索引先于主库落地。
 - 若最近邻命中的 `payload.item_id` 与当前对象相同，要先区分“同一篇文章内容未变”与“同一篇文章更新了内容”：
   - 相同 `content_hash`：`silent`
   - 不同 `content_hash`：`diff_push`
@@ -164,15 +167,63 @@
 5. `00_common_normalize_text_object`
 6. `02_enrich_with_llm`
 7. `03_qdrant_gate`
-8. `Vault Writer`
+8. `Return Mainline Result`
 
 边界约束：
 
 - `VideoTranscriptAPI` 负责下载、转录、校对。
-- 主干负责打分、分类、标签、最终摘要和落库。
+- 主干负责打分、分类、标签、最终摘要；真正的 Vault 写入由调用者再统一交给 `05_common_vault_writer`。
 - `view_token` 只做内部追踪，不能当公开分发链接。
 
-### `05_memos_branch_ingest`
+### `05_common_vault_writer`
+
+职责：共享 Obsidian 写入层，只消费已经过 `03_qdrant_gate` 的主线对象。
+
+输入：至少包含 `item_id / title / published_at / should_write_to_vault`，并优先携带 `summary / reason / dedupe_action / notification_mode / matched_payload`。
+
+建议节点顺序：
+
+1. `Execute Workflow Trigger` 或 `Manual Trigger + Example Gate Result`
+2. `Prepare Vault Write Context`
+3. `IF should_write_to_vault`
+4. `Build Markdown`
+5. `Write Binary File`
+6. `IF should_upsert_qdrant`
+7. `Qdrant Upsert`
+8. `Return Vault Result`
+
+边界约束：
+
+- `05_common_vault_writer` 内部自己处理 `skip / write / return status`，上游入口不再各自维护一套 `IF should_write_to_vault`。
+- 文件命名、frontmatter、`vault_path` 生成规则只保留这一套，避免 `01 / 06 / 后续入口` 再长出第二套 note 结构。
+- 统一返回 `vault_path / vault_write_status`，并保留 `vault_write` 兼容字段，供旧入口逐步迁移。
+- `should_write_to_vault=false` 时必须返回 `skipped`，而不是让各入口自行约定空值或缺字段。
+- `Qdrant Upsert` 只允许发生在 `Write Binary File` 成功之后；如果 Vault 没写成，索引必须保持未提交状态。
+
+### `06_manual_media_submit`
+
+职责：本地手动投递媒体 URL，只负责把 YouTube / 播客 / 其他音视频链接接入主链。
+
+建议节点顺序：
+
+1. `Webhook` 或手动触发
+2. `Normalize Manual Media Request`
+3. `04_video_transcript_ingest`
+4. `05_common_vault_writer`
+5. `Respond to Webhook`
+
+边界约束：
+
+- 这个入口只接 `media URL`，不接文章正文、剪藏文本或通用手动笔记。
+- URL 进入后先走 `04_video_transcript_ingest`，不要重新发明一套转录或摘要逻辑。
+- `04_video_transcript_ingest` 只返回主线结果，不在内部直接写 Vault；写库统一走共享 `05_common_vault_writer`。
+- 触发方式可以是 `Webhook / Quicker / Tasker / 简单表单`，但进入主链前必须统一成同一份输入对象。
+- `source_type` 应保留内容来源语义，例如 `podcast` 或 `transcript`，不要因为它是手动触发就整体改成 `manual`。
+- 可以追加 `manual-submit` tag，用来标识触发方式；不要让它污染去重、统计和来源语义。
+- 默认本地 webhook 路径使用 `POST /webhook/aip/local/manual-media-submit`。
+- 在当前 repo JSON 直同步到 SQLite 的运行模式下，live webhook 实际注册路径以 `webhook_entity.webhookPath` 为准；必要时先从 `deploy/data/n8n/database.sqlite` 查询后再调用。
+
+### `07_memos_branch_ingest`
 
 职责：支路增强，不抢主干角色。
 
@@ -182,7 +233,7 @@
 2. `00_common_normalize_text_object`
 3. `02_enrich_with_llm`
 4. `03_qdrant_gate`
-5. `Vault Writer`
+5. `05_common_vault_writer`
 
 ## Qdrant 集合初始化
 
@@ -294,9 +345,12 @@ status: raw
 
 - 仓库内的 `deploy/n8n/workflows/*.json` 才是工作流定义的 source of truth
 - 不要继续手改 `deploy/data/n8n/database.sqlite`
-- 使用 `python deploy/n8n/scripts/sync_workflows.py` 把 repo JSON 同步到当前 n8n 主库
+- 对外只使用 `python deploy/n8n/scripts/publish_runtime.py` 作为发布入口
+- `publish_runtime.py` 内部会调用 `sync_workflows.py`，并把它固定为唯一 SQLite 写入步骤
+- 发布链路固定为 `sync -> restart n8n -> check_runtime_alignment`
+- 根目录 `DEBUG_LOG.md` 是统一调试日志，发布/同步/校验脚本都会追加到这里
 - 使用 `python deploy/n8n/scripts/smoke_qdrant_gate.py` 在终端侧检查 embedding 配置、collection 维度和三种 `dedupe_action` 的实际分支结果
-- 同步脚本会先备份活动 SQLite 库，再补齐 `workflow_entity` 和 `workflow_history`
+- `sync_workflows.py` 会先备份活动 SQLite 库，再补齐 `workflow_entity` 和 `workflow_history`
 - 被 `Execute Workflow` 调用的子工作流，必须同时具备：
   - `workflow_entity.active = true`
   - `workflow_entity.activeVersionId = versionId`

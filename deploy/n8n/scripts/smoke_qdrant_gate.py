@@ -4,12 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
+
+from debug_log import append_debug_log, default_debug_log_path
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -108,38 +109,26 @@ def decide_action(
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Check embedding config, Qdrant collection status, and synthetic 03_qdrant_gate behavior."
-    )
-    parser.add_argument(
-        "--env-file",
-        type=Path,
-        default=Path(__file__).resolve().parents[2] / ".env",
-        help="Path to the deploy/.env file.",
-    )
-    parser.add_argument(
-        "--qdrant-base-url",
-        default="http://localhost:6333",
-        help="Qdrant base URL reachable from the host.",
-    )
-    args = parser.parse_args()
-
-    env_values = load_dotenv(args.env_file)
+def run_smoke(
+    *,
+    env_file: Path,
+    qdrant_base_url: str,
+) -> dict:
+    env_file = env_file.resolve()
+    env_values = load_dotenv(env_file)
     embedding_base_url = env_values.get("EMBEDDING_BASE_URL", "")
     embedding_api_key = env_values.get("EMBEDDING_API_KEY", "")
     embedding_model = env_values.get("EMBEDDING_MODEL", "")
+    embedding_input_max_chars = int(env_values.get("EMBEDDING_INPUT_MAX_CHARS", "8000") or "8000")
     qdrant_collection = env_values.get("QDRANT_COLLECTION", "article_embeddings") or "article_embeddings"
     qdrant_vector_size = int(env_values.get("QDRANT_VECTOR_SIZE", "0") or "0")
     diff_threshold = float(env_values.get("QDRANT_DIFF_THRESHOLD", "0.85") or "0.85")
     silent_threshold = float(env_values.get("QDRANT_SILENT_THRESHOLD", "0.97") or "0.97")
 
-    print("Embedding config:")
-    print(f"  EMBEDDING_BASE_URL set: {bool(embedding_base_url)}")
-    print(f"  EMBEDDING_API_KEY set: {bool(embedding_api_key)}")
-    print(f"  EMBEDDING_MODEL set: {bool(embedding_model)}")
+    embedding_probe_skipped = not (embedding_base_url and embedding_api_key and embedding_model)
+    embedding_vector_length: int | None = None
     if not (embedding_base_url and embedding_api_key and embedding_model):
-        print("  live embedding probe skipped: one or more embedding env vars are blank")
+        embedding_probe_skipped = True
     else:
         probe = request_json(
             "POST",
@@ -154,30 +143,24 @@ def main() -> int:
         )
         embedding = probe.get("data", [{}])[0].get("embedding")
         if not isinstance(embedding, list):
-            raise SystemExit("Embedding probe failed: response did not include data[0].embedding")
-        print(f"  live embedding vector length: {len(embedding)}")
+            raise RuntimeError("Embedding probe failed: response did not include data[0].embedding")
+        embedding_vector_length = len(embedding)
         if qdrant_vector_size and len(embedding) != qdrant_vector_size:
-            raise SystemExit(
+            raise RuntimeError(
                 "Embedding probe failed: vector length does not match "
                 f"QDRANT_VECTOR_SIZE ({len(embedding)} != {qdrant_vector_size})"
             )
 
-    collection_url = f"{args.qdrant_base_url.rstrip('/')}/collections/{qdrant_collection}"
+    collection_url = f"{qdrant_base_url.rstrip('/')}/collections/{qdrant_collection}"
     collection = request_json("GET", collection_url)
     actual_size = int(collection["result"]["config"]["params"]["vectors"]["size"])
-    print("Qdrant collection:")
-    print(f"  name: {qdrant_collection}")
-    print(f"  configured vector size: {qdrant_vector_size}")
-    print(f"  actual vector size: {actual_size}")
-    print(f"  diff threshold: {diff_threshold}")
-    print(f"  silent threshold: {silent_threshold}")
     if actual_size != qdrant_vector_size:
-        raise SystemExit(
+        raise RuntimeError(
             f"Collection size mismatch: env QDRANT_VECTOR_SIZE={qdrant_vector_size}, actual={actual_size}"
         )
 
     smoke_collection = f"{qdrant_collection}__smoke"
-    smoke_url = f"{args.qdrant_base_url.rstrip('/')}/collections/{smoke_collection}"
+    smoke_url = f"{qdrant_base_url.rstrip('/')}/collections/{smoke_collection}"
     try:
         request_json("DELETE", smoke_url)
     except RuntimeError:
@@ -245,7 +228,7 @@ def main() -> int:
     ]
 
     failures: list[str] = []
-    print("Synthetic gate scenarios:")
+    scenario_results: list[dict[str, object]] = []
     for scenario in scenarios:
         search = request_json(
             "POST",
@@ -266,10 +249,15 @@ def main() -> int:
             silent_threshold=silent_threshold,
         )
         actual = str(outcome["dedupe_action"])
-        print(
-            f"  {scenario['name']}: score={outcome['matched_score']:.4f} "
-            f"action={actual} write={outcome['should_write_to_vault']} "
-            f"upsert={outcome['should_upsert_qdrant']}"
+        scenario_results.append(
+            {
+                "name": scenario["name"],
+                "expected_action": scenario["expected"],
+                "actual_action": actual,
+                "matched_score": round(float(outcome["matched_score"]), 4),
+                "should_write_to_vault": bool(outcome["should_write_to_vault"]),
+                "should_upsert_qdrant": bool(outcome["should_upsert_qdrant"]),
+            }
         )
         if actual != scenario["expected"]:
             failures.append(f"{scenario['name']}: expected {scenario['expected']}, got {actual}")
@@ -277,13 +265,106 @@ def main() -> int:
     request_json("DELETE", smoke_url)
 
     if failures:
-        print("Smoke test failures:")
-        for failure in failures:
-            print(f"  - {failure}")
-        return 1
+        raise RuntimeError("Smoke test failures: " + "; ".join(failures))
 
+    return {
+        "env_file": env_file,
+        "qdrant_base_url": qdrant_base_url,
+        "embedding_base_url_set": bool(embedding_base_url),
+        "embedding_api_key_set": bool(embedding_api_key),
+        "embedding_model_set": bool(embedding_model),
+        "embedding_probe_skipped": embedding_probe_skipped,
+        "embedding_vector_length": embedding_vector_length,
+        "embedding_input_max_chars": embedding_input_max_chars,
+        "qdrant_collection": qdrant_collection,
+        "qdrant_vector_size": qdrant_vector_size,
+        "actual_vector_size": actual_size,
+        "diff_threshold": diff_threshold,
+        "silent_threshold": silent_threshold,
+        "scenario_results": scenario_results,
+    }
+
+
+def print_smoke_result(result: dict) -> None:
+    print("Embedding config:")
+    print(f"  EMBEDDING_BASE_URL set: {result['embedding_base_url_set']}")
+    print(f"  EMBEDDING_API_KEY set: {result['embedding_api_key_set']}")
+    print(f"  EMBEDDING_MODEL set: {result['embedding_model_set']}")
+    if result["embedding_probe_skipped"]:
+        print("  live embedding probe skipped: one or more embedding env vars are blank")
+    else:
+        print(f"  live embedding vector length: {result['embedding_vector_length']}")
+
+    print("Qdrant collection:")
+    print(f"  name: {result['qdrant_collection']}")
+    print(f"  configured vector size: {result['qdrant_vector_size']}")
+    print(f"  actual vector size: {result['actual_vector_size']}")
+    print(f"  diff threshold: {result['diff_threshold']}")
+    print(f"  silent threshold: {result['silent_threshold']}")
+
+    print("Synthetic gate scenarios:")
+    for scenario in result["scenario_results"]:
+        print(
+            f"  {scenario['name']}: score={scenario['matched_score']:.4f} "
+            f"action={scenario['actual_action']} write={scenario['should_write_to_vault']} "
+            f"upsert={scenario['should_upsert_qdrant']}"
+        )
     print("Smoke test passed.")
-    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Check embedding config, Qdrant collection status, and synthetic 03_qdrant_gate behavior."
+    )
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / ".env",
+        help="Path to the deploy/.env file.",
+    )
+    parser.add_argument(
+        "--qdrant-base-url",
+        default="http://localhost:6333",
+        help="Qdrant base URL reachable from the host.",
+    )
+    parser.add_argument(
+        "--debug-log",
+        type=Path,
+        default=default_debug_log_path(),
+        help="Append a summary to this debug log file.",
+    )
+    args = parser.parse_args()
+
+    try:
+        result = run_smoke(
+            env_file=args.env_file,
+            qdrant_base_url=args.qdrant_base_url,
+        )
+        print_smoke_result(result)
+        append_debug_log(
+            script_name="smoke_qdrant_gate.py",
+            stage="smoke_qdrant_gate",
+            status="success",
+            summary=f"Synthetic gate smoke passed with {len(result['scenario_results'])} scenario(s).",
+            details=result,
+            log_path=args.debug_log,
+        )
+        return 0
+    except Exception as exc:
+        append_debug_log(
+            script_name="smoke_qdrant_gate.py",
+            stage="smoke_qdrant_gate",
+            status="failure",
+            summary=f"Smoke test failed: {exc}",
+            details={
+                "env_file": args.env_file,
+                "qdrant_base_url": args.qdrant_base_url,
+                "error": str(exc),
+            },
+            log_path=args.debug_log,
+        )
+        print(exc, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

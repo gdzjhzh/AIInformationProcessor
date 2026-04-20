@@ -42,7 +42,7 @@
 ## 仍待补齐的模块
 
 - `rss2im`
-- `手动提交`
+- `通用手动提交（非媒体类）`
 - `memo auto`
 - `Every Day Analysis`
 - `微信群总结`
@@ -83,21 +83,35 @@ docker compose up -d memos n8n qdrant redis rsshub
 
 如果你已有自己的 Obsidian Vault，把 `.env` 里的 `OBSIDIAN_VAULT_PATH` 改成现有 Vault 的绝对路径即可。
 
-## 第一条已实现的工作流
+## 当前已实现的工作流
 
-已在仓库里生成首条工作流模板：
+已在仓库里生成这些工作流模板：
 
 - `deploy/n8n/workflows/01_rss_to_obsidian_raw.json`
+- `deploy/n8n/workflows/05_common_vault_writer.json`
+- `deploy/n8n/workflows/06_manual_media_submit.json`
 
-这条工作流做的是：
+当前主干做的是：
 
 - 读取 `.env` 中的 `RSS_SOURCE_URLS_JSON`
 - 拉取 RSS 条目
 - 清洗正文和元数据
-- 生成 Markdown + frontmatter
-- 写入 Obsidian Inbox
+- 文本项走 `00 -> 02 -> 03`
+- 播客 / 音频项走 `04 -> 00 -> 02 -> 03`
+- `03` 只做 Qdrant search / dedupe 判定并返回 deferred upsert payload
+- 最后统一交给 `05_common_vault_writer` 生成 Markdown + frontmatter，先写入 Obsidian Inbox，再执行 Qdrant upsert
 
 如果 `RSS_SOURCE_URLS_JSON` 为空，工作流会回退到一个默认的 `42章经` 播客 RSS 做演示。
+
+`05_common_vault_writer.json` 是共享 Vault 写入子流程。`01` 和 `06` 现在都统一调用它；`04_video_transcript_ingest` 继续保持 adapter-only，只返回主线结果，不直接写 Vault。
+
+`06_manual_media_submit.json` 是本地手动媒体入口，只接 `YouTube / 播客 / 其他音视频 URL`，然后复用 `04 -> 00 -> 02 -> 03` 主链，再统一交给共享 `05` 写入 Vault；它不处理文章正文或通用手动笔记。默认本地 webhook 为：
+
+```text
+POST http://localhost:5678/webhook/aip/local/manual-media-submit
+```
+
+如果你是用仓库里的 JSON 直接同步到 live SQLite，再重启 `n8n`，实际可调用的 webhook 路径要以 `deploy/data/n8n/database.sqlite` 里的 `webhook_entity.webhookPath` 为准。
 
 ## 飞书机器人单独启用
 
@@ -170,6 +184,7 @@ docker compose --profile headless up -d browserless rsshub
 - `LLM_API_KEY`: 用于摘要和打分
 - `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL`: 用于向量去重
   `EMBEDDING_MODEL` 和 `QDRANT_VECTOR_SIZE` 要成对调整，避免 collection 维度错配
+- `EMBEDDING_INPUT_MAX_CHARS`: 控制送入 embedding provider 的文本截断上限，默认 `8000`
 - `QDRANT_DIFF_THRESHOLD` / `QDRANT_SILENT_THRESHOLD`: 控制 `full_push -> diff_push -> silent` 的分界值，默认分别为 `0.85 / 0.97`
 - `VIDEO_TRANSCRIPT_BASE_URL` / `VIDEO_TRANSCRIPT_API_KEY`: 用于音视频转文本
 - `FEISHU_WEBHOOK_URL`: 用于 n8n 最终推送飞书
@@ -187,35 +202,48 @@ docker compose --profile headless up -d browserless rsshub
 1. 先初始化 Obsidian Vault 和 Memos 管理员账号。
 2. 先做第一条主干：`RSS/YouTube/播客 -> AI 打分 -> Markdown 写入 Obsidian`。
 3. 再补 `飞书/企业微信推送`。
-4. 确认主干稳定后，再接入 `Embedding + Qdrant` 做三级降噪；当前 repo 里的 01 已经预留 `02 -> 03 -> should_write_to_vault` 分支。
+4. 当前 repo 已收口成 `01/06 -> 00/04 -> 02 -> 03 -> 05`；`03` 负责 search/decide，`05` 负责 write-then-upsert，避免索引先于主库提交。
 5. 再接入 `im2memo -> Memos -> memo auto` 这条增强支路。
-6. 最后补 `Video Transcript API`、`手动提交`、`每日复盘` 和 `订阅管理 Web 端`。
+6. 最后补 `每日复盘` 和 `订阅管理 Web 端` 等外围能力。
 ## 同步工作流到运行态
 
 仓库里的 `deploy/n8n/workflows/*.json` 是版本控制下的主定义，`deploy/data/n8n/database.sqlite` 只是运行态缓存。
 在导入、更新或串联工作流后，使用下面的命令把仓库版本同步到当前 n8n 主库：
 
 ```powershell
-python deploy/n8n/scripts/sync_workflows.py
+python deploy/n8n/scripts/publish_runtime.py
 ```
 
-如果只想同步某几条工作流，可以重复传 `--workflow-id`：
+`publish_runtime.py` 现在是对外唯一发布入口。它会依次执行 `sync_workflows.py -> restart n8n -> check_runtime_alignment.py`，并把整次过程追加到仓库根目录 `DEBUG_LOG.md`。
+
+如果只想发布某几条工作流，可以重复传 `--workflow-id`：
 
 ```powershell
-python deploy/n8n/scripts/sync_workflows.py `
+python deploy/n8n/scripts/publish_runtime.py `
   --workflow-id D3a7Kp9Lm4Qx2Rst `
   --workflow-id 828e50ae98c24f31
 ```
 
-这个脚本会：
+如果需要把验证也串进同一次发布，可额外开启：
+
+```powershell
+python deploy/n8n/scripts/publish_runtime.py --run-smoke-qdrant
+python deploy/n8n/scripts/publish_runtime.py --run-verify-transcript
+```
+
+`sync_workflows.py` 仍然保留，但它现在的定位是唯一的 SQLite 同步步骤，不再作为日常发布入口。
+
+这个发布链路会：
 - 先对当前活动 SQLite 库做一次备份
 - 用 repo JSON 更新 `workflow_entity`
 - 确保当前 `versionId` 在 `workflow_history` 中存在
 - 对 `active: true` 的工作流补齐 `activeVersionId`
+- 重启 `n8n`，刷新 webhook 等 runtime 衍生态
+- 用 `check_runtime_alignment.py` 回读 live SQLite，确认 repo JSON 和 runtime 没有再次分裂
 
 这一步是 `01 -> 02 -> 03` 链路稳定运行的前提，因为 `Execute Workflow` 调子工作流时不会只看 `active` 标志，还会检查当前激活版本是否真的存在于版本历史中。
 
-同步后建议再跑一次：
+发布后建议再跑一次：
 
 ```powershell
 python deploy/n8n/scripts/smoke_qdrant_gate.py
@@ -225,3 +253,5 @@ python deploy/n8n/scripts/smoke_qdrant_gate.py
 - 直接检查 `EMBEDDING_*` 是否已配置
 - 核对 `QDRANT_COLLECTION` 是否存在，以及实际维度是否等于 `QDRANT_VECTOR_SIZE`
 - 用合成向量验证 `full_push`、`diff_push`、`silent` 三种动作，以及“同一 `item_id` 内容更新”不会被误吞
+
+根目录 `DEBUG_LOG.md` 是总调试日志。后续 `publish / sync / smoke / verify / alignment check` 都会默认往这里追加。
