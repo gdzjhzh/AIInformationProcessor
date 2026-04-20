@@ -1,202 +1,210 @@
 {
-  "id": "828e50ae98c24f31",
-  "name": "02 Enrich With LLM",
-  "description": "Runnable template and callable sub-workflow: validate a NormalizedTextObject, call an OpenAI-compatible chat completions API, and merge score/category/tags/summary/reason back onto the same object.",
-  "active": true,
-  "isArchived": false,
-  "nodes": [
-    {
-      "parameters": {},
-      "id": "81e7020a-6dd8-4485-8126-1c863746c65b",
-      "name": "When clicking 'Execute workflow'",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [
-        260,
-        240
-      ]
-    },
-    {
-      "parameters": {
-        "inputSource": "passthrough"
-      },
-      "id": "362d59bb-d7c0-453a-b499-2f61446ad502",
-      "name": "When Executed by Another Workflow",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1.1,
-      "position": [
-        260,
-        420
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "return [\n  {\n    json: {\n      item_id: '6d6e2f96ab2c',\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      canonical_url: 'https://example.com/post',\n      title: 'Example normalized item',\n      author: 'OpenAI',\n      published_at: '2026-04-17T09:00:00-04:00',\n      ingested_at: '2026-04-17T09:05:00-04:00',\n      media_type: 'text',\n      content_text: 'Normalized plain text content for scoring and summary. The article explains why stable object contracts, idempotent IDs, and a single Obsidian write target are required before the project adds more ingestion paths.',\n      content_hash: 'sha256:example',\n      upstream_summary: '',\n      tags: ['inbox', 'ai-information-processor'],\n      dedupe_action: 'full_push',\n      status: 'raw'\n    }\n  }\n];"
-      },
-      "id": "6515eba8-013c-4352-8497-b93a1cc323dd",
-      "name": "Example Normalized Text Object",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        520,
-        240
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const requiredFields = ['item_id', 'source_type', 'source_name', 'title', 'content_text'];\nconst missingFields = requiredFields.filter((field) => !String($json[field] || '').trim());\nif (missingFields.length) {\n  throw new Error(`NormalizedTextObject missing required fields: ${missingFields.join(', ')}`);\n}\n\nconst llmBaseUrl = String($env.LLM_BASE_URL || '').trim().replace(/\\/+$/, '');\nconst llmModel = String($env.LLM_MODEL || '').trim();\nconst llmApiKey = String($env.LLM_API_KEY || '').trim();\n\nif (!llmBaseUrl) {\n  throw new Error('LLM_BASE_URL is required for 02_enrich_with_llm');\n}\nif (!llmModel) {\n  throw new Error('LLM_MODEL is required for 02_enrich_with_llm');\n}\nif (!llmApiKey) {\n  throw new Error('LLM_API_KEY is required for 02_enrich_with_llm');\n}\n\nconst contentText = String($json.content_text || '').trim();\nif (contentText.length < 40) {\n  throw new Error('content_text is too short for reliable enrichment; expected at least 40 characters');\n}\n\nreturn {\n  json: {\n    ...$json,\n    content_text: contentText,\n    llm_base_url: llmBaseUrl,\n    llm_model: llmModel,\n    existing_tags: Array.isArray($json.tags) ? $json.tags.filter(Boolean) : []\n  }\n};"
-      },
-      "id": "c50d95f5-3b75-4d69-82e7-ea9daea2dd18",
-      "name": "Validate Normalized Text Object",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        780,
-        240
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const systemPrompt = [\n  'You are the enrichment layer of AIInformationProcessor.',\n  'Return JSON only.',\n  'Evaluate the item and return exactly these keys: score, category, tags, summary, reason.',\n  'score must be a number between 0 and 1.',\n  'category must be a short stable label.',\n  'tags must be an array of concise lowercase strings.',\n  'summary must be the final summary used by the mainline pipeline, not a copy of upstream_summary.',\n  'reason must explain why the item is valuable, niche, redundant, or low-value.',\n  'Use content_text as the primary source of truth. upstream_summary is optional context only.'\n].join('\\n');\n\nconst userPayload = {\n  item_id: $json.item_id,\n  source_type: $json.source_type,\n  source_name: $json.source_name,\n  title: $json.title,\n  author: $json.author || '',\n  canonical_url: $json.canonical_url || '',\n  published_at: $json.published_at || '',\n  existing_tags: $json.existing_tags || [],\n  upstream_summary: $json.upstream_summary || '',\n  content_text: $json.content_text\n};\n\nreturn {\n  json: {\n    ...$json,\n    llm_endpoint: `${$json.llm_base_url}/chat/completions`,\n    llm_request: {\n      model: $json.llm_model,\n      temperature: 0.2,\n      response_format: {\n        type: 'json_object'\n      },\n      messages: [\n        {\n          role: 'system',\n          content: systemPrompt\n        },\n        {\n          role: 'user',\n          content: JSON.stringify(userPayload, null, 2)\n        }\n      ]\n    }\n  }\n};"
-      },
-      "id": "10de7a55-15f0-45ce-a60c-25f77317b87b",
-      "name": "Build LLM Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1040,
-        240
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{$json.llm_endpoint}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{'Bearer ' + $env.LLM_API_KEY}}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.llm_request) }}",
-        "options": {}
-      },
-      "id": "411cf499-2f86-4c6f-ab6f-e57a8188e253",
-      "name": "Call LLM Enrichment API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1300,
-        240
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const original = $('Build LLM Request').item.json || {};\nconst rawContent = $json?.choices?.[0]?.message?.content;\nif (!rawContent || typeof rawContent !== 'string') {\n  throw new Error('LLM response did not include choices[0].message.content');\n}\n\nconst stripCodeFence = (value) => String(value)\n  .trim()\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(stripCodeFence(rawContent));\n} catch (error) {\n  throw new Error(`Failed to parse LLM JSON response: ${error.message}`);\n}\n\nconst numericScore = Number(parsed.score);\nif (!Number.isFinite(numericScore)) {\n  throw new Error('LLM response score must be numeric');\n}\nconst score = Math.max(0, Math.min(1, numericScore));\nconst category = String(parsed.category || '').trim();\nconst summary = String(parsed.summary || '').trim();\nconst reason = String(parsed.reason || '').trim();\nif (!category) {\n  throw new Error('LLM response category must be non-empty');\n}\nif (!summary) {\n  throw new Error('LLM response summary must be non-empty');\n}\nif (!reason) {\n  throw new Error('LLM response reason must be non-empty');\n}\n\nconst normalizedTags = Array.isArray(parsed.tags)\n  ? parsed.tags\n  : typeof parsed.tags === 'string'\n    ? parsed.tags.split(',')\n    : [];\nconst mergedTags = [...new Set([\n  ...((Array.isArray(original.existing_tags) ? original.existing_tags : []).map((tag) => String(tag).trim()).filter(Boolean)),\n  ...normalizedTags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean)\n])];\n\nreturn {\n  json: {\n    ...original,\n    score,\n    category,\n    tags: mergedTags,\n    summary,\n    reason,\n    enriched_at: new Date().toISOString(),\n    status: 'enriched'\n  }\n};"
-      },
-      "id": "affb788f-d002-4d09-922a-f9895df8cf31",
-      "name": "Parse And Merge Enrichment",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1560,
-        240
-      ]
-    }
-  ],
-  "connections": {
-    "When clicking 'Execute workflow'": {
-      "main": [
-        [
-          {
-            "node": "Example Normalized Text Object",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "When Executed by Another Workflow": {
-      "main": [
-        [
-          {
-            "node": "Validate Normalized Text Object",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Example Normalized Text Object": {
-      "main": [
-        [
-          {
-            "node": "Validate Normalized Text Object",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate Normalized Text Object": {
-      "main": [
-        [
-          {
-            "node": "Build LLM Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build LLM Request": {
-      "main": [
-        [
-          {
-            "node": "Call LLM Enrichment API",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Call LLM Enrichment API": {
-      "main": [
-        [
-          {
-            "node": "Parse And Merge Enrichment",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "staticData": null,
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "pinData": {},
-  "versionId": "48bbd55b-3356-4d18-8296-a4af08d46e78",
-  "tags": []
+    "id":  "828e50ae98c24f31",
+    "name":  "02 Enrich With LLM",
+    "description":  "Runnable template and callable sub-workflow: validate a NormalizedTextObject, call an OpenAI-compatible chat completions API, and merge compatibility score/category/tags/summary/reason plus structured scoring fields back onto the same object.",
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "81e7020a-6dd8-4485-8126-1c863746c65b",
+                      "name":  "When clicking \u0027Execute workflow\u0027",
+                      "type":  "n8n-nodes-base.manualTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       260,
+                                       240
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "inputSource":  "passthrough"
+                                     },
+                      "id":  "362d59bb-d7c0-453a-b499-2f61446ad502",
+                      "name":  "When Executed by Another Workflow",
+                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       260,
+                                       420
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "return [\n  {\n    json: {\n      item_id: \u00276d6e2f96ab2c\u0027,\n      source_type: \u0027rss\u0027,\n      source_name: \u0027OpenAI YouTube\u0027,\n      canonical_url: \u0027https://example.com/post\u0027,\n      title: \u0027Example normalized item\u0027,\n      author: \u0027OpenAI\u0027,\n      published_at: \u00272026-04-17T09:00:00-04:00\u0027,\n      ingested_at: \u00272026-04-17T09:05:00-04:00\u0027,\n      media_type: \u0027text\u0027,\n      content_text: \u0027Normalized plain text content for scoring and summary. The article explains why stable object contracts, idempotent IDs, and a single Obsidian write target are required before the project adds more ingestion paths.\u0027,\n      content_hash: \u0027sha256:example\u0027,\n      upstream_summary: \u0027\u0027,\n      tags: [\u0027inbox\u0027, \u0027ai-information-processor\u0027],\n      dedupe_action: \u0027full_push\u0027,\n      status: \u0027raw\u0027\n    }\n  }\n];"
+                                     },
+                      "id":  "6515eba8-013c-4352-8497-b93a1cc323dd",
+                      "name":  "Example Normalized Text Object",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       520,
+                                       240
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const requiredFields = [\u0027item_id\u0027, \u0027source_type\u0027, \u0027source_name\u0027, \u0027title\u0027, \u0027content_text\u0027];\nconst missingFields = requiredFields.filter((field) =\u003e !String($json[field] || \u0027\u0027).trim());\nif (missingFields.length) {\n  throw new Error(`NormalizedTextObject missing required fields: ${missingFields.join(\u0027, \u0027)}`);\n}\n\nconst llmBaseUrl = String($env.LLM_BASE_URL || \u0027\u0027).trim().replace(/\\/+$/, \u0027\u0027);\nconst llmModel = String($env.LLM_MODEL || \u0027\u0027).trim();\nconst llmApiKey = String($env.LLM_API_KEY || \u0027\u0027).trim();\n\nif (!llmBaseUrl) {\n  throw new Error(\u0027LLM_BASE_URL is required for 02_enrich_with_llm\u0027);\n}\nif (!llmModel) {\n  throw new Error(\u0027LLM_MODEL is required for 02_enrich_with_llm\u0027);\n}\nif (!llmApiKey) {\n  throw new Error(\u0027LLM_API_KEY is required for 02_enrich_with_llm\u0027);\n}\n\nconst contentText = String($json.content_text || \u0027\u0027).trim();\nif (contentText.length \u003c 40) {\n  throw new Error(\u0027content_text is too short for reliable enrichment; expected at least 40 characters\u0027);\n}\n\nconst llmProvider = String($env.LLM_PROVIDER || \u0027\u0027).trim() || (\n  /deepseek/i.test(llmModel)\n    ? \u0027deepseek\u0027\n    : /gpt|openai/i.test(llmModel) || /openai/i.test(llmBaseUrl)\n      ? \u0027openai\u0027\n      : \u0027openai-compatible\u0027\n);\n\nreturn {\n  json: {\n    ...$json,\n    content_text: contentText,\n    llm_base_url: llmBaseUrl,\n    llm_model: llmModel,\n    llm_provider: llmProvider,\n    existing_tags: Array.isArray($json.tags) ? $json.tags.filter(Boolean) : [],\n    score_scale: 100,\n    model_profile: \u0027scoring_default\u0027,\n    prompt_version: \u0027scoring_v1\u0027,\n    rubric_version: \u0027personal_info_processor_v1\u0027\n  }\n};"
+                                     },
+                      "id":  "c50d95f5-3b75-4d69-82e7-ea9daea2dd18",
+                      "name":  "Validate Normalized Text Object",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       780,
+                                       240
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const systemPrompt = [\n  \u0027You are the enrichment layer of AIInformationProcessor.\u0027,\n  \u0027Return JSON only.\u0027,\n  \u0027Evaluate the item and return exactly these keys: category, tags, summary, reason, ai_score, score_dimensions.\u0027,\n  \u0027category must be a short stable label.\u0027,\n  \u0027tags must be an array of concise lowercase strings.\u0027,\n  \u0027summary must be the final summary used by the mainline pipeline, not a copy of upstream_summary.\u0027,\n  \u0027reason must explain why the item is valuable, niche, redundant, or low-value.\u0027,\n  \u0027ai_score must be an object with keys: keep_score, notify_score, reference_score, action_score, confidence, decision_hint.\u0027,\n  \u0027keep_score, notify_score, reference_score, and action_score must be integers between 0 and 100.\u0027,\n  \u0027confidence must be a number between 0 and 1.\u0027,\n  \u0027decision_hint must be one of: keep_full, keep_reference, review, skip.\u0027,\n  \u0027score_dimensions must be an object with keys: personal_relevance, information_density, novelty, actionability, long_term_value, source_quality, penalty.\u0027,\n  \u0027score_dimensions.personal_relevance must be an integer between 0 and 25.\u0027,\n  \u0027score_dimensions.information_density must be an integer between 0 and 20.\u0027,\n  \u0027score_dimensions.novelty must be an integer between 0 and 20.\u0027,\n  \u0027score_dimensions.actionability must be an integer between 0 and 15.\u0027,\n  \u0027score_dimensions.long_term_value must be an integer between 0 and 15.\u0027,\n  \u0027score_dimensions.source_quality must be an integer between 0 and 5.\u0027,\n  \u0027score_dimensions.penalty must be an integer between -20 and 0.\u0027,\n  \u0027Use content_text as the primary source of truth. upstream_summary is optional context only.\u0027,\n  \u0027The workflow keeps top-level score compatible as keep_score divided by score_scale.\u0027\n].join(\u0027\\n\u0027);\n\nconst userPayload = {\n  item_id: $json.item_id,\n  source_type: $json.source_type,\n  source_name: $json.source_name,\n  title: $json.title,\n  author: $json.author || \u0027\u0027,\n  canonical_url: $json.canonical_url || \u0027\u0027,\n  published_at: $json.published_at || \u0027\u0027,\n  dedupe_action: $json.dedupe_action || \u0027full_push\u0027,\n  existing_tags: $json.existing_tags || [],\n  upstream_summary: $json.upstream_summary || \u0027\u0027,\n  score_scale: $json.score_scale || 100,\n  rubric_version: $json.rubric_version,\n  scoring_rubric: {\n    personal_relevance: { min: 0, max: 25 },\n    information_density: { min: 0, max: 20 },\n    novelty: { min: 0, max: 20 },\n    actionability: { min: 0, max: 15 },\n    long_term_value: { min: 0, max: 15 },\n    source_quality: { min: 0, max: 5 },\n    penalty: { min: -20, max: 0 }\n  },\n  content_text: $json.content_text\n};\n\nreturn {\n  json: {\n    ...$json,\n    llm_endpoint: `${$json.llm_base_url}/chat/completions`,\n    llm_request: {\n      model: $json.llm_model,\n      temperature: 0.1,\n      response_format: {\n        type: \u0027json_object\u0027\n      },\n      messages: [\n        {\n          role: \u0027system\u0027,\n          content: systemPrompt\n        },\n        {\n          role: \u0027user\u0027,\n          content: JSON.stringify(userPayload, null, 2)\n        }\n      ]\n    }\n  }\n};"
+                                     },
+                      "id":  "10de7a55-15f0-45ce-a60c-25f77317b87b",
+                      "name":  "Build LLM Request",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1040,
+                                       240
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "={{$json.llm_endpoint}}",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{\u0027Bearer \u0027 + $env.LLM_API_KEY}}"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify($json.llm_request) }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "411cf499-2f86-4c6f-ab6f-e57a8188e253",
+                      "name":  "Call LLM Enrichment API",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       1300,
+                                       240
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const original = $(\u0027Build LLM Request\u0027).item.json || {};\nconst rawContent = $json?.choices?.[0]?.message?.content;\nif (!rawContent || typeof rawContent !== \u0027string\u0027) {\n  throw new Error(\u0027LLM response did not include choices[0].message.content\u0027);\n}\n\nconst stripCodeFence = (value) =\u003e String(value)\n  .trim()\n  .replace(/^```json\\s*/i, \u0027\u0027)\n  .replace(/^```\\s*/i, \u0027\u0027)\n  .replace(/\\s*```$/, \u0027\u0027)\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(stripCodeFence(rawContent));\n} catch (error) {\n  throw new Error(`Failed to parse LLM JSON response: ${error.message}`);\n}\n\nconst toClampedInt = (value, min, max, fieldName) =\u003e {\n  const numericValue = Math.round(Number(value));\n  if (!Number.isFinite(numericValue)) {\n    throw new Error(`LLM response ${fieldName} must be numeric`);\n  }\n  return Math.max(min, Math.min(max, numericValue));\n};\n\nconst toClampedFloat = (value, min, max, fieldName) =\u003e {\n  const numericValue = Number(value);\n  if (!Number.isFinite(numericValue)) {\n    throw new Error(`LLM response ${fieldName} must be numeric`);\n  }\n  return Math.max(min, Math.min(max, numericValue));\n};\n\nconst category = String(parsed.category || \u0027\u0027).trim();\nconst summary = String(parsed.summary || \u0027\u0027).trim();\nconst reason = String(parsed.reason || \u0027\u0027).trim();\nif (!category) {\n  throw new Error(\u0027LLM response category must be non-empty\u0027);\n}\nif (!summary) {\n  throw new Error(\u0027LLM response summary must be non-empty\u0027);\n}\nif (!reason) {\n  throw new Error(\u0027LLM response reason must be non-empty\u0027);\n}\n\nconst parsedDimensions = parsed.score_dimensions \u0026\u0026 typeof parsed.score_dimensions === \u0027object\u0027\n  ? parsed.score_dimensions\n  : parsed.dimensions \u0026\u0026 typeof parsed.dimensions === \u0027object\u0027\n    ? parsed.dimensions\n    : null;\nif (!parsedDimensions) {\n  throw new Error(\u0027LLM response score_dimensions must be an object\u0027);\n}\n\nconst scoreDimensions = {\n  personal_relevance: toClampedInt(parsedDimensions.personal_relevance, 0, 25, \u0027score_dimensions.personal_relevance\u0027),\n  information_density: toClampedInt(parsedDimensions.information_density, 0, 20, \u0027score_dimensions.information_density\u0027),\n  novelty: toClampedInt(parsedDimensions.novelty, 0, 20, \u0027score_dimensions.novelty\u0027),\n  actionability: toClampedInt(parsedDimensions.actionability, 0, 15, \u0027score_dimensions.actionability\u0027),\n  long_term_value: toClampedInt(parsedDimensions.long_term_value, 0, 15, \u0027score_dimensions.long_term_value\u0027),\n  source_quality: toClampedInt(parsedDimensions.source_quality, 0, 5, \u0027score_dimensions.source_quality\u0027),\n  penalty: toClampedInt(parsedDimensions.penalty, -20, 0, \u0027score_dimensions.penalty\u0027)\n};\n\nconst scoreScale = Number.isInteger(original.score_scale) ? original.score_scale : 100;\nconst keepScore = Math.max(0, Math.min(scoreScale,\n  scoreDimensions.personal_relevance\n  + scoreDimensions.information_density\n  + scoreDimensions.novelty\n  + scoreDimensions.actionability\n  + scoreDimensions.long_term_value\n  + scoreDimensions.source_quality\n  + scoreDimensions.penalty\n));\n\nconst parsedAiScore = parsed.ai_score \u0026\u0026 typeof parsed.ai_score === \u0027object\u0027 ? parsed.ai_score : {};\nconst decisionHint = String(parsedAiScore.decision_hint || \u0027\u0027).trim() || \u0027review\u0027;\nif (![\u0027keep_full\u0027, \u0027keep_reference\u0027, \u0027review\u0027, \u0027skip\u0027].includes(decisionHint)) {\n  throw new Error(\u0027LLM response ai_score.decision_hint must be one of keep_full, keep_reference, review, skip\u0027);\n}\n\nconst aiScore = {\n  keep_score: keepScore,\n  notify_score: toClampedInt(parsedAiScore.notify_score ?? keepScore, 0, 100, \u0027ai_score.notify_score\u0027),\n  reference_score: toClampedInt(parsedAiScore.reference_score ?? keepScore, 0, 100, \u0027ai_score.reference_score\u0027),\n  action_score: toClampedInt(parsedAiScore.action_score ?? 0, 0, 100, \u0027ai_score.action_score\u0027),\n  confidence: Number(toClampedFloat(parsedAiScore.confidence, 0, 1, \u0027ai_score.confidence\u0027).toFixed(4)),\n  decision_hint: decisionHint\n};\n\nconst normalizedTags = Array.isArray(parsed.tags)\n  ? parsed.tags\n  : typeof parsed.tags === \u0027string\u0027\n    ? parsed.tags.split(\u0027,\u0027)\n    : [];\nconst mergedTags = [...new Set([\n  ...((Array.isArray(original.existing_tags) ? original.existing_tags : []).map((tag) =\u003e String(tag).trim()).filter(Boolean)),\n  ...normalizedTags.map((tag) =\u003e String(tag).trim().toLowerCase()).filter(Boolean)\n])];\n\nconst scoredAt = new Date().toISOString();\nconst aiMeta = {\n  model_profile: String(original.model_profile || \u0027scoring_default\u0027),\n  provider: String(original.llm_provider || \u0027openai-compatible\u0027),\n  model: String(original.llm_model || \u0027\u0027).trim(),\n  prompt_version: String(original.prompt_version || \u0027scoring_v1\u0027),\n  rubric_version: String(original.rubric_version || \u0027personal_info_processor_v1\u0027),\n  input_chars: String(original.content_text || \u0027\u0027).length,\n  scored_at: scoredAt\n};\n\nreturn {\n  json: {\n    ...original,\n    score: Number((keepScore / scoreScale).toFixed(4)),\n    score_scale: scoreScale,\n    category,\n    tags: mergedTags,\n    summary,\n    reason,\n    ai_score: aiScore,\n    score_dimensions: scoreDimensions,\n    ai_meta: aiMeta,\n    enriched_at: scoredAt,\n    status: \u0027enriched\u0027\n  }\n};"
+                                     },
+                      "id":  "affb788f-d002-4d09-922a-f9895df8cf31",
+                      "name":  "Parse And Merge Enrichment",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1560,
+                                       240
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "When clicking \u0027Execute workflow\u0027":  {
+                                                                           "main":  [
+                                                                                        [
+                                                                                            {
+                                                                                                "node":  "Example Normalized Text Object",
+                                                                                                "type":  "main",
+                                                                                                "index":  0
+                                                                                            }
+                                                                                        ]
+                                                                                    ]
+                                                                       },
+                        "When Executed by Another Workflow":  {
+                                                                  "main":  [
+                                                                               [
+                                                                                   {
+                                                                                       "node":  "Validate Normalized Text Object",
+                                                                                       "type":  "main",
+                                                                                       "index":  0
+                                                                                   }
+                                                                               ]
+                                                                           ]
+                                                              },
+                        "Example Normalized Text Object":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Validate Normalized Text Object",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                        "Validate Normalized Text Object":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Build LLM Request",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "Build LLM Request":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Call LLM Enrichment API",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Call LLM Enrichment API":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Parse And Merge Enrichment",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "staticData":  null,
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "pinData":  {
+
+                },
+    "versionId":  "48bbd55b-3356-4d18-8296-a4af08d46e78",
+    "tags":  [
+
+             ]
 }

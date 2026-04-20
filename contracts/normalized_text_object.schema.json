@@ -116,6 +116,10 @@
       "minimum": 0,
       "maximum": 1
     },
+    "score_scale": {
+      "type": "integer",
+      "minimum": 1
+    },
     "category": {
       "type": "string",
       "minLength": 1
@@ -158,6 +162,147 @@
     "reason": {
       "type": "string",
       "minLength": 1
+    },
+    "ai_score": {
+      "type": "object",
+      "required": [
+        "keep_score",
+        "notify_score",
+        "reference_score",
+        "action_score",
+        "confidence",
+        "decision_hint"
+      ],
+      "properties": {
+        "keep_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "notify_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "reference_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "action_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "decision_hint": {
+          "type": "string",
+          "enum": [
+            "keep_full",
+            "keep_reference",
+            "review",
+            "skip"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "score_dimensions": {
+      "type": "object",
+      "required": [
+        "personal_relevance",
+        "information_density",
+        "novelty",
+        "actionability",
+        "long_term_value",
+        "source_quality",
+        "penalty"
+      ],
+      "properties": {
+        "personal_relevance": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25
+        },
+        "information_density": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "novelty": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "actionability": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "long_term_value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "source_quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "penalty": {
+          "type": "integer",
+          "minimum": -20,
+          "maximum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ai_meta": {
+      "type": "object",
+      "required": [
+        "model_profile",
+        "provider",
+        "model",
+        "prompt_version",
+        "rubric_version",
+        "input_chars",
+        "scored_at"
+      ],
+      "properties": {
+        "model_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rubric_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_chars": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "scored_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
     },
     "enriched_at": {
       "type": "string",

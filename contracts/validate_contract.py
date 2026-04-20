@@ -275,6 +275,32 @@ def _validate_semantics(document: dict[str, Any]) -> list[ValidationIssue]:
                 )
             )
 
+    ai_score = document.get("ai_score")
+    score_scale = document.get("score_scale")
+    score = document.get("score")
+    if isinstance(ai_score, dict):
+        if not isinstance(score_scale, int) or score_scale <= 0:
+            issues.append(
+                ValidationIssue(
+                    path="$.score_scale",
+                    message="score_scale must be a positive integer when ai_score is present",
+                )
+            )
+        keep_score = ai_score.get("keep_score")
+        if _is_number(keep_score) and _is_number(score) and isinstance(score_scale, int) and score_scale > 0:
+            expected_score = round(float(keep_score) / float(score_scale), 6)
+            actual_score = round(float(score), 6)
+            if abs(expected_score - actual_score) > 0.0005:
+                issues.append(
+                    ValidationIssue(
+                        path="$.score",
+                        message=(
+                            "score must stay compatible with ai_score.keep_score / score_scale "
+                            f"(expected {expected_score}, got {actual_score})"
+                        ),
+                    )
+                )
+
     return issues
 
 

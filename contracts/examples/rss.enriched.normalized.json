@@ -1,0 +1,65 @@
+{
+  "item_id": "c9f1234e2d0e1300481af7b1a387ef7b3b28bbf4c0a0a42cd6f4a6bb5be0e099",
+  "source_type": "rss",
+  "source_name": "OpenAI Blog",
+  "source_host": "openai.com",
+  "original_id": "rss:openai-blog:2026-04-20-structured-score",
+  "canonical_url": "https://openai.com/index/structured-score-example/",
+  "title": "Structured scoring example",
+  "author": "OpenAI",
+  "published_at": "2026-04-20T08:30:00Z",
+  "ingested_at": "2026-04-20T08:35:00Z",
+  "media_type": "text",
+  "content_text": "This article explains why the mainline should keep a compatibility score while also storing structured dimensions for auditability.",
+  "content_html": "<p>This article explains why the mainline should keep a compatibility score while also storing structured dimensions for auditability.</p>",
+  "upstream_task_id": "",
+  "upstream_view_token": "",
+  "upstream_summary": "",
+  "content_hash": "sha256:719f7d265899f7d41692f9498013d55ee8d6872a8141594d0ce4969b5f8e6577",
+  "score": 0.82,
+  "score_scale": 100,
+  "category": "AI Infra",
+  "tags": [
+    "inbox",
+    "ai-information-processor",
+    "structured-score",
+    "rss"
+  ],
+  "dedupe_action": "full_push",
+  "status": "enriched",
+  "vault_path": "",
+  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "summary": "Structured scoring keeps the mainline contract compatible while making enrichment outputs auditable.",
+  "reason": "The content is directly relevant to the repo's architecture and introduces a practical scoring migration path.",
+  "ai_score": {
+    "keep_score": 82,
+    "notify_score": 64,
+    "reference_score": 88,
+    "action_score": 45,
+    "confidence": 0.76,
+    "decision_hint": "keep_reference"
+  },
+  "score_dimensions": {
+    "personal_relevance": 22,
+    "information_density": 18,
+    "novelty": 16,
+    "actionability": 10,
+    "long_term_value": 15,
+    "source_quality": 4,
+    "penalty": -3
+  },
+  "ai_meta": {
+    "model_profile": "scoring_default",
+    "provider": "deepseek",
+    "model": "deepseek-chat",
+    "prompt_version": "scoring_v1",
+    "rubric_version": "personal_info_processor_v1",
+    "input_chars": 129,
+    "scored_at": "2026-04-20T08:35:30Z"
+  },
+  "enriched_at": "2026-04-20T08:35:30Z",
+  "original_item": {
+    "feed_url": "https://openai.com/news/rss.xml",
+    "source": "rss"
+  }
+}
