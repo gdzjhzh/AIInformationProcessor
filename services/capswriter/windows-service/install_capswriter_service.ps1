@@ -26,7 +26,6 @@ function Resolve-CapsWriterAppDir {
     }
 
     $candidates += (Join-Path $RepoRoot 'services\capswriter\runtime\CapsWriter-Offline')
-    $candidates += (Join-Path $RepoRoot 'backups\vendor\capswriter\app\CapsWriter-Offline')
 
     foreach ($candidate in $candidates) {
         if (-not [string]::IsNullOrWhiteSpace($candidate)) {

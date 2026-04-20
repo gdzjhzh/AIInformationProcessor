@@ -43,10 +43,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\code\AIInformationProcess
 
 ## Runtime 查找顺序
 
-安装脚本会按这个顺序找 `CapsWriter-Offline`：
+安装脚本现在只按这个顺序找 `CapsWriter-Offline`：
 
 1. 环境变量 `CAPSWRITER_APP_DIR`
 2. `services/capswriter/runtime/CapsWriter-Offline`
-3. `backups/vendor/capswriter/app/CapsWriter-Offline`
 
-第 3 条只保留为兼容旧机器或旧会话的迁移回退路径；当前这台机器已经完成切换，应优先维护第 1/2 条。
+旧的 `backups/vendor/capswriter/...` 回退逻辑已经移除；后续如果 runtime 不在这两个位置之一，安装脚本会直接报错，而不是再去尝试历史路径。
