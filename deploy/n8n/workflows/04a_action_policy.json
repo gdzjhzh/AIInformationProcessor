@@ -1,0 +1,108 @@
+{
+    "id":  "e7847c3145f4432d",
+    "name":  "04a Action Policy",
+    "description":  "Runnable sub-workflow: combine structured LLM scoring with the coarse dedupe action and emit deterministic write, notify, and deferred-index decisions.",
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "a64bd70b-76af-4f0b-8c95-f333ce19ecda",
+                      "name":  "When clicking \u0027Execute workflow\u0027",
+                      "type":  "n8n-nodes-base.manualTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       260,
+                                       200
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "inputSource":  "passthrough"
+                                     },
+                      "id":  "06681dab-621f-449d-b5b6-9d9fcaa9e1c4",
+                      "name":  "When Executed by Another Workflow",
+                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       260,
+                                       400
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "return [\n  {\n    json: {\n      item_id: \u00276d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1\u0027,\n      source_type: \u0027rss\u0027,\n      source_name: \u0027OpenAI YouTube\u0027,\n      title: \u0027Example enriched item after LLM scoring\u0027,\n      content_text: \u0027This example item already has structured scoring and matched-payload context, and now needs a deterministic action policy.\u0027,\n      score: 0.82,\n      score_scale: 100,\n      category: \u0027AI Infra\u0027,\n      tags: [\u0027inbox\u0027, \u0027ai-information-processor\u0027],\n      dedupe_action: \u0027diff_push\u0027,\n      matched_score: 0.89,\n      ai_score: {\n        keep_score: 82,\n        notify_score: 64,\n        reference_score: 88,\n        action_score: 45,\n        confidence: 0.76,\n        decision_hint: \u0027keep_reference\u0027\n      },\n      status: \u0027enriched\u0027\n    }\n  }\n];"
+                                     },
+                      "id":  "e060a56f-4faa-4eaf-9012-2d46317908e1",
+                      "name":  "Example Enriched Candidate",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       520,
+                                       200
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const aiScore = $json.ai_score \u0026\u0026 typeof $json.ai_score === \u0027object\u0027 ? $json.ai_score : null;\nif (!aiScore) {\n  throw new Error(\u002704a_action_policy requires ai_score from 02_enrich_with_llm\u0027);\n}\n\nconst toNumber = (value, fallback = 0) =\u003e {\n  const numericValue = Number(value);\n  return Number.isFinite(numericValue) ? numericValue : fallback;\n};\n\nconst keepScore = Math.round(toNumber(aiScore.keep_score, Math.round(toNumber($json.score, 0) * 100)));\nconst notifyScore = Math.round(toNumber(aiScore.notify_score, keepScore));\nconst referenceScore = Math.round(toNumber(aiScore.reference_score, keepScore));\nconst actionScore = Math.round(toNumber(aiScore.action_score, 0));\nconst confidence = toNumber(aiScore.confidence, 0);\nconst decisionHint = String(aiScore.decision_hint || \u0027review\u0027).trim() || \u0027review\u0027;\nconst dedupeAction = String($json.dedupe_action || \u0027full_push\u0027).trim() || \u0027full_push\u0027;\n\nlet shouldWriteToVault = false;\nif ([\u0027keep_full\u0027, \u0027keep_reference\u0027, \u0027review\u0027].includes(decisionHint)) {\n  shouldWriteToVault = true;\n}\nif (decisionHint === \u0027skip\u0027) {\n  shouldWriteToVault = false;\n}\nif (!shouldWriteToVault \u0026\u0026 (keepScore \u003e= 60 || referenceScore \u003e= 70 || actionScore \u003e= 65)) {\n  shouldWriteToVault = true;\n}\n\nconst shouldNotify = shouldWriteToVault \u0026\u0026 notifyScore \u003e= 75 \u0026\u0026 confidence \u003e= 0.65;\nconst shouldUpsertQdrant = shouldWriteToVault;\nconst notificationMode = shouldNotify\n  ? (dedupeAction === \u0027diff_push\u0027 ? \u0027incremental\u0027 : \u0027full\u0027)\n  : \u0027silent\u0027;\nconst normalizedTags = Array.isArray($json.tags)\n  ? $json.tags.map((tag) =\u003e String(tag).trim().toLowerCase()).filter(Boolean)\n  : [];\nif (decisionHint === \u0027review\u0027 || confidence \u003c 0.5) {\n  normalizedTags.push(\u0027needs-review\u0027);\n}\n\nreturn {\n  json: {\n    ...$json,\n    tags: [...new Set(normalizedTags)],\n    should_write_to_vault: shouldWriteToVault,\n    should_notify: shouldNotify,\n    should_upsert_qdrant: shouldUpsertQdrant,\n    notification_mode: notificationMode,\n    status: shouldWriteToVault ? \u0027enriched\u0027 : \u0027deduped\u0027,\n    qdrant_operation: shouldUpsertQdrant ? \u0027pending\u0027 : \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
+                                     },
+                      "id":  "2723bb58-0dc5-4db6-9972-5f27a9fee3a8",
+                      "name":  "Apply Action Policy",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       780,
+                                       280
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "When clicking \u0027Execute workflow\u0027":  {
+                                                                           "main":  [
+                                                                                        {
+                                                                                            "node":  "Example Enriched Candidate",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ]
+                                                                       },
+                        "When Executed by Another Workflow":  {
+                                                                  "main":  [
+                                                                               {
+                                                                                   "node":  "Apply Action Policy",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                              },
+                        "Example Enriched Candidate":  {
+                                                           "main":  [
+                                                                        {
+                                                                            "node":  "Apply Action Policy",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                       }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "staticData":  null,
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "pinData":  {
+
+                },
+    "versionId":  "e2de166b-6c3c-4444-81d0-bce5cef4f850",
+    "tags":  [
+
+             ]
+}

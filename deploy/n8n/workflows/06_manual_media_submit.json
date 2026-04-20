@@ -1,210 +1,238 @@
 {
-  "id": "6b8eaf7c41d2439a",
-  "name": "06 Manual Media Submit",
-  "description": "Local-only ingress workflow: accept manual media URLs such as YouTube and podcast episodes, reuse 04 -> 00 -> 02 -> 03, then hand the result to the shared 05 vault writer.",
-  "active": true,
-  "isArchived": false,
-  "nodes": [
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "aip/local/manual-media-submit",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "7b2efd77-8636-479a-bd65-cdc72d57ba5f",
-      "name": "manual-media-submit-webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [
-        260,
-        320
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const body = $json.body && typeof $json.body === 'object' && !Array.isArray($json.body) ? $json.body : {};\nconst payload = Object.keys(body).length ? body : $json;\nconst transcriptSourceUrl = String(payload.transcript_source_url || payload.url || '').trim();\n\nif (!transcriptSourceUrl) {\n  throw new Error('url is required for 06_manual_media_submit');\n}\n\nlet parsedUrl;\ntry {\n  parsedUrl = new URL(transcriptSourceUrl);\n} catch (error) {\n  throw new Error(`Invalid media URL: ${error.message}`);\n}\n\nconst host = parsedUrl.hostname.replace(/^www\\./i, '').toLowerCase();\nconst pathname = parsedUrl.pathname || '';\nconst isYouTube = /(^|\\.)(youtube\\.com|youtu\\.be)$/.test(host);\nconst isXiaoyuzhouEpisode = host === 'xiaoyuzhoufm.com' && /^\\/episode\\//i.test(pathname);\nconst isBilibiliVideo = /(^|\\.)bilibili\\.com$/.test(host) && /^\\/video\\//i.test(pathname);\nconst isAudioFile = /\\.(mp3|m4a|aac|wav|ogg)(?:$|[?#])/i.test(transcriptSourceUrl);\nconst isVideoFile = /\\.(mp4|mov|m4v|webm|mkv)(?:$|[?#])/i.test(transcriptSourceUrl);\nconst supported = isYouTube || isXiaoyuzhouEpisode || isBilibiliVideo || isAudioFile || isVideoFile;\n\nif (!supported) {\n  throw new Error('06_manual_media_submit only accepts media URLs such as YouTube, Xiaoyuzhou episodes, Bilibili videos, or direct audio/video files');\n}\n\nconst inferredSourceType = String(payload.source_type || '').trim()\n  || (isXiaoyuzhouEpisode || isAudioFile ? 'podcast' : 'transcript');\nconst inferredMediaType = String(payload.media_type || '').trim()\n  || (isXiaoyuzhouEpisode || isAudioFile ? 'audio' : 'video');\nconst defaultSourceName = isYouTube\n  ? 'YouTube manual submit'\n  : isXiaoyuzhouEpisode\n    ? 'Xiaoyuzhou manual submit'\n    : isBilibiliVideo\n      ? 'Bilibili manual submit'\n      : host || 'manual media submit';\nconst pollIntervalMs = Number(payload.poll_interval_ms || payload.transcriptPollIntervalMs || 0);\nconst maxPolls = Number(payload.max_polls || payload.transcriptMaxPolls || 0);\nconst requestedTags = Array.isArray(payload.extra_tags)\n  ? payload.extra_tags\n  : Array.isArray(payload.tags)\n    ? payload.tags\n    : [];\nconst extraTags = [...new Set([\n  'manual-submit',\n  ...requestedTags.map((tag) => String(tag).trim())\n].filter(Boolean))];\n\nreturn {\n  json: {\n    transcript_source_url: transcriptSourceUrl,\n    canonical_url: String(payload.canonical_url || transcriptSourceUrl).trim(),\n    source_name: String(payload.source_name || payload.sourceName || defaultSourceName).trim() || defaultSourceName,\n    source_type: inferredSourceType,\n    media_type: inferredMediaType,\n    title: String(payload.title || '').trim(),\n    author: String(payload.author || '').trim(),\n    description: String(payload.description || '').trim(),\n    published_at: payload.published_at || new Date().toISOString(),\n    obsidian_inbox_dir: String(payload.obsidian_inbox_dir || payload.obsidianInboxDir || $env.OBSIDIAN_INBOX_DIR || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor',\n    use_speaker_recognition: Boolean(payload.use_speaker_recognition ?? payload.useSpeakerRecognition),\n    download_url: String(payload.download_url || '').trim(),\n    extra_tags: extraTags,\n    ...(Number.isFinite(pollIntervalMs) && pollIntervalMs > 0 ? { poll_interval_ms: pollIntervalMs } : {}),\n    ...(Number.isFinite(maxPolls) && maxPolls > 0 ? { max_polls: maxPolls } : {}),\n    original_request: {\n      headers: $json.headers ?? {},\n      params: $json.params ?? {},\n      query: $json.query ?? {}\n    },\n    original_item: payload\n  }\n};"
-      },
-      "id": "cf2eaf31-fd1d-43c8-b887-ae0ed6fe97b7",
-      "name": "Normalize Manual Media Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        780,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "value": "acb525fca8ea4dc4",
-          "mode": "list",
-          "cachedResultName": "04 Video Transcript Ingest"
-        },
-        "mode": "each",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "3287bfe2-55b5-430e-b004-4303c779da8e",
-      "name": "04 Video Transcript Ingest",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "onError": "continueRegularOutput",
-      "position": [
-        1040,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\n\nif (typeof metadata.error === 'string' && metadata.error.trim()) {\n  return {\n    json: {\n      ok: false,\n      stage: '04_video_transcript_ingest',\n      error: metadata.error.trim(),\n      should_write_to_vault: false,\n      vault_write_status: 'error',\n      vault_write: 'error',\n      debug_input: $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ok: true,\n    workflow_label: 'manual-media-submit',\n    ...metadata\n  }\n};"
-      },
-      "id": "be1b11f0-9621-4d80-bab5-6b114f1e5f46",
-      "name": "Normalize Manual Submit Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1300,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "value": "5d53f72296534f1c",
-          "mode": "list",
-          "cachedResultName": "05 Common Vault Writer"
-        },
-        "mode": "each",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "9d67c702-19d3-4aa8-9dbf-6ee0bd6dce2d",
-      "name": "05 Common Vault Writer",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        1560,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const vaultWriteStatus = String($json.vault_write_status || $json.vault_write || 'skipped').trim() || 'skipped';\nconst result = {\n  ok: $json.ok !== false,\n  stage: String($json.stage || (vaultWriteStatus === 'written' ? 'vault_write' : 'manual_media_submit')).trim() || 'manual_media_submit',\n  should_write_to_vault: Boolean($json.should_write_to_vault),\n  vault_write_status: vaultWriteStatus,\n  vault_write: vaultWriteStatus,\n  vault_path: String($json.vault_path || $json.relativeFilePath || '').trim(),\n  item_id: String($json.item_id || '').trim(),\n  title: String($json.title || '').trim(),\n  source_type: String($json.source_type || '').trim(),\n  source_name: String($json.source_name || '').trim(),\n  media_type: String($json.media_type || '').trim(),\n  canonical_url: String($json.canonical_url || '').trim(),\n  dedupe_action: String($json.dedupe_action || '').trim(),\n  status: String($json.status || '').trim()\n};\n\nif ($json.score !== null && $json.score !== undefined && $json.score !== '') {\n  result.score = $json.score;\n}\n\nconst category = String($json.category || '').trim();\nif (category) {\n  result.category = category;\n}\n\nconst summary = String($json.summary || '').trim();\nif (summary) {\n  result.summary = summary;\n}\n\nconst reason = String($json.reason || '').trim();\nif (reason) {\n  result.reason = reason;\n}\n\nconst error = String($json.error || '').trim();\nif (error) {\n  result.error = error;\n}\n\nreturn { json: result };"
-      },
-      "id": "1e920e2d-809d-49a6-8e06-0134609130d6",
-      "name": "Return Submit Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1820,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{$json}}",
-        "options": {}
-      },
-      "id": "396f64c8-f56d-4900-a5bc-31e5e9d6ee60",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        2080,
-        220
-      ]
-    }
-  ],
-  "connections": {
-    "manual-media-submit-webhook": {
-      "main": [
-        [
-          {
-            "node": "Normalize Manual Media Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize Manual Media Request": {
-      "main": [
-        [
-          {
-            "node": "04 Video Transcript Ingest",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "04 Video Transcript Ingest": {
-      "main": [
-        [
-          {
-            "node": "Normalize Manual Submit Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize Manual Submit Result": {
-      "main": [
-        [
-          {
-            "node": "05 Common Vault Writer",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "05 Common Vault Writer": {
-      "main": [
-        [
-          {
-            "node": "Return Submit Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Return Submit Result": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "staticData": null,
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "pinData": {},
-  "versionId": "447a3b2b-bb0c-4141-8855-a283915f7f17",
-  "tags": []
+    "id":  "6b8eaf7c41d2439a",
+    "name":  "06 Manual Media Submit",
+    "description":  "Webhook ingress for manual media URLs: normalize the request, reuse 04_video_transcript_ingest for transcript-aware mainline processing, write through the shared Vault writer, then run deferred 03b Qdrant commit before responding.",
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "aip/local/manual-media-submit",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "7b2efd77-8636-479a-bd65-cdc72d57ba5f",
+                      "name":  "manual-media-submit-webhook",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       260,
+                                       320
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const body = $json.body \u0026\u0026 typeof $json.body === \u0027object\u0027 \u0026\u0026 !Array.isArray($json.body) ? $json.body : {};\nconst payload = Object.keys(body).length ? body : $json;\nconst transcriptSourceUrl = String(payload.transcript_source_url || payload.url || \u0027\u0027).trim();\n\nif (!transcriptSourceUrl) {\n  throw new Error(\u0027url is required for 06_manual_media_submit\u0027);\n}\n\nconst match = transcriptSourceUrl.match(/^(https?):\\/\\/([^\\/?#]+)(\\/[^?#]*)?/i);\nif (!match) {\n  throw new Error(\u0027Invalid media URL: expected an absolute http/https URL\u0027);\n}\n\nconst host = String(match[2] || \u0027\u0027).replace(/:\\d+$/, \u0027\u0027).replace(/^www\\./i, \u0027\u0027).toLowerCase();\nconst pathname = String(match[3] || \u0027/\u0027);\nconst isYouTube = /(^|\\.)(youtube\\.com|youtu\\.be)$/.test(host);\nconst isXiaoyuzhouEpisode = host === \u0027xiaoyuzhoufm.com\u0027 \u0026\u0026 /^\\/episode\\//i.test(pathname);\nconst isBilibiliVideo = /(^|\\.)bilibili\\.com$/.test(host) \u0026\u0026 /^\\/video\\//i.test(pathname);\nconst isAudioFile = /\\.(mp3|m4a|aac|wav|ogg)(?:$|[?#])/i.test(transcriptSourceUrl);\nconst isVideoFile = /\\.(mp4|mov|m4v|webm|mkv)(?:$|[?#])/i.test(transcriptSourceUrl);\nconst supported = isYouTube || isXiaoyuzhouEpisode || isBilibiliVideo || isAudioFile || isVideoFile;\n\nif (!supported) {\n  throw new Error(\u002706_manual_media_submit only accepts media URLs such as YouTube, Xiaoyuzhou episodes, Bilibili videos, or direct audio/video files\u0027);\n}\n\nconst inferredSourceType = String(payload.source_type || \u0027\u0027).trim()\n  || (isXiaoyuzhouEpisode || isAudioFile ? \u0027podcast\u0027 : \u0027transcript\u0027);\nconst inferredMediaType = String(payload.media_type || \u0027\u0027).trim()\n  || (isXiaoyuzhouEpisode || isAudioFile ? \u0027audio\u0027 : \u0027video\u0027);\nconst defaultSourceName = isYouTube\n  ? \u0027YouTube manual submit\u0027\n  : isXiaoyuzhouEpisode\n    ? \u0027Xiaoyuzhou manual submit\u0027\n    : isBilibiliVideo\n      ? \u0027Bilibili manual submit\u0027\n      : host || \u0027manual media submit\u0027;\nconst pollIntervalMs = Number(payload.poll_interval_ms || payload.transcriptPollIntervalMs || 0);\nconst maxPolls = Number(payload.max_polls || payload.transcriptMaxPolls || 0);\nconst requestedTags = Array.isArray(payload.extra_tags)\n  ? payload.extra_tags\n  : Array.isArray(payload.tags)\n    ? payload.tags\n    : [];\nconst extraTags = [...new Set([\n  \u0027manual-submit\u0027,\n  ...requestedTags.map((tag) =\u003e String(tag).trim())\n].filter(Boolean))];\n\nreturn {\n  json: {\n    transcript_source_url: transcriptSourceUrl,\n    canonical_url: String(payload.canonical_url || transcriptSourceUrl).trim(),\n    source_name: String(payload.source_name || payload.sourceName || defaultSourceName).trim() || defaultSourceName,\n    source_type: inferredSourceType,\n    media_type: inferredMediaType,\n    title: String(payload.title || \u0027\u0027).trim(),\n    author: String(payload.author || \u0027\u0027).trim(),\n    description: String(payload.description || \u0027\u0027).trim(),\n    published_at: payload.published_at || new Date().toISOString(),\n    obsidian_inbox_dir: String(payload.obsidian_inbox_dir || payload.obsidianInboxDir || $env.OBSIDIAN_INBOX_DIR || \u002700_Inbox/AI_Information_Processor\u0027).trim() || \u002700_Inbox/AI_Information_Processor\u0027,\n    use_speaker_recognition: Boolean(payload.use_speaker_recognition ?? payload.useSpeakerRecognition),\n    download_url: String(payload.download_url || \u0027\u0027).trim(),\n    extra_tags: extraTags,\n    ...(Number.isFinite(pollIntervalMs) \u0026\u0026 pollIntervalMs \u003e 0 ? { poll_interval_ms: pollIntervalMs } : {}),\n    ...(Number.isFinite(maxPolls) \u0026\u0026 maxPolls \u003e 0 ? { max_polls: maxPolls } : {}),\n    original_request: {\n      headers: $json.headers ?? {},\n      params: $json.params ?? {},\n      query: $json.query ?? {}\n    },\n    original_item: payload\n  }\n};"
+                                     },
+                      "id":  "cf2eaf31-fd1d-43c8-b887-ae0ed6fe97b7",
+                      "name":  "Normalize Manual Media Request",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       780,
+                                       220
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "source":  "database",
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "acb525fca8ea4dc4",
+                                                            "mode":  "list",
+                                                            "cachedResultName":  "04 Video Transcript Ingest"
+                                                        },
+                                         "mode":  "each",
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "3287bfe2-55b5-430e-b004-4303c779da8e",
+                      "name":  "04 Video Transcript Ingest",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "onError":  "continueRegularOutput",
+                      "position":  [
+                                       1040,
+                                       220
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const metadata = $input.item.json \u0026\u0026 typeof $input.item.json === \u0027object\u0027 ? $input.item.json : {};\n\nif (typeof metadata.error === \u0027string\u0027 \u0026\u0026 metadata.error.trim()) {\n  return {\n    json: {\n      ok: false,\n      stage: \u002704_video_transcript_ingest\u0027,\n      error: metadata.error.trim(),\n      should_write_to_vault: false,\n      vault_write_status: \u0027error\u0027,\n      vault_write: \u0027error\u0027,\n      debug_input: $(\u0027Normalize Manual Media Request\u0027).item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ok: true,\n    workflow_label: \u0027manual-media-submit\u0027,\n    ...metadata\n  }\n};"
+                                     },
+                      "id":  "be1b11f0-9621-4d80-bab5-6b114f1e5f46",
+                      "name":  "Normalize Manual Submit Result",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1300,
+                                       220
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "source":  "database",
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "5d53f72296534f1c",
+                                                            "mode":  "list",
+                                                            "cachedResultName":  "05 Common Vault Writer"
+                                                        },
+                                         "mode":  "each",
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "9d67c702-19d3-4aa8-9dbf-6ee0bd6dce2d",
+                      "name":  "05 Common Vault Writer",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       1560,
+                                       220
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "source":  "database",
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "6c65b02be56e4ea2",
+                                                            "mode":  "list",
+                                                            "cachedResultName":  "03b Qdrant Commit"
+                                                        },
+                                         "mode":  "each",
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "c8080dca-4a6e-4525-8b92-3733544c5cf0",
+                      "name":  "03b Qdrant Commit",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       1820,
+                                       220
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const vaultWriteStatus = String($json.vault_write_status || $json.vault_write || \u0027skipped\u0027).trim() || \u0027skipped\u0027;\nconst result = {\n  ok: $json.ok !== false,\n  stage: String($json.stage || (vaultWriteStatus === \u0027written\u0027 ? \u0027vault_write\u0027 : \u0027manual_media_submit\u0027)).trim() || \u0027manual_media_submit\u0027,\n  should_write_to_vault: Boolean($json.should_write_to_vault),\n  vault_write_status: vaultWriteStatus,\n  vault_write: vaultWriteStatus,\n  qdrant_operation: String($json.qdrant_operation || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n  vault_path: String($json.vault_path || $json.relativeFilePath || \u0027\u0027).trim(),\n  item_id: String($json.item_id || \u0027\u0027).trim(),\n  title: String($json.title || \u0027\u0027).trim(),\n  source_type: String($json.source_type || \u0027\u0027).trim(),\n  source_name: String($json.source_name || \u0027\u0027).trim(),\n  media_type: String($json.media_type || \u0027\u0027).trim(),\n  canonical_url: String($json.canonical_url || \u0027\u0027).trim(),\n  dedupe_action: String($json.dedupe_action || \u0027\u0027).trim(),\n  status: String($json.status || \u0027\u0027).trim()\n};\n\nif ($json.score !== null \u0026\u0026 $json.score !== undefined \u0026\u0026 $json.score !== \u0027\u0027) {\n  result.score = $json.score;\n}\n\nconst category = String($json.category || \u0027\u0027).trim();\nif (category) {\n  result.category = category;\n}\n\nconst summary = String($json.summary || \u0027\u0027).trim();\nif (summary) {\n  result.summary = summary;\n}\n\nconst reason = String($json.reason || \u0027\u0027).trim();\nif (reason) {\n  result.reason = reason;\n}\n\nconst error = String($json.error || \u0027\u0027).trim();\nif (error) {\n  result.error = error;\n}\n\nreturn { json: result };"
+                                     },
+                      "id":  "1e920e2d-809d-49a6-8e06-0134609130d6",
+                      "name":  "Return Submit Result",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1820,
+                                       220
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "396f64c8-f56d-4900-a5bc-31e5e9d6ee60",
+                      "name":  "Respond to Webhook",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       2080,
+                                       220
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "manual-media-submit-webhook":  {
+                                                            "main":  [
+                                                                         {
+                                                                             "node":  "Normalize Manual Media Request",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                        },
+                        "Normalize Manual Media Request":  {
+                                                               "main":  [
+                                                                            {
+                                                                                "node":  "04 Video Transcript Ingest",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                           },
+                        "04 Video Transcript Ingest":  {
+                                                           "main":  [
+                                                                        {
+                                                                            "node":  "Normalize Manual Submit Result",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                       },
+                        "Normalize Manual Submit Result":  {
+                                                               "main":  [
+                                                                            {
+                                                                                "node":  "05 Common Vault Writer",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                           },
+                        "05 Common Vault Writer":  {
+                                                       "main":  [
+                                                                    {
+                                                                        "node":  "03b Qdrant Commit",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                   },
+                        "03b Qdrant Commit":  {
+                                                  "main":  [
+                                                               {
+                                                                   "node":  "Return Submit Result",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                              },
+                        "Return Submit Result":  {
+                                                     "main":  [
+                                                                  {
+                                                                      "node":  "Respond to Webhook",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                 }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "staticData":  null,
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "pinData":  {
+
+                },
+    "versionId":  "f279b8e6-d6db-4b3c-8998-358368c69ff2",
+    "tags":  [
+
+             ]
 }

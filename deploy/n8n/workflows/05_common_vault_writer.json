@@ -1,7 +1,7 @@
 {
     "id":  "5d53f72296534f1c",
     "name":  "05 Common Vault Writer",
-    "description":  "Runnable sub-workflow: accept a gate-processed NormalizedTextObject, handle skip/write internally, generate deterministic Markdown, write into /vault, and only then update Qdrant so the index cannot get ahead of Vault state.",
+    "description":  "Runnable sub-workflow: accept a policy-processed NormalizedTextObject, handle skip/write internally, generate deterministic Markdown, and return a post-write object for deferred Qdrant commit.",
     "active":  true,
     "isArchived":  false,
     "nodes":  [
@@ -118,7 +118,7 @@
                       "parameters":  {
                                          "mode":  "runOnceForEachItem",
                                          "language":  "javaScript",
-                                         "jsCode":  "const vaultPath = String($json.relativeFilePath || $json.vault_path || \u0027\u0027).trim();\nconst shouldUpsert = Boolean($json.should_upsert_qdrant)\n  \u0026\u0026 typeof $json.qdrant_upsert_endpoint === \u0027string\u0027\n  \u0026\u0026 $json.qdrant_upsert_endpoint.trim()\n  \u0026\u0026 $json.qdrant_upsert_payload\n  \u0026\u0026 Array.isArray($json.qdrant_upsert_payload.points)\n  \u0026\u0026 $json.qdrant_upsert_payload.points.length \u003e 0;\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: \u0027written\u0027,\n    vault_write: \u0027written\u0027,\n    qdrant_operation: shouldUpsert ? \u0027pending\u0027 : \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
+                                         "jsCode":  "const vaultPath = String($json.relativeFilePath || $json.vault_path || \u0027\u0027).trim();\nconst shouldUpsert = Boolean($json.should_upsert_qdrant);\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: \u0027written\u0027,\n    vault_write: \u0027written\u0027,\n    qdrant_operation: shouldUpsert ? \u0027pending\u0027 : \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
                                      },
                       "id":  "058fae12-5fd6-4e02-b0b1-4501577ff4e6",
                       "name":  "Finalize Written Result",
@@ -127,86 +127,6 @@
                       "position":  [
                                        1820,
                                        180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "conditions":  {
-                                                            "string":  [
-                                                                           {
-                                                                               "value1":  "={{String($json.qdrant_operation || \u0027\u0027)}}",
-                                                                               "operation":  "equal",
-                                                                               "value2":  "pending"
-                                                                           }
-                                                                       ]
-                                                        }
-                                     },
-                      "id":  "e8e7b49d-0a59-4967-953d-1ae2ae7865e8",
-                      "name":  "Should Upsert Qdrant?",
-                      "type":  "n8n-nodes-base.if",
-                      "typeVersion":  1,
-                      "position":  [
-                                       2080,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "method":  "PUT",
-                                         "url":  "={{$json.qdrant_upsert_endpoint}}",
-                                         "sendHeaders":  true,
-                                         "headerParameters":  {
-                                                                  "parameters":  [
-                                                                                     {
-                                                                                         "name":  "Content-Type",
-                                                                                         "value":  "application/json"
-                                                                                     }
-                                                                                 ]
-                                                              },
-                                         "sendBody":  true,
-                                         "specifyBody":  "json",
-                                         "jsonBody":  "={{ JSON.stringify($json.qdrant_upsert_payload) }}",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "45fce9c5-b492-45a5-a42a-162a95f7124f",
-                      "name":  "Qdrant Upsert",
-                      "type":  "n8n-nodes-base.httpRequest",
-                      "typeVersion":  4.2,
-                      "position":  [
-                                       2340,
-                                       120
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const original = $(\u0027Finalize Written Result\u0027).item.json || {};\nreturn {\n  json: {\n    ...original,\n    qdrant_operation: \u0027upserted\u0027,\n    qdrant_upsert_response: $json\n  }\n};"
-                                     },
-                      "id":  "a0a2d935-8c82-4f74-bab1-4b369be7a0da",
-                      "name":  "Finalize Upsert Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       2600,
-                                       120
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return {\n  json: {\n    ...$json,\n    qdrant_operation: String($json.qdrant_operation || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
-                                     },
-                      "id":  "bb29f3eb-11db-42c6-8e0e-c4162f8c2786",
-                      "name":  "Finalize Written Without Upsert",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       2340,
-                                       260
                                    ]
                   },
                   {
@@ -228,25 +148,12 @@
                       "parameters":  {
                                          "mode":  "append"
                                      },
-                      "id":  "3f6ef6a6-0db7-4f7b-af7d-eb2bf272fcd8",
-                      "name":  "Merge Written Result",
-                      "type":  "n8n-nodes-base.merge",
-                      "typeVersion":  3.2,
-                      "position":  [
-                                       2860,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "append"
-                                     },
                       "id":  "ef1a9d76-a634-4ef9-af25-aa4773ec9bda",
                       "name":  "Merge Vault Result",
                       "type":  "n8n-nodes-base.merge",
                       "typeVersion":  3.2,
                       "position":  [
-                                       3120,
+                                       2340,
                                        280
                                    ]
                   },
@@ -261,7 +168,7 @@
                       "type":  "n8n-nodes-base.code",
                       "typeVersion":  2,
                       "position":  [
-                                       3380,
+                                       2600,
                                        280
                                    ]
                   }
@@ -269,46 +176,38 @@
     "connections":  {
                         "When clicking \u0027Execute workflow\u0027":  {
                                                                            "main":  [
-                                                                                        [
-                                                                                            {
-                                                                                                "node":  "Example Gate Result",
-                                                                                                "type":  "main",
-                                                                                                "index":  0
-                                                                                            }
-                                                                                        ]
+                                                                                        {
+                                                                                            "node":  "Example Gate Result",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
                                                                                     ]
                                                                        },
                         "When Executed by Another Workflow":  {
                                                                   "main":  [
-                                                                               [
-                                                                                   {
-                                                                                       "node":  "Prepare Vault Write Context",
-                                                                                       "type":  "main",
-                                                                                       "index":  0
-                                                                                   }
-                                                                               ]
+                                                                               {
+                                                                                   "node":  "Prepare Vault Write Context",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
                                                                            ]
                                                               },
                         "Example Gate Result":  {
                                                     "main":  [
-                                                                 [
-                                                                     {
-                                                                         "node":  "Prepare Vault Write Context",
-                                                                         "type":  "main",
-                                                                         "index":  0
-                                                                     }
-                                                                 ]
+                                                                 {
+                                                                     "node":  "Prepare Vault Write Context",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
                                                              ]
                                                 },
                         "Prepare Vault Write Context":  {
                                                             "main":  [
-                                                                         [
-                                                                             {
-                                                                                 "node":  "Should Write To Vault?",
-                                                                                 "type":  "main",
-                                                                                 "index":  0
-                                                                             }
-                                                                         ]
+                                                                         {
+                                                                             "node":  "Should Write To Vault?",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
                                                                      ]
                                                         },
                         "Should Write To Vault?":  {
@@ -331,119 +230,47 @@
                                                    },
                         "Build Markdown":  {
                                                "main":  [
-                                                            [
-                                                                {
-                                                                    "node":  "Write Binary File",
-                                                                    "type":  "main",
-                                                                    "index":  0
-                                                                }
-                                                            ]
+                                                            {
+                                                                "node":  "Write Binary File",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
                                                         ]
                                            },
                         "Write Binary File":  {
                                                   "main":  [
-                                                               [
-                                                                   {
-                                                                       "node":  "Finalize Written Result",
-                                                                       "type":  "main",
-                                                                       "index":  0
-                                                                   }
-                                                               ]
-                                                           ]
-                                              },
-                        "Finalize Written Result":  {
-                                                        "main":  [
-                                                                     [
-                                                                         {
-                                                                             "node":  "Should Upsert Qdrant?",
-                                                                             "type":  "main",
-                                                                             "index":  0
-                                                                         }
-                                                                     ]
-                                                                 ]
-                                                    },
-                        "Should Upsert Qdrant?":  {
-                                                      "main":  [
-                                                                   [
-                                                                       {
-                                                                           "node":  "Qdrant Upsert",
-                                                                           "type":  "main",
-                                                                           "index":  0
-                                                                       }
-                                                                   ],
-                                                                   [
-                                                                       {
-                                                                           "node":  "Finalize Written Without Upsert",
-                                                                           "type":  "main",
-                                                                           "index":  0
-                                                                       }
-                                                                   ]
-                                                               ]
-                                                  },
-                        "Qdrant Upsert":  {
-                                              "main":  [
-                                                           [
                                                                {
-                                                                   "node":  "Finalize Upsert Result",
+                                                                   "node":  "Finalize Written Result",
                                                                    "type":  "main",
                                                                    "index":  0
                                                                }
                                                            ]
-                                                       ]
-                                          },
-                        "Finalize Upsert Result":  {
-                                                       "main":  [
-                                                                    [
-                                                                        {
-                                                                            "node":  "Merge Written Result",
-                                                                            "type":  "main",
-                                                                            "index":  0
-                                                                        }
-                                                                    ]
-                                                                ]
-                                                   },
-                        "Finalize Written Without Upsert":  {
-                                                                "main":  [
-                                                                             [
-                                                                                 {
-                                                                                     "node":  "Merge Written Result",
-                                                                                     "type":  "main",
-                                                                                     "index":  1
-                                                                                 }
-                                                                             ]
-                                                                         ]
-                                                            },
-                        "Finalize Skipped Result":  {
+                                              },
+                        "Finalize Written Result":  {
                                                         "main":  [
-                                                                     [
-                                                                         {
-                                                                             "node":  "Merge Vault Result",
-                                                                             "type":  "main",
-                                                                             "index":  1
-                                                                         }
-                                                                     ]
+                                                                     {
+                                                                         "node":  "Merge Vault Result",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
                                                                  ]
                                                     },
-                        "Merge Written Result":  {
-                                                     "main":  [
-                                                                  [
-                                                                      {
-                                                                          "node":  "Merge Vault Result",
-                                                                          "type":  "main",
-                                                                          "index":  0
-                                                                      }
-                                                                  ]
-                                                              ]
-                                                 },
+                        "Finalize Skipped Result":  {
+                                                        "main":  [
+                                                                     {
+                                                                         "node":  "Merge Vault Result",
+                                                                         "type":  "main",
+                                                                         "index":  1
+                                                                     }
+                                                                 ]
+                                                    },
                         "Merge Vault Result":  {
                                                    "main":  [
-                                                                [
-                                                                    {
-                                                                        "node":  "Return Vault Result",
-                                                                        "type":  "main",
-                                                                        "index":  0
-                                                                    }
-                                                                ]
+                                                                {
+                                                                    "node":  "Return Vault Result",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
                                                             ]
                                                }
                     },
@@ -457,7 +284,7 @@
     "pinData":  {
 
                 },
-    "versionId":  "5a53904d-ca41-4239-9187-98eabaf7a999",
+    "versionId":  "0a04e057-ecb0-46d9-8d9f-2e326573010b",
     "tags":  [
 
              ]
