@@ -1,7 +1,7 @@
 {
   "id": "918c7f6da45023eb",
   "name": "90 Local Verify Transcript Mainline",
-  "description": "Local-only webhook entrypoint that runs 04 -> 00 -> 02 -> 03 inside the live main instance without starting a second n8n process against the Windows bind-mounted SQLite database.",
+  "description": "Local-only webhook entrypoint that calls 04 as a transcript adapter and then runs the shared mainline decision path 00 -> 01a -> 03 -> 02 -> 04a inside the live main instance without writing Vault or starting a second n8n process against the Windows bind-mounted SQLite database.",
   "active": true,
   "isArchived": false,
   "nodes": [
@@ -68,11 +68,204 @@
         "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\n\nif (typeof metadata.error === 'string' && metadata.error.trim()) {\n  return {\n    json: {\n      ok: false,\n      stage: '04_video_transcript_ingest',\n      error: metadata.error.trim(),\n      error_metadata: $input.item.metadata ?? null,\n      debug_input: $('Normalize Verify Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ok: true,\n    ...metadata\n  }\n};"
       },
       "id": "40c84630-f5ba-4395-ab1a-5d04d2f24765",
-      "name": "Return Verify Result",
+      "name": "Normalize Verify Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.ok || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "ffa357a5-6005-42f4-97d3-031806f91456",
+      "name": "Should Continue To Shared Mainline?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "d4f093a8e2f74e39",
+          "mode": "list",
+          "cachedResultName": "00 Common Normalize Text Object"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "f7bfcb13-46fc-42aa-819d-49adf6b56d48",
+      "name": "00 Common Normalize Text Object",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "c1f91d1d6f5a4bb1",
+          "mode": "list",
+          "cachedResultName": "01a Rule Prefilter"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4463973d-5e20-4ffa-bdc7-35e6937c13ca",
+      "name": "01a Rule Prefilter",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.should_continue_to_qdrant || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "eed750cb-5a23-45b4-8d46-be1054be9e14",
+      "name": "Should Continue To Qdrant?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "a793499a65e344bc",
+          "mode": "list",
+          "cachedResultName": "03 Qdrant Gate"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "3615d6aa-d8e8-4955-b6f1-78b731f64f93",
+      "name": "03 Qdrant Gate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.should_continue_to_llm || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "357fbe39-6778-4f5f-9e52-a60149bb6296",
+      "name": "Should Continue To LLM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "828e50ae98c24f31",
+          "mode": "list",
+          "cachedResultName": "02 Enrich With LLM"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "3e4f47e4-fa52-44d9-9291-cf2f2f05e888",
+      "name": "02 Enrich With LLM",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2340,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "e7847c3145f4432d",
+          "mode": "list",
+          "cachedResultName": "04a Action Policy"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "a376e57a-1f2f-4a1d-8d5c-be1adcba7a9f",
+      "name": "04a Action Policy",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2600,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\n\nif (metadata.ok === false || (typeof metadata.error === 'string' && metadata.error.trim())) {\n  return { json: metadata };\n}\n\nreturn {\n  json: {\n    ok: true,\n    ...metadata\n  }\n};"
+      },
+      "id": "ccea9237-4253-4a1b-acb0-ebca9f60971b",
+      "name": "Return Verify Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
         300
       ]
     }
@@ -104,6 +297,126 @@
       "main": [
         [
           {
+            "node": "Normalize Verify Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Verify Result": {
+      "main": [
+        [
+          {
+            "node": "Should Continue To Shared Mainline?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue To Shared Mainline?": {
+      "main": [
+        [
+          {
+            "node": "00 Common Normalize Text Object",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Verify Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "00 Common Normalize Text Object": {
+      "main": [
+        [
+          {
+            "node": "01a Rule Prefilter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "01a Rule Prefilter": {
+      "main": [
+        [
+          {
+            "node": "Should Continue To Qdrant?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue To Qdrant?": {
+      "main": [
+        [
+          {
+            "node": "03 Qdrant Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Verify Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 Qdrant Gate": {
+      "main": [
+        [
+          {
+            "node": "Should Continue To LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue To LLM?": {
+      "main": [
+        [
+          {
+            "node": "02 Enrich With LLM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Verify Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 Enrich With LLM": {
+      "main": [
+        [
+          {
+            "node": "04a Action Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04a Action Policy": {
+      "main": [
+        [
+          {
             "node": "Return Verify Result",
             "type": "main",
             "index": 0
@@ -120,6 +433,6 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "a8b8eada-db70-4519-95e9-721e53da657f",
+  "versionId": "0e0c49da-c398-4a39-bc1f-0007cf7b24d2",
   "tags": []
 }

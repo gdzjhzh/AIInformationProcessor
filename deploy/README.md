@@ -96,16 +96,16 @@ docker compose up -d memos n8n qdrant redis rsshub
 - 读取 `.env` 中的 `RSS_SOURCE_URLS_JSON`
 - 拉取 RSS 条目
 - 清洗正文和元数据
-- 文本项走 `00 -> 02 -> 03`
-- 播客 / 音频项走 `04 -> 00 -> 02 -> 03`
+- 文本项直接进入共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`
+- 播客 / 音频项先走 `04` transcript adapter，再进入共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`
 - `03` 只做 Qdrant search / dedupe 判定并返回 deferred upsert payload
 - 最后统一交给 `05_common_vault_writer` 生成 Markdown + frontmatter，先写入 Obsidian Inbox，再执行 Qdrant upsert
 
 如果 `RSS_SOURCE_URLS_JSON` 为空，工作流会回退到一个默认的 `42章经` 播客 RSS 做演示。
 
-`05_common_vault_writer.json` 是共享 Vault 写入子流程。`01` 和 `06` 现在都统一调用它；`04_video_transcript_ingest` 继续保持 adapter-only，只返回主线结果，不直接写 Vault。
+`05_common_vault_writer.json` 是共享 Vault 写入子流程。`01` 和 `06` 现在都统一调用它；`04_video_transcript_ingest` 继续保持 adapter-only，只返回可交给 `00` 的 transcript ingress payload，不直接写 Vault。
 
-`06_manual_media_submit.json` 是本地手动媒体入口，只接 `YouTube / 播客 / 其他音视频 URL`，然后复用 `04 -> 00 -> 02 -> 03` 主链，再统一交给共享 `05` 写入 Vault；它不处理文章正文或通用手动笔记。默认本地 webhook 为：
+`06_manual_media_submit.json` 是本地手动媒体入口，只接 `YouTube / 播客 / 其他音视频 URL`，然后先走 `04` transcript adapter，再显式进入共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`；它不处理文章正文或通用手动笔记。默认本地 webhook 为：
 
 ```text
 POST http://localhost:5678/webhook/aip/local/manual-media-submit
@@ -202,7 +202,7 @@ docker compose --profile headless up -d browserless rsshub
 1. 先初始化 Obsidian Vault 和 Memos 管理员账号。
 2. 先做第一条主干：`RSS/YouTube/播客 -> AI 打分 -> Markdown 写入 Obsidian`。
 3. 再补 `飞书/企业微信推送`。
-4. 当前 repo 已收口成 `01/06 -> 00/04 -> 02 -> 03 -> 05`；`03` 负责 search/decide，`05` 负责 write-then-upsert，避免索引先于主库提交。
+4. 当前 repo 已收口成一条共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`；`01` 直接喂这条主链，`06` 先经过 `04` transcript adapter 再接入。`03` 负责 search/decide，`05` 负责 write-then-upsert，避免索引先于主库提交。
 5. 再接入 `im2memo -> Memos -> memo auto` 这条增强支路。
 6. 最后补 `每日复盘` 和 `订阅管理 Web 端` 等外围能力。
 ## 同步工作流到运行态

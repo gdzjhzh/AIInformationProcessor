@@ -1,7 +1,7 @@
 {
   "id": "acb525fca8ea4dc4",
   "name": "04 Video Transcript Ingest",
-  "description": "Runnable ingress workflow: submit a URL to VideoTranscriptAPI, poll task completion over HTTP nodes, reuse task.data.transcript, then pass the result through 00 -> 01a -> 03 pre-LLM dedupe, conditionally 02 -> 04a, and return the shared mainline object without writing Vault.",
+  "description": "Runnable transcript adapter: submit a media URL to VideoTranscriptAPI, poll task completion over HTTP nodes, clean the transcript payload, and return a NormalizedTextObject-compatible ingress input. This workflow does not run scoring, dedupe, action policy, or Vault writing.",
   "active": true,
   "isArchived": false,
   "nodes": [
@@ -203,7 +203,7 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const transcriptText = String($json.transcript_text || $json.calibrated_transcript || '').trim();\nif (!transcriptText) {\n  throw new Error('Resolved transcript payload is missing transcript_text');\n}\n\nconst obsidianInboxDir = String($json.obsidian_inbox_dir || $env.OBSIDIAN_INBOX_DIR || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\n\nreturn {\n  json: {\n    source_type: String($json.source_type || 'transcript').trim() || 'transcript',\n    source_name: String($json.source_name || 'video-transcript-api').trim() || 'video-transcript-api',\n    canonical_url: String($json.canonical_url || $json.transcript_source_url || '').trim(),\n    original_id: String($json.original_id || '').trim(),\n    title: String($json.title || 'untitled').trim() || 'untitled',\n    author: String($json.author || '').trim(),\n    published_at: $json.published_at || new Date().toISOString(),\n    media_type: String($json.media_type || 'video').trim() || 'video',\n    raw_html: '',\n    raw_text: transcriptText,\n    obsidian_inbox_dir: obsidianInboxDir,\n    extra_tags: ['transcript'],\n    upstream_task_id: String($json.upstream_task_id || '').trim(),\n    upstream_view_token: String($json.upstream_view_token || '').trim(),\n    upstream_summary: String($json.upstream_summary || '').trim(),\n    original_item: $json.original_item ?? $json\n  }\n};"
+        "jsCode": "const transcriptText = String($json.transcript_text || $json.calibrated_transcript || '').trim();\nif (!transcriptText) {\n  throw new Error('Resolved transcript payload is missing transcript_text');\n}\n\nconst obsidianInboxDir = String($json.obsidian_inbox_dir || $env.OBSIDIAN_INBOX_DIR || '00_Inbox/AI_Information_Processor').trim() || '00_Inbox/AI_Information_Processor';\nconst requestedTags = Array.isArray($json.extra_tags) ? $json.extra_tags : [];\nconst extraTags = [...new Set([\n  'transcript',\n  ...requestedTags.map((tag) => String(tag).trim())\n].filter(Boolean))];\n\nreturn {\n  json: {\n    source_type: String($json.source_type || 'transcript').trim() || 'transcript',\n    source_name: String($json.source_name || 'video-transcript-api').trim() || 'video-transcript-api',\n    canonical_url: String($json.canonical_url || $json.transcript_source_url || '').trim(),\n    original_id: String($json.original_id || '').trim(),\n    title: String($json.title || 'untitled').trim() || 'untitled',\n    author: String($json.author || '').trim(),\n    published_at: $json.published_at || new Date().toISOString(),\n    media_type: String($json.media_type || 'video').trim() || 'video',\n    raw_html: '',\n    raw_text: transcriptText,\n    obsidian_inbox_dir: obsidianInboxDir,\n    extra_tags: extraTags,\n    upstream_task_id: String($json.upstream_task_id || '').trim(),\n    upstream_view_token: String($json.upstream_view_token || '').trim(),\n    upstream_summary: String($json.upstream_summary || '').trim(),\n    original_item: $json.original_item ?? $json\n  }\n};"
       },
       "id": "fd48bc59-b434-4c1d-9f47-5456f1cb983f",
       "name": "Transcript Adapter",
@@ -216,174 +216,17 @@
     },
     {
       "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "value": "d4f093a8e2f74e39",
-          "mode": "list",
-          "cachedResultName": "00 Common Normalize Text Object"
-        },
-        "mode": "each",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "64d6739e-3d26-4dde-b9c9-5917a4ba5078",
-      "name": "00 Common Normalize Text Object",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        2860,
-        280
-      ]
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "value": "c1f91d1d6f5a4bb1",
-          "mode": "list",
-          "cachedResultName": "01a Rule Prefilter"
-        },
-        "mode": "each",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "e3ab758e-845a-4748-bc00-cedb374d2ec8",
-      "name": "01a Rule Prefilter",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        3120,
-        280
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{String($json.should_continue_to_qdrant || false)}}",
-              "operation": "equal",
-              "value2": "true"
-            }
-          ]
-        }
-      },
-      "id": "6ae6c4e6-418c-4ba8-a62f-b2e4ba3bdd1c",
-      "name": "Should Continue To Qdrant?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        3380,
-        280
-      ]
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "value": "a793499a65e344bc",
-          "mode": "list",
-          "cachedResultName": "03 Qdrant Gate"
-        },
-        "mode": "each",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "df6066ab-e77b-4f27-8b0d-1280a1b30f5f",
-      "name": "03 Qdrant Gate",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        3640,
-        280
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{String($json.should_continue_to_llm || false)}}",
-              "operation": "equal",
-              "value2": "true"
-            }
-          ]
-        }
-      },
-      "id": "060b68f4-8fb0-42ff-844c-2349d8b4ed85",
-      "name": "Should Continue To LLM?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        3900,
-        280
-      ]
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "value": "828e50ae98c24f31",
-          "mode": "list",
-          "cachedResultName": "02 Enrich With LLM"
-        },
-        "mode": "each",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "9bd0f58b-3c2d-4672-af66-84d3c9d8fd29",
-      "name": "02 Enrich With LLM",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        3640,
-        460
-      ]
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "value": "e7847c3145f4432d",
-          "mode": "list",
-          "cachedResultName": "04a Action Policy"
-        },
-        "mode": "each",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "448d2841-9ff4-4adb-95a0-8b75729ba8c1",
-      "name": "04a Action Policy",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        3900,
-        460
-      ]
-    },
-    {
-      "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
         "jsCode": "return { json: { ...$json } };"
       },
       "id": "45984f85-a527-476f-a718-73241e9521e7",
-      "name": "Return Mainline Result",
+      "name": "Return Adapter Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4160,
-        280
+        2860,
+        380
       ]
     }
   ],
@@ -520,98 +363,7 @@
       "main": [
         [
           {
-            "node": "00 Common Normalize Text Object",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "00 Common Normalize Text Object": {
-      "main": [
-        [
-          {
-            "node": "01a Rule Prefilter",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "01a Rule Prefilter": {
-      "main": [
-        [
-          {
-            "node": "Should Continue To Qdrant?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Should Continue To Qdrant?": {
-      "main": [
-        [
-          {
-            "node": "03 Qdrant Gate",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Return Mainline Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "03 Qdrant Gate": {
-      "main": [
-        [
-          {
-            "node": "Should Continue To LLM?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Should Continue To LLM?": {
-      "main": [
-        [
-          {
-            "node": "02 Enrich With LLM",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Return Mainline Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "02 Enrich With LLM": {
-      "main": [
-        [
-          {
-            "node": "04a Action Policy",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "04a Action Policy": {
-      "main": [
-        [
-          {
-            "node": "Return Mainline Result",
+            "node": "Return Adapter Result",
             "type": "main",
             "index": 0
           }
@@ -627,6 +379,6 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "79be7b1e-19b4-437e-adb7-409c90f1b8a5",
+  "versionId": "b3eade1f-d435-468d-986e-919505566c15",
   "tags": []
 }
