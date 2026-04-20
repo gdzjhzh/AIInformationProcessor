@@ -1,6 +1,6 @@
 # 给本地 AI 的项目上下文采集任务
 
-> 用途：把这份文件交给本地 AI / 本地编程助手，让它在你的项目本地工作区中生成一份可发给 GPT Pro 的事实上下文包。  
+> 用途：把这份文件交给本地 AI / 本地编程助手，让它在你的项目本地工作区中生成一份可发给 GPT Pro 的事实上下文包。
 > 目标：让我后续基于**真实 repo、本地未提交改动、n8n runtime、Docker 状态、Qdrant 状态、测试结果**来判断项目架构，而不是靠猜测。
 
 ---
@@ -1132,4 +1132,3 @@ zip -r ai_context_pack_generated.zip ai_context_pack_generated
 [ ] 已生成 13_FINAL_CONTEXT_FOR_GPT_PRO.md
 [ ] 已提醒用户发送前二次检查敏感信息
 ```
-
