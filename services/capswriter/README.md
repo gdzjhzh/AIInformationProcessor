@@ -4,7 +4,7 @@ CapsWriter 的仓库内正式位置放在 `services/capswriter/`。
 
 这里跟踪的是：
 - Windows Service 的安装脚本和配置模板
-- 后续如果要把本地 vendored runtime 收进统一目录，可放到 `runtime/`
+- 本机实际使用的 runtime canonical 位置约定为 `runtime/`
 
 这里不跟踪的是：
 - `WinSW` 包装器二进制 `CapsWriterService.exe`
@@ -14,11 +14,20 @@ CapsWriter 的仓库内正式位置放在 `services/capswriter/`。
 
 ## 当前状态
 
-当前这台机器上已经安装成功的 Windows Service，最初是从旧路径
-`backups/vendor/capswriter/service/`
-注册进去的。
+当前仓库内的正式 Windows Service 资产已经位于：
 
-这次迁移先做“仓库内规范化”，不直接改动已运行的服务实例，避免把当前可用状态打断。
+- `services/capswriter/windows-service/`
+- `services/capswriter/runtime/CapsWriter-Offline`
+
+当前这台机器上的 `CapsWriterService` 已经重装并切到新的 canonical 路径：
+
+- `services/capswriter/runtime/CapsWriter-Offline`
+
+迁移完成后：
+
+- `services/capswriter/runtime/CapsWriter-Offline` 是唯一的 canonical runtime
+- 旧的 `backups/vendor/capswriter/*` 只属于迁移前遗留，不再作为当前运行依赖
+- 本机上的旧 `backups/vendor/capswriter` 可以删除，避免继续堆放重复模型和下载包
 
 如果要把已安装服务正式切换到新的 canonical 路径，请用管理员 PowerShell 运行：
 
@@ -30,6 +39,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\code\AIInformationProcess
 
 - `windows-service/`: 跟 Windows Service 相关的可追踪资产
 - `runtime/`: 本机下载或手动放置的 CapsWriter runtime，默认不进 Git
+- `runtime/downloads-archive/`: 本机保留的原始下载包归档，默认不进 Git
 
 ## Runtime 查找顺序
 
@@ -39,4 +49,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\code\AIInformationProcess
 2. `services/capswriter/runtime/CapsWriter-Offline`
 3. `backups/vendor/capswriter/app/CapsWriter-Offline`
 
-这样做是为了允许仓库结构先统一，同时兼容当前已经跑起来的老路径。
+第 3 条只保留为兼容旧机器或旧会话的迁移回退路径；当前这台机器已经完成切换，应优先维护第 1/2 条。
