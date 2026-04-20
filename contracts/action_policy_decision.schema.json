@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiinformationprocessor.local/contracts/action_policy_decision.schema.json",
+  "title": "ActionPolicyDecision",
+  "description": "Deterministic post-LLM action decision fragment emitted by 04a_action_policy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tags",
+    "should_write_to_vault",
+    "should_notify",
+    "should_upsert_qdrant",
+    "notification_mode",
+    "status",
+    "qdrant_operation",
+    "qdrant_upsert_response"
+  ],
+  "properties": {
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "should_write_to_vault": {
+      "type": "boolean"
+    },
+    "should_notify": {
+      "type": "boolean"
+    },
+    "should_upsert_qdrant": {
+      "type": "boolean"
+    },
+    "notification_mode": {
+      "type": "string",
+      "enum": [
+        "full",
+        "incremental",
+        "silent"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "enriched",
+        "deduped"
+      ]
+    },
+    "qdrant_operation": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "skipped"
+      ]
+    },
+    "qdrant_upsert_response": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}

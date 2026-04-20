@@ -251,7 +251,13 @@ python deploy/n8n/scripts/publish_runtime.py --run-verify-transcript
 - `contracts/examples/rss.normalized.json`
 - `contracts/examples/transcript.normalized.json`
 - `contracts/examples/manual.normalized.json`
+- `contracts/llm_score.schema.json`
+- `contracts/dedupe_decision.schema.json`
+- `contracts/action_policy_decision.schema.json`
+- `contracts/writer_result.schema.json`
 - `contracts/validate_contract.py`
+
+其中 `*.normalized.json` 只表示 Stage 0 / ingress 基线对象；LLM 打分、去重决策、动作决策、写入结果应分别走自己的 contract，而不是继续塞回 `NormalizedTextObject`。
 
 运行方式：
 

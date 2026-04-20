@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiinformationprocessor.local/contracts/dedupe_decision.schema.json",
+  "title": "DedupeDecision",
+  "description": "Pre-LLM dedupe decision fragment emitted by 03_qdrant_gate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "dedupe_action",
+    "notification_mode",
+    "should_continue_to_llm",
+    "should_write_to_vault",
+    "should_notify",
+    "should_upsert_qdrant",
+    "matched_payload",
+    "matched_score",
+    "matched_same_item",
+    "matched_same_content",
+    "status",
+    "qdrant_operation",
+    "qdrant_upsert_response"
+  ],
+  "properties": {
+    "dedupe_action": {
+      "type": "string",
+      "enum": [
+        "full_push",
+        "diff_push",
+        "silent"
+      ]
+    },
+    "notification_mode": {
+      "type": "string",
+      "enum": [
+        "full",
+        "incremental",
+        "silent"
+      ]
+    },
+    "should_continue_to_llm": {
+      "type": "boolean"
+    },
+    "should_write_to_vault": {
+      "type": "boolean"
+    },
+    "should_notify": {
+      "type": "boolean"
+    },
+    "should_upsert_qdrant": {
+      "type": "boolean"
+    },
+    "matched_payload": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "matched_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "matched_same_item": {
+      "type": "boolean"
+    },
+    "matched_same_content": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "raw",
+        "deduped"
+      ]
+    },
+    "qdrant_operation": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "skipped"
+      ]
+    },
+    "qdrant_upsert_response": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}

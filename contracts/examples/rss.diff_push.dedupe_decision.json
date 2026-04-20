@@ -1,0 +1,20 @@
+{
+  "dedupe_action": "diff_push",
+  "notification_mode": "incremental",
+  "should_continue_to_llm": true,
+  "should_write_to_vault": true,
+  "should_notify": true,
+  "should_upsert_qdrant": true,
+  "matched_payload": {
+    "item_id": "70db29a9387c457e2810c850f9094a8cf5c0e1d52b5c9e22e12c3de06fc17e18",
+    "title": "Example model release note",
+    "canonical_url": "https://openai.com/index/example-model-release/",
+    "content_hash": "sha256:8d893f1f369ba2ae53ebf339faabf7e2df4da3d14cc6d7c1811f0e4d262e7497"
+  },
+  "matched_score": 0.9124,
+  "matched_same_item": true,
+  "matched_same_content": false,
+  "status": "raw",
+  "qdrant_operation": "pending",
+  "qdrant_upsert_response": null
+}

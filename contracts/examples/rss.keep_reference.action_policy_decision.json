@@ -1,0 +1,15 @@
+{
+  "tags": [
+    "inbox",
+    "ai-information-processor",
+    "structured-score",
+    "rss"
+  ],
+  "should_write_to_vault": true,
+  "should_notify": false,
+  "should_upsert_qdrant": true,
+  "notification_mode": "silent",
+  "status": "enriched",
+  "qdrant_operation": "pending",
+  "qdrant_upsert_response": null
+}

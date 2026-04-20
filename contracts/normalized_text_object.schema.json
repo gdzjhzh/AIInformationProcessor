@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aiinformationprocessor.local/contracts/normalized_text_object.schema.json",
   "title": "NormalizedTextObject",
-  "description": "Machine-readable contract for the shared object emitted by 00_common_normalize_text_object and consumed by the mainline workflows.",
+  "description": "Machine-readable contract for the shared Stage-0 ingress baseline emitted by 00_common_normalize_text_object before enrichment, dedupe, and write-time fragments are attached.",
   "type": "object",
   "additionalProperties": false,
   "x-forbiddenProperties": [
@@ -18,8 +18,7 @@
     "raw_text": "content_text",
     "raw_html": "content_html",
     "transcript_text": "content_text",
-    "calibrated_transcript": "content_text",
-    "action": "dedupe_action"
+    "calibrated_transcript": "content_text"
   },
   "required": [
     "item_id",
@@ -39,12 +38,7 @@
     "upstream_view_token",
     "upstream_summary",
     "content_hash",
-    "score",
-    "category",
     "tags",
-    "dedupe_action",
-    "status",
-    "vault_path",
     "obsidianInboxDir"
   ],
   "properties": {
@@ -109,310 +103,19 @@
     },
     "content_hash": {
       "type": "string",
-      "minLength": 1
-    },
-    "score": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 1
-    },
-    "score_scale": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "category": {
-      "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "^sha256:"
     },
     "tags": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "string",
         "minLength": 1
       },
       "uniqueItems": true
     },
-    "dedupe_action": {
-      "type": "string",
-      "enum": [
-        "full_push",
-        "diff_push",
-        "silent"
-      ]
-    },
-    "status": {
-      "type": "string",
-      "enum": [
-        "raw",
-        "enriched",
-        "deduped"
-      ]
-    },
-    "vault_path": {
-      "type": "string"
-    },
     "obsidianInboxDir": {
-      "type": "string",
-      "minLength": 1
-    },
-    "summary": {
-      "type": "string",
-      "minLength": 1
-    },
-    "reason": {
-      "type": "string",
-      "minLength": 1
-    },
-    "ai_score": {
-      "type": "object",
-      "required": [
-        "keep_score",
-        "notify_score",
-        "reference_score",
-        "action_score",
-        "confidence",
-        "decision_hint"
-      ],
-      "properties": {
-        "keep_score": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "notify_score": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "reference_score": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "action_score": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "decision_hint": {
-          "type": "string",
-          "enum": [
-            "keep_full",
-            "keep_reference",
-            "review",
-            "skip"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "score_dimensions": {
-      "type": "object",
-      "required": [
-        "personal_relevance",
-        "information_density",
-        "novelty",
-        "actionability",
-        "long_term_value",
-        "source_quality",
-        "penalty"
-      ],
-      "properties": {
-        "personal_relevance": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 25
-        },
-        "information_density": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 20
-        },
-        "novelty": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 20
-        },
-        "actionability": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 15
-        },
-        "long_term_value": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 15
-        },
-        "source_quality": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 5
-        },
-        "penalty": {
-          "type": "integer",
-          "minimum": -20,
-          "maximum": 0
-        }
-      },
-      "additionalProperties": false
-    },
-    "ai_meta": {
-      "type": "object",
-      "required": [
-        "model_profile",
-        "provider",
-        "model",
-        "prompt_version",
-        "rubric_version",
-        "input_chars",
-        "scored_at"
-      ],
-      "properties": {
-        "model_profile": {
-          "type": "string",
-          "minLength": 1
-        },
-        "provider": {
-          "type": "string",
-          "minLength": 1
-        },
-        "model": {
-          "type": "string",
-          "minLength": 1
-        },
-        "prompt_version": {
-          "type": "string",
-          "minLength": 1
-        },
-        "rubric_version": {
-          "type": "string",
-          "minLength": 1
-        },
-        "input_chars": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "scored_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "additionalProperties": false
-    },
-    "enriched_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "notification_mode": {
-      "type": "string",
-      "enum": [
-        "full",
-        "incremental",
-        "silent"
-      ]
-    },
-    "should_write_to_vault": {
-      "type": "boolean"
-    },
-    "should_notify": {
-      "type": "boolean"
-    },
-    "should_upsert_qdrant": {
-      "type": "boolean"
-    },
-    "matched_score": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 1
-    },
-    "matched_same_item": {
-      "type": "boolean"
-    },
-    "matched_same_content": {
-      "type": "boolean"
-    },
-    "matched_payload": {
-      "type": "object"
-    },
-    "qdrant_point_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "qdrant_upsert_endpoint": {
-      "type": "string",
-      "minLength": 1
-    },
-    "qdrant_upsert_payload": {
-      "type": "object",
-      "required": [
-        "points"
-      ],
-      "properties": {
-        "points": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "vector",
-              "payload"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "vector": {
-                "type": "array",
-                "minItems": 1,
-                "items": {
-                  "type": "number"
-                }
-              },
-              "payload": {
-                "type": "object"
-              }
-            },
-            "additionalProperties": true
-          }
-        }
-      },
-      "additionalProperties": true
-    },
-    "qdrant_operation": {
-      "type": "string",
-      "enum": [
-        "pending",
-        "upserted",
-        "skipped"
-      ]
-    },
-    "qdrant_upsert_response": {},
-    "vault_write_status": {
-      "type": "string",
-      "enum": [
-        "pending",
-        "written",
-        "skipped",
-        "error"
-      ]
-    },
-    "vault_write": {
-      "type": "string",
-      "enum": [
-        "pending",
-        "written",
-        "skipped",
-        "error"
-      ]
-    },
-    "workflow_label": {
       "type": "string",
       "minLength": 1
     },

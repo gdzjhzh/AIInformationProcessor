@@ -16,8 +16,6 @@
   "upstream_view_token": "vt_example_token_001",
   "upstream_summary": "",
   "content_hash": "sha256:83455d61bba5f32910e1749cb3238f79ea3f8182e7682e4fd4dc647564f03f79",
-  "score": 0,
-  "category": "pending",
   "tags": [
     "inbox",
     "ai-information-processor",
@@ -25,9 +23,6 @@
     "video-transcript-api",
     "transcript"
   ],
-  "dedupe_action": "full_push",
-  "status": "raw",
-  "vault_path": "",
   "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
   "original_item": {
     "request": {

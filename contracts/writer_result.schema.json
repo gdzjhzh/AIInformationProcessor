@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiinformationprocessor.local/contracts/writer_result.schema.json",
+  "title": "WriterResult",
+  "description": "Vault writer result fragment emitted by 05_common_vault_writer before Qdrant commit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "vault_path",
+    "vault_write_status",
+    "vault_write",
+    "qdrant_operation",
+    "qdrant_upsert_response"
+  ],
+  "properties": {
+    "vault_path": {
+      "type": "string"
+    },
+    "vault_write_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "written",
+        "skipped",
+        "error"
+      ]
+    },
+    "vault_write": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "written",
+        "skipped",
+        "error"
+      ]
+    },
+    "qdrant_operation": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "skipped"
+      ]
+    },
+    "qdrant_upsert_response": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "obsidianInboxDir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow_label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fileBaseName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "relativeFilePath": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

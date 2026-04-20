@@ -1,0 +1,11 @@
+{
+  "vault_path": "00_Inbox/AI_Information_Processor/2026-04-20_rss_c9f1234e2d_structured-scoring-example.md",
+  "vault_write_status": "written",
+  "vault_write": "written",
+  "qdrant_operation": "pending",
+  "qdrant_upsert_response": null,
+  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "workflow_label": "ai-information-processor-mainline",
+  "fileBaseName": "2026-04-20_rss_c9f1234e2d_structured-scoring-example",
+  "relativeFilePath": "00_Inbox/AI_Information_Processor/2026-04-20_rss_c9f1234e2d_structured-scoring-example.md"
+}

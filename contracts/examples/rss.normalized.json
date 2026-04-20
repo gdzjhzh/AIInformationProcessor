@@ -16,8 +16,6 @@
   "upstream_view_token": "",
   "upstream_summary": "",
   "content_hash": "sha256:8d893f1f369ba2ae53ebf339faabf7e2df4da3d14cc6d7c1811f0e4d262e7497",
-  "score": 0,
-  "category": "pending",
   "tags": [
     "inbox",
     "ai-information-processor",
@@ -25,9 +23,6 @@
     "openai-blog",
     "rss"
   ],
-  "dedupe_action": "full_push",
-  "status": "raw",
-  "vault_path": "",
   "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
   "original_item": {
     "feed_url": "https://openai.com/news/rss.xml",

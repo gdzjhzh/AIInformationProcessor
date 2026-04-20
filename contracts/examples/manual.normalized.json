@@ -16,8 +16,6 @@
   "upstream_view_token": "vt_example_token_manual_001",
   "upstream_summary": "",
   "content_hash": "sha256:8b52f5af73055f8297f9268caef1dfe8e629c7e081474808475dd07117c37c81",
-  "score": 0,
-  "category": "pending",
   "tags": [
     "inbox",
     "ai-information-processor",
@@ -26,9 +24,6 @@
     "podcast",
     "manual-submit"
   ],
-  "dedupe_action": "full_push",
-  "status": "raw",
-  "vault_path": "",
   "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
   "original_item": {
     "source": "manual-media-submit",
