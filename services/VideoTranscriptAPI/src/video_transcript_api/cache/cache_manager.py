@@ -453,7 +453,8 @@ class CacheManager:
                 # 读取转录文件
                 transcript_funasr = file_path / "transcript_funasr.json"
                 transcript_capswriter = file_path / "transcript_capswriter.txt"
-                
+                transcript_capswriter_json = file_path / "transcript_capswriter.json"
+
                 if transcript_funasr.exists():
                     with open(transcript_funasr, 'r', encoding='utf-8') as f:
                         cache_data['transcript_data'] = json.load(f)
@@ -462,6 +463,9 @@ class CacheManager:
                     with open(transcript_capswriter, 'r', encoding='utf-8') as f:
                         cache_data['transcript_data'] = f.read()
                     cache_data['transcript_type'] = 'capswriter'
+                    if transcript_capswriter_json.exists():
+                        with open(transcript_capswriter_json, 'r', encoding='utf-8') as f:
+                            cache_data['transcription_data'] = json.load(f)
                 else:
                     logger.warning(f"未找到转录文件: {file_path}")
                     # 删除数据库记录

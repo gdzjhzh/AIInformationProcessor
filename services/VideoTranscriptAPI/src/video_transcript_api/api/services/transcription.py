@@ -448,6 +448,7 @@ def process_transcription(
                 logger.info("使用 FunASR 缓存，包含说话人信息")
             else:
                 transcript = cache_data["transcript_data"]
+                transcription_data = cache_data.get("transcription_data")
                 logger.info("使用 CapsWriter 缓存文本")
 
             has_llm_calibrated = "llm_calibrated" in cache_data
@@ -583,6 +584,7 @@ def process_transcription(
                         "transcript": transcript,
                         "cached": True,
                         "speaker_recognition": has_speaker_recognition,
+                        "transcription_data": transcription_data,
                     },
                 }
 
@@ -610,9 +612,7 @@ def process_transcription(
                         "description": description,
                         "transcript": transcript,
                         "use_speaker_recognition": has_speaker_recognition,
-                        "transcription_data": transcription_data
-                        if has_speaker_recognition
-                        else None,
+                        "transcription_data": transcription_data,
                         "is_generic": is_generic_downloader or is_from_generic,
                         "wechat_webhook": wechat_webhook,
                         "perf_tracker": tracker,
@@ -634,6 +634,7 @@ def process_transcription(
                     "transcript": transcript,
                     "cached": True,
                     "speaker_recognition": has_speaker_recognition,
+                    "transcription_data": transcription_data,
                 },
             }
         else:
@@ -890,6 +891,10 @@ def process_transcription(
                                     local_file, temp_output_base
                                 )
                                 transcript = transcription_result.get("transcript", "")
+                                transcription_data = (
+                                    transcription_result.get("transcription_data")
+                                    or transcription_result.get("funasr_json_data")
+                                )
 
                                 cache_result = cache_manager.save_cache(
                                     platform=platform,
@@ -901,6 +906,7 @@ def process_transcription(
                                     title=video_title,
                                     author=author,
                                     description=description,
+                                    extra_json_data=transcription_data,
                                 )
 
                         if not cache_result:
@@ -930,11 +936,7 @@ def process_transcription(
                                     "description": description,
                                     "transcript": transcript,
                                     "use_speaker_recognition": use_speaker_recognition,
-                                    "transcription_data": transcription_result.get(
-                                        "transcription_data"
-                                    )
-                                    if use_speaker_recognition
-                                    else None,
+                                    "transcription_data": transcription_data,
                                     "is_generic": False,
                                     "wechat_webhook": wechat_webhook,
                                     "perf_tracker": tracker,
@@ -964,6 +966,7 @@ def process_transcription(
                                 "author": author,
                                 "transcript": transcript,
                                 "speaker_recognition": use_speaker_recognition,
+                                "transcription_data": transcription_data,
                             },
                         }
 
@@ -1266,6 +1269,10 @@ def process_transcription(
                                 local_file, temp_output_base
                             )
                             transcript = transcription_result.get("transcript", "")
+                            transcription_data = (
+                                transcription_result.get("transcription_data")
+                                or transcription_result.get("funasr_json_data")
+                            )
 
                             # 使用新缓存系统保存
                             cache_result = cache_manager.save_cache(
@@ -1278,6 +1285,7 @@ def process_transcription(
                                 title=video_title,
                                 author=author,
                                 description=description,
+                                extra_json_data=transcription_data,
                             )
 
                             if not cache_result:
@@ -1312,8 +1320,7 @@ def process_transcription(
                                 "transcription_data": transcription_result.get(
                                     "transcription_data"
                                 )
-                                if use_speaker_recognition
-                                else None,
+                                or transcription_result.get("funasr_json_data"),
                                 "is_generic": is_generic_downloader or is_from_generic,
                                 "wechat_webhook": wechat_webhook,
                                 "perf_tracker": tracker,
@@ -1335,6 +1342,10 @@ def process_transcription(
                             "author": author,
                             "transcript": transcript,
                             "speaker_recognition": use_speaker_recognition,
+                            "transcription_data": transcription_result.get(
+                                "transcription_data"
+                            )
+                            or transcription_result.get("funasr_json_data"),
                             **(download_data or {}),
                         },
                     }

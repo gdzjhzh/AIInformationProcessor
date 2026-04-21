@@ -129,6 +129,7 @@ class Transcriber:
                 result = {
                     "transcript": "",
                     "txt_path": None,
+                    "transcription_data": None,
                     "funasr_json_data": None,  # 用于存储 FunASR 兼容格式的 JSON 数据
                     "generated_files": generated_files,  # 返回生成的文件列表，供后续清理
                 }
@@ -159,6 +160,7 @@ class Transcriber:
 
                             with open(file_path_str, "r", encoding="utf-8") as f:
                                 result["funasr_json_data"] = json.load(f)
+                            result["transcription_data"] = result["funasr_json_data"]
                             logger.info(f"已读取 FunASR 兼容格式 JSON: {file_path_str}")
                         except Exception as e:
                             logger.warning(f"读取 FunASR JSON 失败: {str(e)}")
