@@ -263,9 +263,17 @@ python deploy/n8n/scripts/publish_runtime.py --run-verify-transcript
 
 ```powershell
 python contracts/validate_contract.py
+python deploy/n8n/scripts/validate_workflow_boundaries.py
 ```
 
 这层契约的 canonical 字段已经收口为 `obsidianInboxDir / content_text / content_html / dedupe_action`。像 `obsidian_inbox_dir / raw_text / raw_html / transcript_text / calibrated_transcript / action` 这类字段只允许停留在入口适配阶段，不能泄漏到 `00` 之后的主干对象里。
+
+硬规则如下：
+
+- 只有 ingress adapter 和 `00_common_normalize_text_object` 可以接触历史字段
+- `00` 之后，任何 workflow 都不允许继续新增或依赖 `raw_text / raw_html / transcript_text / calibrated_transcript / obsidian_inbox_dir / action`
+- `01_rss_to_obsidian_raw` 的 transcript 分支必须先回到 `00 Common Normalize Text Object`，不能再从 `04` 直接跳到 `05`
+- `05_common_vault_writer` 仍保留 `obsidian_inbox_dir` fallback，但它只是兼容层；如果同时收到 `obsidianInboxDir` 和 `obsidian_inbox_dir` 且两者不一致，会直接报错，要求先经过 `00` 规范化
 
 发布后建议再跑一次：
 
@@ -289,6 +297,7 @@ pre-commit run --all-files
 ```
 
 - `AIP contract guard` 会在改动 `contracts/` 或 `deploy/n8n/workflows/` 时运行 `python contracts/validate_contract.py`
+- `AIP contract guard` 还会继续运行 `python deploy/n8n/scripts/validate_workflow_boundaries.py`，检查历史字段边界和共享主链连接关系
 - `AIP qdrant smoke guard` 会在改动 workflow/runtime 相关文件时运行 `python deploy/n8n/scripts/smoke_qdrant_gate.py --no-debug-log`
 - 如需紧急跳过本地 smoke，可临时设置 `AIP_SKIP_SMOKE=1`，但这只应该用于与 runtime 无关的例外场景
 ## Transcript Debug First
