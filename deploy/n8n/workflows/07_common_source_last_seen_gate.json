@@ -1,0 +1,302 @@
+{
+  "id": "7e31c8adf5d24b70",
+  "name": "07 Common Source Last Seen Gate",
+  "description": "Runnable sub-workflow: compare a source batch against the persisted last-seen latest guid/link/published_at snapshot, write the new snapshot when the latest changes, and return either the new RSS items to process or a skip sentinel for poll_runs.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "71f4f113-fd5f-4fe3-89cc-c8d6f78be9be",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "bfcf8202-7378-43d6-a2a9-8520afc87a6a",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [\n  {\n    json: {\n      feedUrl: 'http://rsshub:1200/bilibili/user/dynamic/946974?limit=1',\n      sourceName: 'Example source',\n      sourceType: 'bilibili-dynamic',\n      routeToTranscript: false,\n      useSpeakerRecognition: false,\n      transcriptPollIntervalMs: 0,\n      transcriptMaxPolls: 0,\n      obsidianInboxDir: '00_Inbox/AI_Information_Processor',\n      rss_status: 'success',\n      rss_error: '',\n      rss_items: [\n        {\n          title: 'Example latest item',\n          guid: 'example-guid-2',\n          link: 'https://example.com/post-2',\n          isoDate: '2026-04-21T03:00:00.000Z',\n          contentSnippet: 'Example latest content.'\n        },\n        {\n          title: 'Example previous item',\n          guid: 'example-guid-1',\n          link: 'https://example.com/post-1',\n          isoDate: '2026-04-20T03:00:00.000Z',\n          contentSnippet: 'Example previous content.'\n        }\n      ]\n    }\n  }\n];"
+      },
+      "id": "1494b796-69bf-4fdf-a390-6d2ebd2d77f4",
+      "name": "Example Source Batch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const safeString = (value) => {\n  if (value === undefined || value === null) {\n    return '';\n  }\n  return String(value).trim();\n};\n\nconst toIsoIfPossible = (value) => {\n  const text = safeString(value);\n  if (!text) {\n    return '';\n  }\n  const date = new Date(text);\n  return Number.isNaN(date.getTime()) ? text : date.toISOString();\n};\n\nconst slugify = (value = '') => safeString(value)\n  .normalize('NFKD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9\\u4e00-\\u9fa5]+/g, '-')\n  .replace(/^-+|-+$/g, '')\n  .toLowerCase();\n\nconst stableId = (value = '') => {\n  let hash = 5381;\n  const text = safeString(value);\n  for (let index = 0; index < text.length; index += 1) {\n    hash = (((hash << 5) + hash) + text.charCodeAt(index)) >>> 0;\n  }\n  return hash.toString(16).padStart(8, '0');\n};\n\nconst buildLatestFingerprint = (item) => ({\n  guid: safeString(item?.guid || item?.id || item?.original_id || ''),\n  link: safeString(item?.link || item?.canonical_url || ''),\n  published_at: toIsoIfPossible(item?.isoDate || item?.pubDate || item?.published_at || ''),\n  title: safeString(item?.title || '')\n});\n\nconst sortItemsNewestFirst = (items) => {\n  const fallbackItems = Array.isArray(items) ? items : [];\n  return [...fallbackItems].sort((left, right) => {\n    const leftRaw = safeString(left?.isoDate || left?.pubDate || left?.published_at || '');\n    const rightRaw = safeString(right?.isoDate || right?.pubDate || right?.published_at || '');\n    const leftTime = leftRaw ? Date.parse(leftRaw) : Number.NaN;\n    const rightTime = rightRaw ? Date.parse(rightRaw) : Number.NaN;\n    const leftValid = Number.isFinite(leftTime);\n    const rightValid = Number.isFinite(rightTime);\n    if (leftValid && rightValid && leftTime !== rightTime) {\n      return rightTime - leftTime;\n    }\n    if (leftValid && !rightValid) {\n      return -1;\n    }\n    if (!leftValid && rightValid) {\n      return 1;\n    }\n    return 0;\n  });\n};\n\nconst sourceName = safeString($json.sourceName || $json.source_name || '');\nconst sourceType = safeString($json.sourceType || $json.source_type || 'rss') || 'rss';\nconst feedUrl = safeString($json.feedUrl || $json.feed_url || '');\nconst routeToTranscript = typeof $json.routeToTranscript === 'boolean'\n  ? $json.routeToTranscript\n  : (typeof $json.route_to_transcript === 'boolean' ? $json.route_to_transcript : null);\nconst obsidianInboxDir = safeString($json.obsidianInboxDir || $json.obsidian_inbox_dir || '00_Inbox/AI_Information_Processor') || '00_Inbox/AI_Information_Processor';\nconst sourceKey = feedUrl || `${sourceName}::${sourceType}`;\nconst sourceStateId = stableId(sourceKey || `${sourceName}:${sourceType}`);\nconst sourceSlug = slugify(sourceName || sourceType || 'source').slice(0, 40) || 'source';\nconst sourceStatePath = `/home/node/.n8n-files/source_last_seen/${sourceStateId}_${sourceSlug}.json`;\nconst rssItems = sortItemsNewestFirst($json.rss_items);\nconst currentLatest = rssItems.length ? buildLatestFingerprint(rssItems[0]) : null;\nconst sampleTitles = rssItems\n  .map((item) => safeString(item?.title || ''))\n  .filter(Boolean)\n  .slice(0, 5);\n\nreturn {\n  json: {\n    ...$json,\n    feedUrl,\n    sourceName,\n    sourceType,\n    routeToTranscript,\n    useSpeakerRecognition: Boolean($json.useSpeakerRecognition ?? $json.use_speaker_recognition),\n    transcriptPollIntervalMs: Number($json.transcriptPollIntervalMs || $json.transcript_poll_interval_ms || 0) || 0,\n    transcriptMaxPolls: Number($json.transcriptMaxPolls || $json.transcript_max_polls || 0) || 0,\n    obsidianInboxDir,\n    rss_status: safeString($json.rss_status || 'success') || 'success',\n    rss_error: safeString($json.rss_error || ''),\n    rss_items: rssItems,\n    source_key: sourceKey,\n    source_state_id: sourceStateId,\n    source_state_path: sourceStatePath,\n    source_item_count: rssItems.length,\n    source_sample_titles: sampleTitles,\n    source_current_latest: currentLatest\n  }\n};"
+      },
+      "id": "4276aa34-6f9e-4621-8507-bbc0de41c82c",
+      "name": "Prepare Source Gate Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "={{$json.source_state_path}}",
+        "dataPropertyName": "stateData"
+      },
+      "id": "9c6214c2-c21b-4798-8d20-5ba9350f0ca4",
+      "name": "Read Previous Source Last Seen",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "onError": "continueRegularOutput",
+      "position": [
+        1100,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const safeString = (value) => {\n  if (value === undefined || value === null) {\n    return '';\n  }\n  return String(value).trim();\n};\n\nconst normalizeLatest = (value) => {\n  if (!value || typeof value !== 'object') {\n    return null;\n  }\n  const publishedAt = safeString(value.published_at || value.isoDate || value.pubDate || '');\n  const date = publishedAt ? new Date(publishedAt) : null;\n  return {\n    guid: safeString(value.guid || value.id || ''),\n    link: safeString(value.link || value.canonical_url || ''),\n    published_at: publishedAt\n      ? (Number.isNaN(date?.getTime?.()) ? publishedAt : date.toISOString())\n      : '',\n    title: safeString(value.title || '')\n  };\n};\n\nconst preparedContext = (() => {\n  try {\n    return $('Prepare Source Gate Context').item.json || {};\n  } catch {\n    return {};\n  }\n})();\n\nlet previousState = null;\nlet readError = '';\nif (safeString(preparedContext.rss_status || 'success') !== 'error') {\n  if ($binary?.stateData?.data) {\n    try {\n      const raw = Buffer.from($binary.stateData.data, 'base64').toString('utf8');\n      previousState = JSON.parse(raw);\n    } catch (error) {\n      readError = `parse_failed: ${error.message}`;\n    }\n  } else if (safeString($json.error || '')) {\n    readError = safeString($json.error);\n  }\n}\n\nreturn {\n  json: {\n    ...preparedContext,\n    source_previous_state: previousState,\n    source_previous_latest: normalizeLatest(previousState?.latest),\n    source_state_read_error: readError\n  }\n};"
+      },
+      "id": "0cbf2f05-d140-4a29-8129-228152f0b0f3",
+      "name": "Parse Previous Source Last Seen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const safeString = (value) => {\n  if (value === undefined || value === null) {\n    return '';\n  }\n  return String(value).trim();\n};\n\nconst normalizeLatest = (value) => {\n  if (!value || typeof value !== 'object') {\n    return null;\n  }\n  return {\n    guid: safeString(value.guid || value.id || ''),\n    link: safeString(value.link || value.canonical_url || ''),\n    published_at: safeString(value.published_at || value.isoDate || value.pubDate || ''),\n    title: safeString(value.title || '')\n  };\n};\n\nconst latestMatches = (left, right) => {\n  const a = normalizeLatest(left);\n  const b = normalizeLatest(right);\n  if (!a || !b) {\n    return false;\n  }\n  if (a.guid && b.guid && a.guid === b.guid) {\n    return true;\n  }\n  if (a.link && b.link && a.link === b.link) {\n    return true;\n  }\n  if (a.published_at && b.published_at && a.published_at === b.published_at) {\n    if (a.title && b.title) {\n      return a.title === b.title;\n    }\n    return true;\n  }\n  return false;\n};\n\nconst previousLatest = normalizeLatest($json.source_previous_latest);\nconst currentLatest = normalizeLatest($json.source_current_latest);\nconst rssItems = Array.isArray($json.rss_items) ? $json.rss_items : [];\nconst rssStatus = safeString($json.rss_status || 'success') || 'success';\n\nlet sourceGateStatus = 'changed';\nlet shouldWriteState = false;\nlet shouldContinueToProcessing = false;\nlet newItems = [];\n\nif (rssStatus === 'error') {\n  sourceGateStatus = 'rss_error';\n} else if (!currentLatest) {\n  sourceGateStatus = 'empty';\n} else if (previousLatest && latestMatches(currentLatest, previousLatest)) {\n  sourceGateStatus = 'unchanged';\n} else {\n  const matchedPreviousIndex = previousLatest\n    ? rssItems.findIndex((item) => latestMatches(item, previousLatest))\n    : -1;\n  newItems = matchedPreviousIndex >= 0 ? rssItems.slice(0, matchedPreviousIndex) : rssItems;\n  sourceGateStatus = newItems.length > 0 ? 'changed' : 'unchanged';\n  shouldWriteState = newItems.length > 0;\n  shouldContinueToProcessing = newItems.length > 0;\n}\n\nconst newTitles = newItems\n  .map((item) => safeString(item?.title || ''))\n  .filter(Boolean)\n  .slice(0, 5);\nconst updatedAt = new Date().toISOString();\nconst statePayload = currentLatest\n  ? {\n      source_last_seen_version: 1,\n      source_key: safeString($json.source_key || ''),\n      feed_url: safeString($json.feedUrl || $json.feed_url || ''),\n      source_name: safeString($json.sourceName || $json.source_name || ''),\n      source_type: safeString($json.sourceType || $json.source_type || ''),\n      latest: currentLatest,\n      updated_at: updatedAt\n    }\n  : null;\n\nreturn {\n  json: {\n    ...$json,\n    source_previous_latest: previousLatest,\n    source_current_latest: currentLatest,\n    source_gate_status: sourceGateStatus,\n    is_new_since_last_poll: shouldContinueToProcessing,\n    should_continue_to_processing: shouldContinueToProcessing,\n    source_new_item_count: newItems.length,\n    source_new_titles: newTitles,\n    rss_items_to_process: newItems,\n    source_state_should_write: shouldWriteState,\n    source_state_payload: shouldWriteState ? statePayload : null,\n    last_seen_recorded_at: shouldWriteState ? updatedAt : safeString($json.source_previous_state?.updated_at || '')\n  }\n};"
+      },
+      "id": "321f1cd5-a7f3-4a3d-a636-272a4cdaf30b",
+      "name": "Decide Source Last Seen Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.source_state_should_write}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "2fd91058-6767-4d1b-8e82-87e73c87d644",
+      "name": "Should Persist Source Last Seen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1880,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const payload = $json.source_state_payload;\nif (!payload || typeof payload !== 'object') {\n  throw new Error('source_state_payload is required before writing source last-seen state');\n}\n\nreturn {\n  json: {\n    ...$json\n  },\n  binary: {\n    stateData: {\n      data: Buffer.from(JSON.stringify(payload, null, 2), 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: `${$json.source_state_id || 'source_last_seen'}.json`,\n      fileExtension: 'json'\n    }\n  }\n};"
+      },
+      "id": "88d51be3-99c1-4e43-bddb-899df31da13b",
+      "name": "Build Source Last Seen State File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{$json.source_state_path}}",
+        "dataPropertyName": "stateData",
+        "options": {}
+      },
+      "id": "58b4f965-177d-4d41-86db-5390ba10b7f9",
+      "name": "Write Source Last Seen State",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const safeString = (value) => {\n  if (value === undefined || value === null) {\n    return '';\n  }\n  return String(value).trim();\n};\n\nconst toIsoIfPossible = (value) => {\n  const text = safeString(value);\n  if (!text) {\n    return '';\n  }\n  const date = new Date(text);\n  return Number.isNaN(date.getTime()) ? text : date.toISOString();\n};\n\nconst flattenLatest = (prefix, value) => {\n  const latest = value && typeof value === 'object' ? value : {};\n  return {\n    [`${prefix}_guid`]: safeString(latest.guid || latest.id || ''),\n    [`${prefix}_link`]: safeString(latest.link || latest.canonical_url || ''),\n    [`${prefix}_published_at`]: toIsoIfPossible(latest.published_at || latest.isoDate || latest.pubDate || ''),\n    [`${prefix}_title`]: safeString(latest.title || '')\n  };\n};\n\nconst basePayload = {\n  feedUrl: safeString($json.feedUrl || $json.feed_url || ''),\n  sourceName: safeString($json.sourceName || $json.source_name || ''),\n  sourceType: safeString($json.sourceType || $json.source_type || 'rss') || 'rss',\n  routeToTranscript: typeof $json.routeToTranscript === 'boolean'\n    ? $json.routeToTranscript\n    : (typeof $json.route_to_transcript === 'boolean' ? $json.route_to_transcript : null),\n  useSpeakerRecognition: Boolean($json.useSpeakerRecognition ?? $json.use_speaker_recognition),\n  transcriptPollIntervalMs: Number($json.transcriptPollIntervalMs || $json.transcript_poll_interval_ms || 0) || 0,\n  transcriptMaxPolls: Number($json.transcriptMaxPolls || $json.transcript_max_polls || 0) || 0,\n  obsidianInboxDir: safeString($json.obsidianInboxDir || $json.obsidian_inbox_dir || '00_Inbox/AI_Information_Processor') || '00_Inbox/AI_Information_Processor',\n  source_key: safeString($json.source_key || ''),\n  source_state_path: safeString($json.source_state_path || ''),\n  source_gate_status: safeString($json.source_gate_status || ''),\n  is_new_since_last_poll: Boolean($json.is_new_since_last_poll),\n  source_item_count: Number($json.source_item_count || 0) || 0,\n  source_new_item_count: Number($json.source_new_item_count || 0) || 0,\n  source_sample_titles: Array.isArray($json.source_sample_titles) ? $json.source_sample_titles.slice(0, 5) : [],\n  source_new_titles: Array.isArray($json.source_new_titles) ? $json.source_new_titles.slice(0, 5) : [],\n  last_seen_recorded_at: safeString($json.last_seen_recorded_at || '')\n};\n\nObject.assign(basePayload, flattenLatest('source_previous_latest', $json.source_previous_latest));\nObject.assign(basePayload, flattenLatest('source_current_latest', $json.source_current_latest));\n\nconst rssStatus = safeString($json.rss_status || 'success') || 'success';\nif (rssStatus === 'error') {\n  return {\n    json: {\n      ok: false,\n      stage: 'rss_read',\n      error: safeString($json.rss_error || 'unknown RSS read error') || 'unknown RSS read error',\n      should_continue_to_processing: false,\n      ...basePayload\n    }\n  };\n}\n\nif (!$json.should_continue_to_processing) {\n  return {\n    json: {\n      ok: true,\n      stage: 'source_last_seen_gate',\n      skip_reason: safeString($json.source_gate_status || 'unchanged') || 'unchanged',\n      should_continue_to_processing: false,\n      ...basePayload\n    }\n  };\n}\n\nconst itemsToProcess = Array.isArray($json.rss_items_to_process) ? $json.rss_items_to_process : [];\nreturn itemsToProcess.map((item, index) => ({\n  json: {\n    ...item,\n    ok: true,\n    should_continue_to_processing: true,\n    source_new_item_index: index + 1,\n    source_new_item_total: itemsToProcess.length,\n    ...basePayload\n  }\n}));"
+      },
+      "id": "1eb69511-97a3-4f85-95b6-d0d5482fca97",
+      "name": "Expand Source Processing Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Example Source Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Source Gate Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Example Source Batch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Source Gate Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Source Gate Context": {
+      "main": [
+        [
+          {
+            "node": "Read Previous Source Last Seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Previous Source Last Seen": {
+      "main": [
+        [
+          {
+            "node": "Parse Previous Source Last Seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Previous Source Last Seen": {
+      "main": [
+        [
+          {
+            "node": "Decide Source Last Seen Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide Source Last Seen Gate": {
+      "main": [
+        [
+          {
+            "node": "Should Persist Source Last Seen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Persist Source Last Seen?": {
+      "main": [
+        [
+          {
+            "node": "Build Source Last Seen State File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Expand Source Processing Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Source Last Seen State File": {
+      "main": [
+        [
+          {
+            "node": "Write Source Last Seen State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Source Last Seen State": {
+      "main": [
+        [
+          {
+            "node": "Expand Source Processing Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "e5d36469-f6b9-4cf1-b9f2-e513e564e8a2",
+  "tags": []
+}

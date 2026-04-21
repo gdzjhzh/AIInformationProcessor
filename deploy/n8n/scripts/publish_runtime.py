@@ -7,6 +7,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,30 @@ def run_command(command: list[str], cwd: Path) -> subprocess.CompletedProcess[st
         encoding="utf-8",
         errors="replace",
     )
+
+
+def ensure_poll_run_storage_dirs(storage_root: Path, months_ahead: int = 24) -> list[str]:
+    poll_runs_root = storage_root / "poll_runs"
+    created_dirs: list[str] = []
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+
+    for offset in range(months_ahead + 1):
+        year = current_year + ((current_month - 1 + offset) // 12)
+        month = ((current_month - 1 + offset) % 12) + 1
+        target = poll_runs_root / f"{year:04d}" / f"{month:02d}"
+        if not target.exists():
+            created_dirs.append(str(target))
+        target.mkdir(parents=True, exist_ok=True)
+
+    return created_dirs
+
+
+def ensure_source_last_seen_storage_dir(storage_root: Path) -> str | None:
+    source_last_seen_root = storage_root / "source_last_seen"
+    existed = source_last_seen_root.exists()
+    source_last_seen_root.mkdir(parents=True, exist_ok=True)
+    return None if existed else str(source_last_seen_root)
 
 
 def wait_for_http(base_url: str, timeout_seconds: int, poll_interval_seconds: float) -> dict[str, Any]:
@@ -257,19 +282,40 @@ def main() -> int:
         sys.stderr.write(sync_result.stderr)
         return sync_result.returncode
 
+    storage_root = args.db_path.parent / "storage"
+    created_poll_run_dirs = ensure_poll_run_storage_dirs(storage_root)
+    step_results.append(
+        {
+            "step": "ensure_poll_run_storage_dirs",
+            "storage_root": str(storage_root),
+            "created_dirs": created_poll_run_dirs,
+            "months_ahead": 24,
+        }
+    )
+    created_source_last_seen_dir = ensure_source_last_seen_storage_dir(storage_root)
+    step_results.append(
+        {
+            "step": "ensure_source_last_seen_storage_dir",
+            "storage_root": str(storage_root),
+            "created_dir": created_source_last_seen_dir,
+        }
+    )
+
     if not args.no_restart:
         restart_command = [
             "docker",
             "compose",
             "-f",
             str(args.compose_file),
-            "restart",
+            "up",
+            "-d",
+            "--no-deps",
             args.service_name,
         ]
         restart_result = run_command(restart_command, cwd=args.compose_dir)
         step_results.append(
             {
-                "step": "restart_n8n",
+                "step": "refresh_n8n_service",
                 "command": restart_command,
                 "returncode": restart_result.returncode,
             }
@@ -279,7 +325,7 @@ def main() -> int:
                 script_name="publish_runtime.py",
                 stage="publish_runtime",
                 status="failure",
-                summary="docker compose restart failed during publish flow.",
+                summary="docker compose up failed during publish flow.",
                 details={"steps": step_results},
                 raw_output="\n".join(filter(None, [restart_result.stdout, restart_result.stderr])),
                 log_path=args.debug_log,
