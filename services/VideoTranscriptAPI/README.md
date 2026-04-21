@@ -20,6 +20,17 @@
 - **企业级功能**：SQLite + 文件系统双层缓存、多用户管理、审计日志、企业微信通知、任务历史浏览器
 - **风控系统**：敏感词检测、多策略文本脱敏、风险模型自动切换
 
+## 与 AIInformationProcessor 集成边界
+
+当这个服务作为 `AIInformationProcessor` 的 transcript backend 使用时，需要把语义边界固定住：
+
+- `VideoTranscriptAPI` 负责下载、转录、可选校对、可选 summary/cache，以及相关查看页和导出能力。
+- 它不是 canonical enrichment 或 action policy 层。
+- 服务内部的 `summary / cache / LLM` 结果，如果要回流到 `AIInformationProcessor`，只能映射到 `upstream_summary` 或 `transcript_service_meta`。
+- canonical `summary / score / ai_score / score_dimensions / category / tags / should_write_to_vault / should_notify / notification_mode / should_upsert_qdrant` 必须只由 `AIInformationProcessor` 共享主链里的 `02_enrich_with_llm` 和 `04a_action_policy` 生成。
+
+这意味着：即使本服务已经生成了 `llm_summary.txt`、summary 导出或其他辅助 LLM 结果，下游 adapter 也只能把它们当作上游上下文，不能把它们直接当成最终评分、分类、通知或写入决策。
+
 ## 外部依赖
 
 - [Tikhub API key，用于音视频解析下载。有 aff](https://user.tikhub.io/register?referral_code=YArXsaWi)

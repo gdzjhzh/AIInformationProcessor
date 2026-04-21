@@ -32,6 +32,27 @@
 - `CapsWriter` 当前服务端要求 WebSocket subprotocol `binary`
 - 仓库里的 `VideoTranscriptAPI` client 和 `/health` 检查已经按这个要求接好了
 
+## Semantic Boundary
+
+- `VideoTranscriptAPI` 不是 canonical enrichment 或 action policy 层。
+- 服务内部的 `summary / cache / LLM` 结果，如果存在，只能映射到 `upstream_summary` 或 `transcript_service_meta`。
+- canonical `summary / score / ai_score / score_dimensions / category / tags / should_write_to_vault / should_notify / notification_mode / should_upsert_qdrant` 只能由共享主链 `02_enrich_with_llm` 和 `04a_action_policy` 产生。
+- `04_video_transcript_ingest` 继续保持 adapter-only；它可以返回 transcript service 的辅助上下文，但不能直接产出 canonical enrichment 或写入/通知决策。
+
+建议适配形态：
+
+```yaml
+upstream_summary: "transcript service summary, optional"
+transcript_service_meta:
+  backend: "VideoTranscriptAPI"
+  asr_provider: "FunASR"
+  duration_seconds: 1234
+  language: "zh"
+  transcript_quality: "medium"
+  cache_hit: true
+  service_summary_present: true
+```
+
 ## First Debug Order
 
 如果 transcript 主链失败，先按下面顺序检查，不要跳步：
