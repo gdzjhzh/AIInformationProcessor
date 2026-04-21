@@ -446,7 +446,7 @@
       "main": [
         [
           {
-            "node": "05 Common Vault Writer",
+            "node": "00 Common Normalize Text Object",
             "type": "main",
             "index": 0
           }
