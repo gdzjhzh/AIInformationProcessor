@@ -10,14 +10,36 @@
   "published_at": "2026-04-18T19:00:00Z",
   "ingested_at": "2026-04-19T08:42:00Z",
   "media_type": "video",
-  "content_text": "This transcript explains why adapter-only fields must be normalized before the content enters the mainline enrichment and dedupe pipeline.",
+  "content_text": "Host：This chunk explains why the transcript adapter only handles ingress and normalization.\n\nGuest：This chunk shows how shared chunks preserve evidence anchors for later LLM and claim comparison.",
+  "chunks": [
+    {
+      "chunk_id": "t0001",
+      "start_time": "00:00:00",
+      "end_time": "00:01:12",
+      "speaker": "Host",
+      "text": "This chunk explains why the transcript adapter only handles ingress and normalization.",
+      "char_start": 0,
+      "char_end": 91,
+      "topic_hint": "adapter boundary"
+    },
+    {
+      "chunk_id": "t0002",
+      "start_time": "00:01:12",
+      "end_time": "00:02:24",
+      "speaker": "Guest",
+      "text": "This chunk shows how shared chunks preserve evidence anchors for later LLM and claim comparison.",
+      "char_start": 93,
+      "char_end": 195,
+      "topic_hint": "evidence anchors"
+    }
+  ],
   "content_html": "",
   "upstream_task_id": "task_example_001",
   "upstream_view_token": "vt_example_token_001",
   "upstream_summary": "",
   "privacy_level": "public",
   "external_llm_allowed": true,
-  "content_hash": "sha256:83455d61bba5f32910e1749cb3238f79ea3f8182e7682e4fd4dc647564f03f79",
+  "content_hash": "sha256:d88f667d64f536f5b28c1976dd98811444f353e85a29a7b41f667d0f33afcc87",
   "tags": [
     "inbox",
     "ai-information-processor",
