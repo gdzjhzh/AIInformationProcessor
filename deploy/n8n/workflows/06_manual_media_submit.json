@@ -114,9 +114,46 @@
       "name": "00 Common Normalize Text Object",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
       "position": [
         1820,
         220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\nconst error = typeof metadata.error === 'string'\n  ? metadata.error.trim()\n  : metadata.error && typeof metadata.error.message === 'string'\n    ? metadata.error.message.trim()\n    : '';\n\nif (error) {\n  const vaultWriteStatus = String(metadata.vault_write_status || metadata.vault_write || 'error').trim() || 'error';\n  return {\n    json: {\n      ...metadata,\n      ok: false,\n      stage: String(metadata.stage || '00_common_normalize_text_object').trim() || '00_common_normalize_text_object',\n      error,\n      status: 'error',\n      workflow_label: String(metadata.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit',\n      should_write_to_vault: false,\n      should_notify: false,\n      should_upsert_qdrant: false,\n      notification_mode: String(metadata.notification_mode || 'silent').trim() || 'silent',\n      vault_write_status: vaultWriteStatus,\n      vault_write: vaultWriteStatus,\n      qdrant_operation: String(metadata.qdrant_operation || 'skipped').trim() || 'skipped',\n      debug_input: metadata.debug_input ?? $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...metadata,\n    ok: metadata.ok !== false\n  }\n};"
+      },
+      "id": "c8d050d1-fa56-4702-9ae7-f653689f43ef",
+      "name": "Normalize 00 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.ok || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "f65ff5ba-1542-4722-8f47-1d358c42ee20",
+      "name": "Should Continue After 00?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        420
       ]
     },
     {
@@ -137,9 +174,46 @@
       "name": "01a Rule Prefilter",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
       "position": [
         2080,
         220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\nconst error = typeof metadata.error === 'string'\n  ? metadata.error.trim()\n  : metadata.error && typeof metadata.error.message === 'string'\n    ? metadata.error.message.trim()\n    : '';\n\nif (error) {\n  const vaultWriteStatus = String(metadata.vault_write_status || metadata.vault_write || 'error').trim() || 'error';\n  return {\n    json: {\n      ...metadata,\n      ok: false,\n      stage: String(metadata.stage || '01a_rule_prefilter').trim() || '01a_rule_prefilter',\n      error,\n      status: 'error',\n      workflow_label: String(metadata.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit',\n      should_write_to_vault: false,\n      should_notify: false,\n      should_upsert_qdrant: false,\n      notification_mode: String(metadata.notification_mode || 'silent').trim() || 'silent',\n      vault_write_status: vaultWriteStatus,\n      vault_write: vaultWriteStatus,\n      qdrant_operation: String(metadata.qdrant_operation || 'skipped').trim() || 'skipped',\n      debug_input: metadata.debug_input ?? $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...metadata,\n    ok: metadata.ok !== false\n  }\n};"
+      },
+      "id": "31d52eea-889d-45f3-b040-e6350e22d8bb",
+      "name": "Normalize 01a Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.ok || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "34f7e6a8-5295-47e0-a2c8-ff88b697b7ac",
+      "name": "Should Continue After 01a?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        520
       ]
     },
     {
@@ -181,9 +255,46 @@
       "name": "03 Qdrant Gate",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
       "position": [
         2600,
         220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\nconst error = typeof metadata.error === 'string'\n  ? metadata.error.trim()\n  : metadata.error && typeof metadata.error.message === 'string'\n    ? metadata.error.message.trim()\n    : '';\n\nif (error) {\n  const vaultWriteStatus = String(metadata.vault_write_status || metadata.vault_write || 'error').trim() || 'error';\n  return {\n    json: {\n      ...metadata,\n      ok: false,\n      stage: String(metadata.stage || '03_qdrant_gate').trim() || '03_qdrant_gate',\n      error,\n      status: 'error',\n      workflow_label: String(metadata.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit',\n      should_write_to_vault: false,\n      should_notify: false,\n      should_upsert_qdrant: false,\n      notification_mode: String(metadata.notification_mode || 'silent').trim() || 'silent',\n      vault_write_status: vaultWriteStatus,\n      vault_write: vaultWriteStatus,\n      qdrant_operation: String(metadata.qdrant_operation || 'skipped').trim() || 'skipped',\n      debug_input: metadata.debug_input ?? $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...metadata,\n    ok: metadata.ok !== false\n  }\n};"
+      },
+      "id": "ef35b949-fa0f-45a5-a1f8-590fc8f4c1e0",
+      "name": "Normalize 03 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.ok || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "9b6a1fa3-85bd-4597-9a75-1f643527f184",
+      "name": "Should Continue After 03?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        520
       ]
     },
     {
@@ -225,9 +336,46 @@
       "name": "02 Enrich With LLM",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
       "position": [
         2600,
         420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\nconst error = typeof metadata.error === 'string'\n  ? metadata.error.trim()\n  : metadata.error && typeof metadata.error.message === 'string'\n    ? metadata.error.message.trim()\n    : '';\n\nif (error) {\n  const vaultWriteStatus = String(metadata.vault_write_status || metadata.vault_write || 'error').trim() || 'error';\n  return {\n    json: {\n      ...metadata,\n      ok: false,\n      stage: String(metadata.stage || '02_enrich_with_llm').trim() || '02_enrich_with_llm',\n      error,\n      status: 'error',\n      workflow_label: String(metadata.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit',\n      should_write_to_vault: false,\n      should_notify: false,\n      should_upsert_qdrant: false,\n      notification_mode: String(metadata.notification_mode || 'silent').trim() || 'silent',\n      vault_write_status: vaultWriteStatus,\n      vault_write: vaultWriteStatus,\n      qdrant_operation: String(metadata.qdrant_operation || 'skipped').trim() || 'skipped',\n      debug_input: metadata.debug_input ?? $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...metadata,\n    ok: metadata.ok !== false\n  }\n};"
+      },
+      "id": "865eaf96-4110-4d8e-a347-8682129d2980",
+      "name": "Normalize 02 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.ok || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "3d4b3bf5-e43d-4903-a11a-fb49073cecd2",
+      "name": "Should Continue After 02?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        720
       ]
     },
     {
@@ -248,6 +396,7 @@
       "name": "04a Action Policy",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
       "position": [
         2860,
         420
@@ -257,7 +406,43 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "return {\n  json: {\n    ...$json,\n    ok: true,\n    workflow_label: 'manual-media-submit'\n  }\n};"
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\nconst error = typeof metadata.error === 'string'\n  ? metadata.error.trim()\n  : metadata.error && typeof metadata.error.message === 'string'\n    ? metadata.error.message.trim()\n    : '';\n\nif (error) {\n  const vaultWriteStatus = String(metadata.vault_write_status || metadata.vault_write || 'error').trim() || 'error';\n  return {\n    json: {\n      ...metadata,\n      ok: false,\n      stage: String(metadata.stage || '04a_action_policy').trim() || '04a_action_policy',\n      error,\n      status: 'error',\n      workflow_label: String(metadata.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit',\n      should_write_to_vault: false,\n      should_notify: false,\n      should_upsert_qdrant: false,\n      notification_mode: String(metadata.notification_mode || 'silent').trim() || 'silent',\n      vault_write_status: vaultWriteStatus,\n      vault_write: vaultWriteStatus,\n      qdrant_operation: String(metadata.qdrant_operation || 'skipped').trim() || 'skipped',\n      debug_input: metadata.debug_input ?? $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...metadata,\n    ok: metadata.ok !== false\n  }\n};"
+      },
+      "id": "2dbad580-0402-4b91-a37c-b6a6e1a830ea",
+      "name": "Normalize 04a Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.ok || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "80b4a680-3377-4ed5-9176-6db42dc887e4",
+      "name": "Should Continue After 04a?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ok: $json.ok !== false,\n    workflow_label: String($json.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit'\n  }\n};"
       },
       "id": "ed8e9ed6-9f4f-4223-a78c-c88133b11271",
       "name": "Attach Manual Workflow Label",
@@ -286,9 +471,46 @@
       "name": "05 Common Vault Writer",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
       "position": [
         3120,
         220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\nconst error = typeof metadata.error === 'string'\n  ? metadata.error.trim()\n  : metadata.error && typeof metadata.error.message === 'string'\n    ? metadata.error.message.trim()\n    : '';\n\nif (error) {\n  const vaultWriteStatus = String(metadata.vault_write_status || metadata.vault_write || 'error').trim() || 'error';\n  return {\n    json: {\n      ...metadata,\n      ok: false,\n      stage: String(metadata.stage || '05_common_vault_writer').trim() || '05_common_vault_writer',\n      error,\n      status: 'error',\n      workflow_label: String(metadata.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit',\n      should_write_to_vault: false,\n      should_notify: false,\n      should_upsert_qdrant: false,\n      notification_mode: String(metadata.notification_mode || 'silent').trim() || 'silent',\n      vault_write_status: vaultWriteStatus,\n      vault_write: vaultWriteStatus,\n      qdrant_operation: String(metadata.qdrant_operation || 'skipped').trim() || 'skipped',\n      debug_input: metadata.debug_input ?? $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...metadata,\n    ok: metadata.ok !== false\n  }\n};"
+      },
+      "id": "964b73b0-c424-4adf-ba0f-10b723e2698a",
+      "name": "Normalize 05 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.ok || false)}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "ca29f6c0-6f4e-4fc5-8e2e-e27ab89d27f6",
+      "name": "Should Continue After 05?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3380,
+        520
       ]
     },
     {
@@ -309,9 +531,25 @@
       "name": "03b Qdrant Commit",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
       "position": [
         3380,
         220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\nconst error = typeof metadata.error === 'string'\n  ? metadata.error.trim()\n  : metadata.error && typeof metadata.error.message === 'string'\n    ? metadata.error.message.trim()\n    : '';\n\nif (error) {\n  const vaultWriteStatus = String(metadata.vault_write_status || metadata.vault_write || 'error').trim() || 'error';\n  return {\n    json: {\n      ...metadata,\n      ok: false,\n      stage: String(metadata.stage || '03b_qdrant_commit').trim() || '03b_qdrant_commit',\n      error,\n      status: 'error',\n      workflow_label: String(metadata.workflow_label || 'manual-media-submit').trim() || 'manual-media-submit',\n      should_write_to_vault: false,\n      should_notify: false,\n      should_upsert_qdrant: false,\n      notification_mode: String(metadata.notification_mode || 'silent').trim() || 'silent',\n      vault_write_status: vaultWriteStatus,\n      vault_write: vaultWriteStatus,\n      qdrant_operation: String(metadata.qdrant_operation || 'skipped').trim() || 'skipped',\n      debug_input: metadata.debug_input ?? $('Normalize Manual Media Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...metadata,\n    ok: metadata.ok !== false\n  }\n};"
+      },
+      "id": "5831ad36-31e1-49fe-963c-2ad0f1a39162",
+      "name": "Normalize 03b Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        620
       ]
     },
     {
@@ -412,7 +650,36 @@
       "main": [
         [
           {
+            "node": "Normalize 00 Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize 00 Result": {
+      "main": [
+        [
+          {
+            "node": "Should Continue After 00?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue After 00?": {
+      "main": [
+        [
+          {
             "node": "01a Rule Prefilter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Submit Result",
             "type": "main",
             "index": 0
           }
@@ -423,7 +690,36 @@
       "main": [
         [
           {
+            "node": "Normalize 01a Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize 01a Result": {
+      "main": [
+        [
+          {
+            "node": "Should Continue After 01a?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue After 01a?": {
+      "main": [
+        [
+          {
             "node": "Should Continue To Qdrant?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Submit Result",
             "type": "main",
             "index": 0
           }
@@ -452,7 +748,36 @@
       "main": [
         [
           {
+            "node": "Normalize 03 Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize 03 Result": {
+      "main": [
+        [
+          {
+            "node": "Should Continue After 03?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue After 03?": {
+      "main": [
+        [
+          {
             "node": "Should Continue To LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Submit Result",
             "type": "main",
             "index": 0
           }
@@ -481,7 +806,36 @@
       "main": [
         [
           {
+            "node": "Normalize 02 Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize 02 Result": {
+      "main": [
+        [
+          {
+            "node": "Should Continue After 02?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue After 02?": {
+      "main": [
+        [
+          {
             "node": "04a Action Policy",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Submit Result",
             "type": "main",
             "index": 0
           }
@@ -492,7 +846,36 @@
       "main": [
         [
           {
+            "node": "Normalize 04a Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize 04a Result": {
+      "main": [
+        [
+          {
+            "node": "Should Continue After 04a?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue After 04a?": {
+      "main": [
+        [
+          {
             "node": "Attach Manual Workflow Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Submit Result",
             "type": "main",
             "index": 0
           }
@@ -514,7 +897,36 @@
       "main": [
         [
           {
+            "node": "Normalize 05 Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize 05 Result": {
+      "main": [
+        [
+          {
+            "node": "Should Continue After 05?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Continue After 05?": {
+      "main": [
+        [
+          {
             "node": "03b Qdrant Commit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Submit Result",
             "type": "main",
             "index": 0
           }
@@ -522,6 +934,17 @@
       ]
     },
     "03b Qdrant Commit": {
+      "main": [
+        [
+          {
+            "node": "Normalize 03b Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize 03b Result": {
       "main": [
         [
           {

@@ -119,7 +119,7 @@ def run_smoke(
     embedding_base_url = env_values.get("EMBEDDING_BASE_URL", "")
     embedding_api_key = env_values.get("EMBEDDING_API_KEY", "")
     embedding_model = env_values.get("EMBEDDING_MODEL", "")
-    embedding_input_max_chars = int(env_values.get("EMBEDDING_INPUT_MAX_CHARS", "8000") or "8000")
+    embedding_input_max_chars = int(env_values.get("EMBEDDING_INPUT_MAX_CHARS", "6000") or "6000")
     qdrant_collection = env_values.get("QDRANT_COLLECTION", "article_embeddings") or "article_embeddings"
     qdrant_vector_size = int(env_values.get("QDRANT_VECTOR_SIZE", "0") or "0")
     diff_threshold = float(env_values.get("QDRANT_DIFF_THRESHOLD", "0.85") or "0.85")

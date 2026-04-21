@@ -23,6 +23,7 @@ services:
       - "127.0.0.1:${N8N_PORT:-5678}:5678"
     volumes:
       - ./data/n8n:/home/node/.n8n
+      - ./data/n8n/storage:/home/node/.n8n-files
       - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
     environment:
       TZ: ${TZ:-America/New_York}
@@ -46,7 +47,7 @@ services:
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
-      EMBEDDING_INPUT_MAX_CHARS: ${EMBEDDING_INPUT_MAX_CHARS:-8000}
+      EMBEDDING_INPUT_MAX_CHARS: ${EMBEDDING_INPUT_MAX_CHARS:-6000}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION}
       QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE}
       QDRANT_DIFF_THRESHOLD: ${QDRANT_DIFF_THRESHOLD}
