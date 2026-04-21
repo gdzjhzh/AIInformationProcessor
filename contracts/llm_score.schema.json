@@ -22,11 +22,13 @@
     "score": {
       "type": "number",
       "minimum": 0,
-      "maximum": 1
+      "maximum": 1,
+      "description": "Compatibility normalized score. Must equal ai_score.keep_score / score_scale."
     },
     "score_scale": {
       "type": "integer",
-      "minimum": 1
+      "const": 100,
+      "description": "Canonical score scale for ai_score.keep_score. Must remain 100."
     },
     "category": {
       "type": "string",
@@ -62,7 +64,8 @@
         "keep_score": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Canonical keep score on a 0-100 scale. Top-level score must equal keep_score / score_scale."
         },
         "notify_score": {
           "type": "integer",

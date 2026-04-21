@@ -9,7 +9,7 @@
     "rss"
   ],
   "summary": "Structured scoring keeps the mainline contract compatible while making enrichment outputs auditable.",
-  "reason": "The content is directly relevant to the repo's architecture and introduces a practical scoring migration path.",
+  "reason": "The content is directly relevant to the repo's architecture, and the compatibility score is derived from keep_score / score_scale rather than emitted independently by the LLM.",
   "ai_score": {
     "keep_score": 82,
     "notify_score": 64,
