@@ -422,7 +422,7 @@
         "conditions": {
           "string": [
             {
-              "value1": "={{String($json.ok || false)}}",
+              "value1": "={{String($json.should_write_to_vault || false)}}",
               "operation": "equal",
               "value2": "true"
             }
@@ -795,7 +795,7 @@
         ],
         [
           {
-            "node": "Attach Manual Workflow Label",
+            "node": "Return Submit Result",
             "type": "main",
             "index": 0
           }

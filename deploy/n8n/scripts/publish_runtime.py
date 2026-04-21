@@ -87,6 +87,10 @@ def wait_for_http(base_url: str, timeout_seconds: int, poll_interval_seconds: fl
     raise RuntimeError(f"Timed out waiting for n8n at {base_url}: {last_error or 'no response'}")
 
 
+def docker_compose_command(compose_file: Path, *args: str) -> list[str]:
+    return ["docker", "compose", "-f", str(compose_file), *args]
+
+
 def main() -> int:
     script_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(
@@ -260,6 +264,43 @@ def main() -> int:
     for workflow_id in include_ids:
         sync_command.extend(["--workflow-id", workflow_id])
 
+    start_command = docker_compose_command(
+        args.compose_file,
+        "up",
+        "-d",
+        "--no-deps",
+        args.service_name,
+    )
+    service_stopped = False
+    if not args.no_restart:
+        stop_command = docker_compose_command(
+            args.compose_file,
+            "stop",
+            args.service_name,
+        )
+        stop_result = run_command(stop_command, cwd=args.compose_dir)
+        step_results.append(
+            {
+                "step": "stop_n8n_service",
+                "command": stop_command,
+                "returncode": stop_result.returncode,
+            }
+        )
+        if stop_result.returncode != 0:
+            append_debug_log(
+                script_name="publish_runtime.py",
+                stage="publish_runtime",
+                status="failure",
+                summary="docker compose stop failed during publish flow.",
+                details={"steps": step_results},
+                raw_output="\n".join(filter(None, [stop_result.stdout, stop_result.stderr])),
+                log_path=args.debug_log,
+            )
+            sys.stdout.write(stop_result.stdout)
+            sys.stderr.write(stop_result.stderr)
+            return stop_result.returncode
+        service_stopped = True
+
     sync_result = run_command(sync_command, cwd=args.compose_dir)
     step_results.append(
         {
@@ -269,17 +310,30 @@ def main() -> int:
         }
     )
     if sync_result.returncode != 0:
+        recovery_output: list[str] = []
+        if service_stopped:
+            recovery_result = run_command(start_command, cwd=args.compose_dir)
+            step_results.append(
+                {
+                    "step": "recover_n8n_service_after_sync_failure",
+                    "command": start_command,
+                    "returncode": recovery_result.returncode,
+                }
+            )
+            recovery_output.extend(filter(None, [recovery_result.stdout, recovery_result.stderr]))
         append_debug_log(
             script_name="publish_runtime.py",
             stage="publish_runtime",
             status="failure",
             summary="sync_workflows.py failed during publish flow.",
             details={"steps": step_results},
-            raw_output="\n".join(filter(None, [sync_result.stdout, sync_result.stderr])),
+            raw_output="\n".join(filter(None, [sync_result.stdout, sync_result.stderr, *recovery_output])),
             log_path=args.debug_log,
         )
         sys.stdout.write(sync_result.stdout)
         sys.stderr.write(sync_result.stderr)
+        for chunk in recovery_output:
+            sys.stderr.write(chunk)
         return sync_result.returncode
 
     storage_root = args.db_path.parent / "storage"
@@ -302,21 +356,11 @@ def main() -> int:
     )
 
     if not args.no_restart:
-        restart_command = [
-            "docker",
-            "compose",
-            "-f",
-            str(args.compose_file),
-            "up",
-            "-d",
-            "--no-deps",
-            args.service_name,
-        ]
-        restart_result = run_command(restart_command, cwd=args.compose_dir)
+        restart_result = run_command(start_command, cwd=args.compose_dir)
         step_results.append(
             {
-                "step": "refresh_n8n_service",
-                "command": restart_command,
+                "step": "start_n8n_service",
+                "command": start_command,
                 "returncode": restart_result.returncode,
             }
         )
@@ -384,7 +428,7 @@ def main() -> int:
             script_name="publish_runtime.py",
             stage="publish_runtime",
             status="failure",
-            summary="Runtime alignment check failed after sync/restart.",
+            summary="Runtime alignment check failed after stop/sync/start flow.",
             details={"steps": step_results},
             raw_output="\n".join(filter(None, [alignment_result.stdout, alignment_result.stderr])),
             log_path=args.debug_log,
@@ -454,7 +498,7 @@ def main() -> int:
         stage="publish_runtime",
         status="success",
         summary=(
-            "Publish flow completed: tracked repo workflows synced, runtime refreshed, "
+            "Publish flow completed: tracked repo workflows synced with n8n stopped, runtime restarted, "
             "and definition-hash alignment checked."
         ),
         details={"steps": step_results, "debug_log": args.debug_log},
