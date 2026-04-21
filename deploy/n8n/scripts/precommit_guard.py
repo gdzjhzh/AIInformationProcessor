@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[3]
 CONTRACT_SCRIPT = ROOT_DIR / "contracts" / "validate_contract.py"
 WORKFLOW_BOUNDARY_SCRIPT = Path(__file__).resolve().with_name("validate_workflow_boundaries.py")
+REGRESSION_MATRIX_SCRIPT = Path(__file__).resolve().with_name("validate_regression_matrix.py")
 SMOKE_SCRIPT = Path(__file__).resolve().with_name("smoke_qdrant_gate.py")
 DEFAULT_ENV_FILE = ROOT_DIR / "deploy" / ".env"
 DEFAULT_QDRANT_BASE_URL = "http://127.0.0.1:6333"
@@ -23,6 +24,7 @@ CONTRACT_TRIGGERS = (
     "deploy/n8n/workflows/",
     "deploy/n8n/scripts/precommit_guard.py",
     "deploy/n8n/scripts/validate_workflow_boundaries.py",
+    "deploy/n8n/scripts/validate_regression_matrix.py",
     "deploy/README.md",
     "deploy/n8n/WORKFLOW_NOTES.md",
 )
@@ -85,7 +87,10 @@ def run_contract_check(paths: list[str]) -> int:
     contract_exit = run_command([sys.executable, str(CONTRACT_SCRIPT)], label="contract")
     if contract_exit != 0:
         return contract_exit
-    return run_command([sys.executable, str(WORKFLOW_BOUNDARY_SCRIPT)], label="workflow-boundary")
+    boundary_exit = run_command([sys.executable, str(WORKFLOW_BOUNDARY_SCRIPT)], label="workflow-boundary")
+    if boundary_exit != 0:
+        return boundary_exit
+    return run_command([sys.executable, str(REGRESSION_MATRIX_SCRIPT)], label="regression-matrix")
 
 
 def run_smoke_check(paths: list[str], *, env_file: Path, qdrant_base_url: str) -> int:

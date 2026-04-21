@@ -1,0 +1,31 @@
+{
+  "item_id": "5ddda9f0a8dbb5f66acb74fdb89b23e2ab028671fb1e8fdb6f63724cb1194443",
+  "source_type": "memo",
+  "source_name": "Local Memo Capture",
+  "source_host": "local",
+  "original_id": "memo:private-example-001",
+  "canonical_url": "https://local.example.invalid/memos/private-example-001",
+  "title": "Example private item",
+  "author": "hewqb",
+  "published_at": "2026-04-20T09:00:00Z",
+  "ingested_at": "2026-04-20T09:01:00Z",
+  "media_type": "text",
+  "content_text": "This example represents a private local memo that must not be sent to any external LLM provider.",
+  "content_html": "",
+  "upstream_task_id": "",
+  "upstream_view_token": "",
+  "upstream_summary": "",
+  "privacy_level": "private",
+  "external_llm_allowed": false,
+  "content_hash": "sha256:0d10a5ec0fa6a34b6f799bc0c87275636bb0566e2a330d24bbd2b6ec50bcf69d",
+  "tags": [
+    "inbox",
+    "ai-information-processor",
+    "local",
+    "memo"
+  ],
+  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "original_item": {
+    "source": "memo"
+  }
+}

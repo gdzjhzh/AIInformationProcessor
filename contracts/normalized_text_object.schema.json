@@ -101,6 +101,20 @@
     "upstream_summary": {
       "type": "string"
     },
+    "privacy_level": {
+      "type": "string",
+      "enum": [
+        "public",
+        "semi_private",
+        "private",
+        "sensitive"
+      ],
+      "description": "Canonical privacy classification used to route external LLM access."
+    },
+    "external_llm_allowed": {
+      "type": "boolean",
+      "description": "Whether this item may be sent to an external LLM provider."
+    },
     "content_hash": {
       "type": "string",
       "minLength": 1,

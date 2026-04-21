@@ -6,7 +6,7 @@ repos:
         entry: python deploy/n8n/scripts/precommit_guard.py --check contract
         language: system
         pass_filenames: true
-        files: ^(contracts/|deploy/n8n/workflows/|deploy/n8n/scripts/(precommit_guard|validate_workflow_boundaries)\.py|deploy/README\.md|deploy/n8n/WORKFLOW_NOTES\.md)$
+        files: ^(contracts/|deploy/n8n/workflows/|deploy/n8n/scripts/(precommit_guard|validate_workflow_boundaries|validate_regression_matrix)\.py|deploy/README\.md|deploy/n8n/WORKFLOW_NOTES\.md)$
       - id: aip-smoke-guard
         name: AIP qdrant smoke guard
         entry: python deploy/n8n/scripts/precommit_guard.py --check smoke

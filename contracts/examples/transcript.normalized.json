@@ -15,6 +15,8 @@
   "upstream_task_id": "task_example_001",
   "upstream_view_token": "vt_example_token_001",
   "upstream_summary": "",
+  "privacy_level": "public",
+  "external_llm_allowed": true,
   "content_hash": "sha256:83455d61bba5f32910e1749cb3238f79ea3f8182e7682e4fd4dc647564f03f79",
   "tags": [
     "inbox",

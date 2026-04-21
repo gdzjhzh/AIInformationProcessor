@@ -308,6 +308,16 @@ def _validate_normalized_text_object_semantics(document: dict[str, Any]) -> list
             )
         )
 
+    privacy_level = str(document.get("privacy_level", "")).strip().lower()
+    external_llm_allowed = document.get("external_llm_allowed")
+    if privacy_level in {"private", "sensitive"} and external_llm_allowed is not False:
+        issues.append(
+            ValidationIssue(
+                path="$.external_llm_allowed",
+                message="private/sensitive normalized items must set external_llm_allowed=false",
+            )
+        )
+
     return issues
 
 
