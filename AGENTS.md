@@ -13,6 +13,19 @@
 
 不要在没读完这几处之前，重新花时间猜测 transcript runtime 的服务边界。
 
+如果任务涉及 `01_rss_to_obsidian_raw` 的轮询产出、订阅源是否真的抓到内容、某一轮为什么没写文件，先看：
+
+5. `deploy/data/n8n/storage/poll_runs/`
+
+这里会按 `YYYY/MM/` 落每轮轮询的 JSON 摘要。排障时优先看最新一份，确认：
+- 本轮检查了哪些订阅源
+- 哪些源 `success`
+- 哪些源 `error`
+- 每个源看到多少条 item
+- 最终写入了哪些 `vault_path`
+
+这个目录属于 runtime 排障证据，不属于 Obsidian 知识库内容。
+
 ## Transcript Runtime Boundary
 
 - `CapsWriter` 是宿主机本地服务，不在 Docker 里。

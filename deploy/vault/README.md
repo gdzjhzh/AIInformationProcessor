@@ -33,33 +33,31 @@
 - `slug` 只负责可读性，不能承担唯一性。
 - 同一条内容重复抓取时，优先更新同一路径。
 
-## Frontmatter 基线
+## 主笔记与 Sidecar
 
-```yaml
----
-title: 标题
-item_id: 6d6e2f96ab2c
-source_type: rss
-source_name: OpenAI YouTube
-canonical_url: https://example.com/post
-published_at: 2026-04-17T09:00:00-04:00
-ingested_at: 2026-04-17T09:05:00-04:00
-media_type: text
-content_hash: sha256:...
-workflow: rss-to-obsidian-raw
-score: 0
-category: pending
-tags:
-  - inbox
-  - ai-information-processor
-dedupe_action: full_push
-status: raw
----
-```
+当前主文件默认写成读者视图，不再把大段运行时 frontmatter 直接塞在标题前面。
+
+主文件建议结构：
+
+- 标题
+- 来源 / 分数 / 状态摘要
+- `一句话判断`
+- `为什么对我有用`
+- `关键观点`
+- `可沉淀 Claims`
+- `可能的行动项`
+- `关联对象`
+- `原始材料`
+
+结构化元数据不再依赖主文件 frontmatter，而是落到主笔记同级 sidecar：
+
+- `raw/...`: 原始文本或 transcript
+- `audit/...`: 评分、去重、展示字段、运行时元数据
 
 约束：
 
-- `published_at` 和 `ingested_at` 一律使用带时区的 ISO 8601。
+- 主文件优先保持中文、可读、可回看。
+- `published_at` 和 `ingested_at` 一律在 audit sidecar 中保留带时区的 ISO 8601。
 - `status` 表示对象阶段，不表示具体来源。
 - `dedupe_action` 由主干判定器写入，供后续通知和回顾复用。
 

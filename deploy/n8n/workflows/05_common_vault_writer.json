@@ -1,391 +1,379 @@
-﻿{
-    "id":  "5d53f72296534f1c",
-    "name":  "05 Common Vault Writer",
-    "description":  "Runnable sub-workflow: accept a policy-processed NormalizedTextObject, handle skip/write internally, generate deterministic Markdown, and return a post-write object for deferred Qdrant commit.",
-    "active":  true,
-    "isArchived":  false,
-    "nodes":  [
-                  {
-                      "parameters":  {
-
-                                     },
-                      "id":  "a4b7188d-b982-4ebf-bdf0-7e00fc198c3a",
-                      "name":  "When clicking \u0027Execute workflow\u0027",
-                      "type":  "n8n-nodes-base.manualTrigger",
-                      "typeVersion":  1,
-                      "position":  [
-                                       260,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "inputSource":  "passthrough"
-                                     },
-                      "id":  "3b2401ca-7c43-4ae1-a663-c697f2113ebd",
-                      "name":  "When Executed by Another Workflow",
-                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
-                      "typeVersion":  1.1,
-                      "position":  [
-                                       260,
-                                       380
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForAllItems",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return [\n  {\n    json: {\n      item_id: \u00276d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1\u0027,\n      source_type: \u0027rss\u0027,\n      source_name: \u0027OpenAI YouTube\u0027,\n      source_host: \u0027youtube.com\u0027,\n      original_id: \u0027yt:abc123\u0027,\n      canonical_url: \u0027https://example.com/post\u0027,\n      title: \u0027Example gate result\u0027,\n      author: \u0027OpenAI\u0027,\n      published_at: \u00272026-04-17T09:00:00.000Z\u0027,\n      ingested_at: \u00272026-04-17T09:05:00.000Z\u0027,\n      media_type: \u0027text\u0027,\n      content_text: \u0027Normalized plain text content for the shared vault writer smoke item.\u0027,\n      content_html: \u0027\u003cp\u003eNormalized plain text content for the shared vault writer smoke item.\u003c/p\u003e\u0027,\n      content_hash: \u0027sha256:example\u0027,\n      score: 0.82,\n      score_scale: 100,\n      category: \u0027AI Infra\u0027,\n      summary: \u0027A concise summary that should be written into a shared Obsidian note.\u0027,\n      reason: \u0027This proves the vault writer can run as a reusable sub-workflow.\u0027,\n      ai_score: {\n        keep_score: 82,\n        notify_score: 64,\n        reference_score: 88,\n        action_score: 45,\n        confidence: 0.76,\n        decision_hint: \u0027keep_reference\u0027\n      },\n      score_dimensions: {\n        personal_relevance: 22,\n        information_density: 18,\n        novelty: 16,\n        actionability: 10,\n        long_term_value: 15,\n        source_quality: 4,\n        penalty: -3\n      },\n      ai_meta: {\n        model_profile: \u0027scoring_default\u0027,\n        provider: \u0027deepseek\u0027,\n        model: \u0027deepseek-chat\u0027,\n        prompt_version: \u0027scoring_v1\u0027,\n        rubric_version: \u0027personal_info_processor_v1\u0027,\n        input_chars: 64,\n        scored_at: \u00272026-04-17T09:05:05.000Z\u0027\n      },\n      tags: [\u0027inbox\u0027, \u0027ai-information-processor\u0027, \u0027openai\u0027],\n      dedupe_action: \u0027full_push\u0027,\n      notification_mode: \u0027full\u0027,\n      should_write_to_vault: true,\n      status: \u0027enriched\u0027,\n      enriched_at: \u00272026-04-17T09:05:05.000Z\u0027,\n      obsidianInboxDir: \u002700_Inbox/AI_Information_Processor\u0027,\n      workflow_label: \u0027ai-information-processor-mainline\u0027\n    }\n  }\n];"
-                                     },
-                      "id":  "8a527e7d-f0f3-47d8-8364-6cceb5a465d9",
-                      "name":  "Example Gate Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       520,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const normalizeMultiline = (value = \u0027\u0027) =\u003e String(value ?? \u0027\u0027)\n  .replace(/\\r\\n/g, \u0027\\n\u0027)\n  .replace(/\\u0000/g, \u0027\u0027)\n  .trim();\n\nconst normalizeSingleLine = (value = \u0027\u0027) =\u003e normalizeMultiline(value)\n  .replace(/\\s+/g, \u0027 \u0027)\n  .trim();\n\nconst sanitizePathSegment = (value = \u0027\u0027, fallback = \u0027Untitled\u0027) =\u003e {\n  const normalized = normalizeSingleLine(value)\n    .normalize(\u0027NFKC\u0027)\n    .replace(/[\u003c\u003e:\"/\\\\|?*\\u0000-\\u001f]/g, \u0027 \u0027)\n    .replace(/[\\uFF0C\\u3002\\uFF01\\uFF1F\\u3001\\uFF1B\\uFF1A\u0027\"`~!@#$%^\u0026+=\\[\\]{}\\u3010\\u3011\\u300A\\u300B\\u3008\\u3009\\u300C\\u300D\\u300E\\u300F]/g, \u0027 \u0027)\n    .replace(/[()\\uFF08\\uFF09]/g, \u0027 \u0027)\n    .replace(/[\\u00B7\\u2022]/g, \u0027 \u0027)\n    .replace(/\\./g, \u0027 \u0027)\n    .replace(/\\s+/g, \u0027 \u0027)\n    .trim();\n\n  if (!normalized) {\n    return fallback;\n  }\n\n  const hasCjk = /[\\u3400-\\u9fff]/.test(normalized);\n  const separator = hasCjk ? \u0027\u0027 : \u0027-\u0027;\n  return normalized.replace(/\\s+/g, separator).replace(/^-+|-+$/g, \u0027\u0027) || fallback;\n};\n\nconst extractPrimaryName = (value = \u0027\u0027) =\u003e {\n  const normalized = normalizeSingleLine(value);\n  if (!normalized) {\n    return \u0027\u0027;\n  }\n  const parts = normalized\n    .split(/[|\\uFF5C/\\uFF0F]/)\n    .map((part) =\u003e normalizeSingleLine(part))\n    .filter(Boolean);\n  return parts[0] || normalized;\n};\n\nconst isLikelyRuntimeLabel = (value = \u0027\u0027) =\u003e {\n  const normalized = normalizeSingleLine(value).toLowerCase();\n  if (!normalized) {\n    return false;\n  }\n  return [\n    \u0027manual submit\u0027,\n    \u0027manual-media-submit\u0027,\n    \u0027manual_media_submit\u0027,\n    \u0027codex\u0027,\n    \u0027runtime\u0027,\n    \u0027rerun\u0027,\n    \u0027verify\u0027,\n    \u0027smoke\u0027,\n    \u0027webhook\u0027,\n    \u0027mainline\u0027\n  ].some((token) =\u003e normalized.includes(token));\n};\n\nconst pickSourceDisplayName = (payload) =\u003e {\n  const candidateKeys = [\n    \u0027source_display_name\u0027,\n    \u0027series_display_name\u0027,\n    \u0027collection_display_name\u0027,\n    \u0027feed_display_name\u0027,\n    \u0027channel_title\u0027,\n    \u0027feed_title\u0027\n  ];\n\n  for (const key of candidateKeys) {\n    const candidate = normalizeSingleLine(payload[key] || \u0027\u0027);\n    if (candidate) {\n      return candidate;\n    }\n  }\n\n  const sourceName = normalizeSingleLine(payload.source_name || \u0027\u0027);\n  if (sourceName \u0026\u0026 !isLikelyRuntimeLabel(sourceName)) {\n    return sourceName;\n  }\n\n  const author = normalizeSingleLine(payload.author || \u0027\u0027);\n  if (author) {\n    const sourceType = normalizeSingleLine(payload.source_type || \u0027\u0027).toLowerCase();\n    return sourceType === \u0027podcast\u0027 ? extractPrimaryName(author) : author;\n  }\n\n  if (sourceName) {\n    return sourceName;\n  }\n\n  const sourceHost = normalizeSingleLine(payload.source_host || \u0027\u0027).replace(/^www\\./i, \u0027\u0027);\n  return sourceHost || \u0027UnknownSource\u0027;\n};\n\nconst deriveContentKind = (payload) =\u003e {\n  const sourceType = normalizeSingleLine(payload.source_type || \u0027\u0027).toLowerCase();\n  const mediaType = normalizeSingleLine(payload.media_type || \u0027\u0027).toLowerCase();\n\n  if (sourceType === \u0027podcast\u0027 || mediaType === \u0027audio\u0027) {\n    return \u0027Podcast\u0027;\n  }\n  if (mediaType === \u0027video\u0027 || sourceType === \u0027video\u0027 || sourceType === \u0027transcript\u0027) {\n    return \u0027Video\u0027;\n  }\n  if (sourceType === \u0027article\u0027 || sourceType === \u0027rss\u0027 || mediaType === \u0027text\u0027) {\n    return \u0027Article\u0027;\n  }\n  return \u0027Item\u0027;\n};\n\nconst deriveSequenceParts = (payload) =\u003e {\n  const rawTitle = normalizeSingleLine(payload.title || \u0027\u0027);\n  const explicitKeys = [\u0027sequence_label\u0027, \u0027episode_no\u0027, \u0027episode_number\u0027, \u0027episode_index\u0027, \u0027issue_number\u0027];\n  let sequenceLabel = \u0027\u0027;\n\n  for (const key of explicitKeys) {\n    const candidate = normalizeSingleLine(payload[key] || \u0027\u0027);\n    if (candidate) {\n      sequenceLabel = candidate;\n      break;\n    }\n  }\n\n  let titleWithoutSequence = rawTitle;\n\n  if (!sequenceLabel \u0026\u0026 rawTitle) {\n    const match = rawTitle.match(/^((?:EP|ep|No\\.?|NO\\.?)?\\s*\\d{1,4})(?:\\s*[.\\uFF0E:\\uFF1A\\u3001-]\\s*|\\s+)(.+)$/);\n    if (match) {\n      sequenceLabel = normalizeSingleLine(match[1] || \u0027\u0027);\n      titleWithoutSequence = normalizeSingleLine(match[2] || rawTitle);\n    }\n  }\n\n  sequenceLabel = sequenceLabel.replace(/\\s+/g, \u0027\u0027).replace(/[^A-Za-z0-9-]/g, \u0027\u0027);\n  if (/^\\d+$/.test(sequenceLabel)) {\n    sequenceLabel = sequenceLabel.padStart(Math.max(sequenceLabel.length, 3), \u00270\u0027);\n  }\n\n  return {\n    sequenceLabel,\n    titleWithoutSequence: titleWithoutSequence || rawTitle\n  };\n};\n\nconst shouldWriteToVault = Boolean($json.should_write_to_vault);\nconst existingVaultPath = String($json.vault_path || \u0027\u0027).trim();\nconst existingWriteStatus = String($json.vault_write_status || $json.vault_write || \u0027\u0027).trim();\nconst canonicalObsidianInboxDir = String($json.obsidianInboxDir || \u0027\u0027).trim();\nconst legacyObsidianInboxDir = String($json.obsidian_inbox_dir || \u0027\u0027).trim();\nif (\n  canonicalObsidianInboxDir \u0026\u0026\n  legacyObsidianInboxDir \u0026\u0026\n  canonicalObsidianInboxDir !== legacyObsidianInboxDir\n) {\n  throw new Error(\u002705_common_vault_writer received conflicting obsidianInboxDir and obsidian_inbox_dir; normalize through 00_common_normalize_text_object before writing\u0027);\n}\nconst obsidianInboxDir = canonicalObsidianInboxDir\n  || legacyObsidianInboxDir\n  || String($env.OBSIDIAN_INBOX_DIR || \u002700_Inbox/AI_Information_Processor\u0027).trim()\n  || \u002700_Inbox/AI_Information_Processor\u0027;\nconst workflowLabel = String($json.workflow_label || $json.workflow_name || $json.workflow || \u0027ai-information-processor-mainline\u0027).trim() || \u0027ai-information-processor-mainline\u0027;\n\nlet fileBaseName = \u0027\u0027;\nlet relativeFilePath = existingVaultPath;\nconst itemId = String($json.item_id || \u0027\u0027).trim();\nconst title = String($json.title || \u0027\u0027).trim();\nconst sourceDisplayName = pickSourceDisplayName($json);\nconst sourceDisplayPath = sanitizePathSegment(sourceDisplayName, \u0027UnknownSource\u0027).slice(0, 80) || \u0027UnknownSource\u0027;\nconst { sequenceLabel, titleWithoutSequence } = deriveSequenceParts($json);\nconst titleDisplay = sanitizePathSegment(titleWithoutSequence || title, \u0027Untitled\u0027).slice(0, 100) || \u0027Untitled\u0027;\nconst shortId = sanitizePathSegment(itemId.slice(0, 6) || \u0027unknown\u0027, \u0027unknown\u0027).slice(0, 12) || \u0027unknown\u0027;\nconst contentKind = deriveContentKind($json);\n\nif (itemId \u0026\u0026 title) {\n  const dateForFile = new Date($json.published_at || Date.now());\n  const safeDate = Number.isNaN(dateForFile.getTime()) ? new Date() : dateForFile;\n  const yyyy = safeDate.getUTCFullYear();\n  const mm = String(safeDate.getUTCMonth() + 1).padStart(2, \u00270\u0027);\n  const dd = String(safeDate.getUTCDate()).padStart(2, \u00270\u0027);\n  const datePrefix = `${yyyy}-${mm}-${dd}`;\n  const stem = sequenceLabel ? `${sequenceLabel}-${titleDisplay}` : titleDisplay;\n  fileBaseName = `${datePrefix}__${stem}__${shortId}`;\n  relativeFilePath = `${obsidianInboxDir}/${contentKind}/${sourceDisplayPath}/${fileBaseName}.md`;\n}\n\nif (shouldWriteToVault \u0026\u0026 !relativeFilePath) {\n  throw new Error(\u002705_common_vault_writer requires item_id/title/published_at to build a deterministic vault path\u0027);\n}\n\nconst vaultWriteStatus = shouldWriteToVault ? \u0027pending\u0027 : (existingWriteStatus || \u0027skipped\u0027);\n\nreturn {\n  json: {\n    ...$json,\n    obsidianInboxDir,\n    workflow_label: workflowLabel,\n    fileBaseName,\n    relativeFilePath,\n    vault_path: relativeFilePath,\n    vault_write_status: vaultWriteStatus,\n    vault_write: vaultWriteStatus,\n    content_kind: contentKind,\n    source_display_name: sourceDisplayName,\n    source_display_path: sourceDisplayPath,\n    sequence_label: sequenceLabel,\n    title_display: titleDisplay,\n    short_id: shortId\n  }\n};"
-                                     },
-                      "id":  "b9c75ba9-b7b6-4e80-b4a2-0e3aa380360d",
-                      "name":  "Prepare Vault Write Context",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       780,
-                                       280
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "conditions":  {
-                                                            "string":  [
-                                                                           {
-                                                                               "value1":  "={{String($json.should_write_to_vault || false)}}",
-                                                                               "operation":  "equal",
-                                                                               "value2":  "true"
-                                                                           }
-                                                                       ]
-                                                        }
-                                     },
-                      "id":  "ce67ce84-a65d-4d2e-b991-8ba7e16b791d",
-                      "name":  "Should Write To Vault?",
-                      "type":  "n8n-nodes-base.if",
-                      "typeVersion":  1,
-                      "position":  [
-                                       1040,
-                                       280
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const yamlEscape = (value = \u0027\u0027) =\u003e String(value)\n  .replace(/\\\\/g, \u0027\\\\\\\\\u0027)\n  .replace(/\"/g, \u0027\\\\\"\u0027);\n\nconst yamlBlock = (key, value = \u0027\u0027) =\u003e {\n  const normalized = String(value || \u0027\u0027).replace(/\\r\\n/g, \u0027\\n\u0027).trim();\n  if (!normalized) {\n    return \u0027\u0027;\n  }\n  const indented = normalized\n    .split(\u0027\\n\u0027)\n    .map((line) =\u003e `  ${line}`)\n    .join(\u0027\\n\u0027);\n  return `${key}: |-\\n${indented}\\n`;\n};\n\nconst yamlScalar = (value) =\u003e {\n  if (typeof value === \u0027number\u0027) {\n    return Number.isInteger(value) ? String(value) : String(Number(value));\n  }\n  if (typeof value === \u0027boolean\u0027) {\n    return value ? \u0027true\u0027 : \u0027false\u0027;\n  }\n  return `\"${yamlEscape(value)}\"`;\n};\n\nconst yamlMapBlock = (key, value) =\u003e {\n  if (!value || typeof value !== \u0027object\u0027 || Array.isArray(value)) {\n    return \u0027\u0027;\n  }\n  const entries = Object.entries(value)\n    .filter(([, entryValue]) =\u003e entryValue !== undefined \u0026\u0026 entryValue !== null \u0026\u0026 !(typeof entryValue === \u0027string\u0027 \u0026\u0026 !entryValue.trim()))\n    .map(([entryKey, entryValue]) =\u003e `  ${entryKey}: ${yamlScalar(entryValue)}`)\n    .join(\u0027\\n\u0027);\n  return entries ? `${key}:\\n${entries}\\n` : \u0027\u0027;\n};\n\nconst normalizeMultiline = (value = \u0027\u0027) =\u003e String(value || \u0027\u0027)\n  .replace(/\\r\\n/g, \u0027\\n\u0027)\n  .replace(/\\u0000/g, \u0027\u0027)\n  .trim();\n\nconst normalizeSingleLine = (value = \u0027\u0027) =\u003e normalizeMultiline(value)\n  .replace(/\\s+/g, \u0027 \u0027)\n  .trim();\n\nconst normalizeTimestamp = (value = \u0027\u0027) =\u003e {\n  const normalized = String(value || \u0027\u0027).trim();\n  if (!normalized) {\n    return \u0027\u0027;\n  }\n\n  const match = normalized.match(/^(\\d{1,2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?$/);\n  if (!match) {\n    return \u0027\u0027;\n  }\n\n  return `${match[1].padStart(2, \u00270\u0027)}:${match[2]}:${match[3]}${match[4] ? `.${match[4].padEnd(3, \u00270\u0027)}` : \u0027\u0027}`;\n};\n\nconst normalizeChunks = (value) =\u003e {\n  if (!Array.isArray(value)) {\n    return [];\n  }\n\n  const normalized = [];\n  for (const chunk of value) {\n    if (!chunk || typeof chunk !== \u0027object\u0027) {\n      continue;\n    }\n\n    const text = normalizeMultiline(chunk.text || chunk.content || \u0027\u0027);\n    if (!text) {\n      continue;\n    }\n\n    const charStart = Math.max(0, Math.floor(Number(chunk.char_start ?? chunk.charStart ?? 0)));\n    const rawCharEnd = Math.floor(Number(chunk.char_end ?? chunk.charEnd ?? (charStart + text.length)));\n    const charEnd = Number.isFinite(rawCharEnd) ? Math.max(charStart, rawCharEnd) : (charStart + text.length);\n\n    normalized.push({\n      chunk_id: normalizeSingleLine(chunk.chunk_id || chunk.chunkId || `c${String(normalized.length + 1).padStart(3, \u00270\u0027)}`),\n      start_time: normalizeTimestamp(chunk.start_time || chunk.startTime || \u0027\u0027),\n      end_time: normalizeTimestamp(chunk.end_time || chunk.endTime || \u0027\u0027),\n      speaker: normalizeSingleLine(chunk.speaker || \u0027\u0027),\n      text,\n      char_start: charStart,\n      char_end: charEnd,\n      topic_hint: normalizeSingleLine(chunk.topic_hint || chunk.topicHint || \u0027\u0027)\n    });\n  }\n\n  return normalized;\n};\n\nconst sanitizePathSegment = (value = \u0027\u0027, fallback = \u0027Untitled\u0027) =\u003e {\n  const normalized = normalizeSingleLine(value)\n    .normalize(\u0027NFKC\u0027)\n    .replace(/[\u003c\u003e:\"/\\\\|?*\\u0000-\\u001f]/g, \u0027 \u0027)\n    .replace(/[\\uFF0C\\u3002\\uFF01\\uFF1F\\u3001\\uFF1B\\uFF1A\u0027\"`~!@#$%^\u0026+=\\[\\]{}\\u3010\\u3011\\u300A\\u300B\\u3008\\u3009\\u300C\\u300D\\u300E\\u300F]/g, \u0027 \u0027)\n    .replace(/[()\\uFF08\\uFF09]/g, \u0027 \u0027)\n    .replace(/[\\u00B7\\u2022]/g, \u0027 \u0027)\n    .replace(/\\./g, \u0027 \u0027)\n    .replace(/\\s+/g, \u0027 \u0027)\n    .trim();\n\n  if (!normalized) {\n    return fallback;\n  }\n\n  const hasCjk = /[\\u3400-\\u9fff]/.test(normalized);\n  const separator = hasCjk ? \u0027\u0027 : \u0027-\u0027;\n  return normalized.replace(/\\s+/g, separator).replace(/^-+|-+$/g, \u0027\u0027) || fallback;\n};\n\nconst truncateText = (value = \u0027\u0027, maxChars = 140, suffix = \u0027...\u0027) =\u003e {\n  const normalized = normalizeSingleLine(value);\n  if (!normalized) {\n    return \u0027\u0027;\n  }\n  if (normalized.length \u003c= maxChars) {\n    return normalized;\n  }\n  const sliceLength = Math.max(0, maxChars - suffix.length);\n  return `${normalized.slice(0, sliceLength).trim()}${suffix}`;\n};\n\nconst extractQuickTake = (value = \u0027\u0027) =\u003e {\n  const normalized = normalizeSingleLine(value);\n  if (!normalized) {\n    return \u0027\u0027;\n  }\n  const sentenceMatch = normalized.match(/^.{1,140}?[\\u3002\\uFF01\\uFF1F?!?](?=\\s|$)/);\n  if (sentenceMatch?.[0]) {\n    return sentenceMatch[0].trim();\n  }\n  return truncateText(normalized, 140);\n};\n\nconst toIsoDate = (value) =\u003e {\n  const parsed = new Date(value || Date.now());\n  if (Number.isNaN(parsed.getTime())) {\n    return \u0027\u0027;\n  }\n  return parsed.toISOString().slice(0, 10);\n};\n\nconst toSafeNumber = (value, fallback = 0) =\u003e {\n  const numericValue = Number(value);\n  return Number.isFinite(numericValue) ? numericValue : fallback;\n};\n\nconst toIntDisplay = (value, fallback = \u0027n/a\u0027) =\u003e {\n  const numericValue = Math.round(Number(value));\n  return Number.isFinite(numericValue) ? String(numericValue) : fallback;\n};\n\nconst cloneJson = (value) =\u003e {\n  if (value === undefined) {\n    return undefined;\n  }\n  if (value === null) {\n    return null;\n  }\n  return JSON.parse(JSON.stringify(value));\n};\n\nconst splitSegments = (value = \u0027\u0027) =\u003e String(value || \u0027\u0027).split(\u0027/\u0027).filter(Boolean);\n\nconst getRelativeLink = (fromPath, toPath) =\u003e {\n  const fromSegments = splitSegments(fromPath).slice(0, -1);\n  const toSegments = splitSegments(toPath);\n  let index = 0;\n  while (index \u003c fromSegments.length \u0026\u0026 index \u003c toSegments.length \u0026\u0026 fromSegments[index] === toSegments[index]) {\n    index += 1;\n  }\n  const upSegments = new Array(fromSegments.length - index).fill(\u0027..\u0027);\n  const downSegments = toSegments.slice(index);\n  const combined = [...upSegments, ...downSegments];\n  return combined.length ? combined.join(\u0027/\u0027) : \u0027./\u0027;\n};\n\nconst buildChunkMeta = (chunk) =\u003e {\n  const parts = [];\n  if (chunk.start_time || chunk.end_time) {\n    parts.push([chunk.start_time, chunk.end_time].filter(Boolean).join(\u0027 - \u0027));\n  }\n  if (chunk.speaker) {\n    parts.push(chunk.speaker);\n  }\n  parts.push(`chars ${chunk.char_start}-${chunk.char_end}`);\n  if (chunk.topic_hint) {\n    parts.push(chunk.topic_hint);\n  }\n  return parts.join(\u0027 · \u0027);\n};\n\nconst fileBaseName = String($json.fileBaseName || \u0027\u0027).trim();\nconst relativeFilePath = String($json.relativeFilePath || \u0027\u0027).trim();\nif (!fileBaseName || !relativeFilePath) {\n  throw new Error(\u002705_common_vault_writer is missing fileBaseName/relativeFilePath before Markdown generation\u0027);\n}\n\nconst obsidianInboxDir = String($json.obsidianInboxDir || \u0027\u0027).trim();\nif (!obsidianInboxDir) {\n  throw new Error(\u002705_common_vault_writer requires obsidianInboxDir before Markdown generation\u0027);\n}\n\nconst mediaType = String($json.media_type || \u0027\u0027).trim().toLowerCase();\nconst sourceType = String($json.source_type || \u0027\u0027).trim().toLowerCase();\nconst contentKind = String($json.content_kind || \u0027\u0027).trim() || \u0027Item\u0027;\nconst sourceDisplayName = normalizeSingleLine($json.source_display_name || $json.author || $json.source_name || \u0027UnknownSource\u0027) || \u0027UnknownSource\u0027;\nconst sourceDisplayPath = sanitizePathSegment($json.source_display_path || sourceDisplayName, \u0027UnknownSource\u0027).slice(0, 80) || \u0027UnknownSource\u0027;\nconst sequenceLabel = normalizeSingleLine($json.sequence_label || \u0027\u0027).replace(/\\s+/g, \u0027\u0027);\nconst titleDisplay = sanitizePathSegment($json.title_display || $json.title || \u0027Untitled\u0027, \u0027Untitled\u0027).slice(0, 100) || \u0027Untitled\u0027;\nconst shortId = sanitizePathSegment($json.short_id || String($json.item_id || \u0027\u0027).slice(0, 6) || \u0027unknown\u0027, \u0027unknown\u0027).slice(0, 12) || \u0027unknown\u0027;\nconst rawKind = [\u0027audio\u0027, \u0027video\u0027].includes(mediaType) || [\u0027podcast\u0027, \u0027transcript\u0027, \u0027audio\u0027].includes(sourceType)\n  ? \u0027transcript\u0027\n  : \u0027raw\u0027;\nconst rawHeading = rawKind === \u0027transcript\u0027 ? \u0027原始转写\u0027 : \u0027原始文本\u0027;\nconst publishedDate = toIsoDate($json.published_at);\nconst datePrefix = publishedDate || toIsoDate(Date.now());\nconst auditPromptVersion = sanitizePathSegment($json.ai_meta?.prompt_version || \u0027scoring_v1\u0027, \u0027scoring_v1\u0027).slice(0, 60) || \u0027scoring_v1\u0027;\nconst auditRubricVersion = sanitizePathSegment($json.ai_meta?.rubric_version || \u0027audit_v1\u0027, \u0027audit_v1\u0027).slice(0, 80) || \u0027audit_v1\u0027;\nconst auditId = sanitizePathSegment(String($json.item_id || \u0027\u0027).slice(0, 13) || shortId, shortId).slice(0, 20) || shortId;\nconst rawSequenceSegment = sequenceLabel ? `__${sequenceLabel}` : \u0027\u0027;\nconst rawFileName = `${datePrefix}__${sourceDisplayPath}${rawSequenceSegment}__${rawKind}__${shortId}.md`;\nconst auditFileName = `${auditId}__${auditPromptVersion}__${auditRubricVersion}.json`;\nconst rawRelativePath = `${obsidianInboxDir}/Raw/${contentKind}/${rawFileName}`;\nconst auditRelativePath = `${obsidianInboxDir}/Audit/LLM/${auditFileName}`;\nconst rawRelativeLink = getRelativeLink(relativeFilePath, rawRelativePath);\nconst auditRelativeLink = getRelativeLink(relativeFilePath, auditRelativePath);\nconst rawParentLink = getRelativeLink(rawRelativePath, relativeFilePath);\n\nconst canonicalUrl = String($json.canonical_url || \u0027\u0027).trim();\nconst workflowLabel = String($json.workflow_label || \u0027ai-information-processor-mainline\u0027).trim() || \u0027ai-information-processor-mainline\u0027;\nconst summary = normalizeMultiline($json.summary || \u0027\u0027);\nconst reason = normalizeMultiline($json.reason || \u0027\u0027);\nconst contentText = normalizeMultiline($json.content_text || \u0027\u0027);\nconst upstreamSummary = normalizeMultiline($json.upstream_summary || \u0027\u0027);\nconst chunks = normalizeChunks($json.chunks);\nconst chunkCount = chunks.length;\nconst chunkCountLine = chunkCount ? `chunk_count: ${chunkCount}\\n` : \u0027\u0027;\nconst quickTake = extractQuickTake(summary) || extractQuickTake(reason) || truncateText(contentText, 140) || \u0027暂无。\u0027;\nconst showSummarySection = Boolean(summary) \u0026\u0026 normalizeSingleLine(summary) !== normalizeSingleLine(quickTake);\nconst dedupeAction = String($json.dedupe_action || \u0027full_push\u0027).trim() || \u0027full_push\u0027;\nconst notificationMode = String($json.notification_mode || \u0027\u0027).trim();\nconst notificationDisplay = notificationMode || \u0027silent\u0027;\nconst matchedPayload = $json.matched_payload \u0026\u0026 typeof $json.matched_payload === \u0027object\u0027 ? $json.matched_payload : null;\nconst matchedScore = toSafeNumber($json.matched_score, NaN);\nconst matchedTitle = matchedPayload ? normalizeSingleLine(matchedPayload.title || \u0027\u0027) : \u0027\u0027;\nconst matchedItemId = matchedPayload ? normalizeSingleLine(matchedPayload.item_id || \u0027\u0027) : \u0027\u0027;\nconst matchedCanonicalUrl = matchedPayload ? normalizeSingleLine(matchedPayload.canonical_url || \u0027\u0027) : \u0027\u0027;\nconst tags = Array.isArray($json.tags) \u0026\u0026 $json.tags.length\n  ? $json.tags.filter(Boolean)\n  : [\u0027inbox\u0027, \u0027ai-information-processor\u0027];\nconst normalizedTags = [...new Set([...tags, `dedupe-${dedupeAction}`].filter(Boolean))];\nconst tagLines = normalizedTags.map((tag) =\u003e `  - ${tag}`).join(\u0027\\n\u0027);\nconst aiScore = $json.ai_score \u0026\u0026 typeof $json.ai_score === \u0027object\u0027 ? $json.ai_score : null;\nconst keepScoreText = toIntDisplay(aiScore?.keep_score, toIntDisplay(toSafeNumber($json.score, 0) * 100));\nconst referenceScoreText = toIntDisplay(aiScore?.reference_score);\nconst actionScoreText = toIntDisplay(aiScore?.action_score);\nconst notifyScoreText = toIntDisplay(aiScore?.notify_score);\nconst decisionHint = normalizeSingleLine(aiScore?.decision_hint || \u0027\u0027);\nconst decisionDisplay = decisionHint || normalizeSingleLine($json.status || \u0027raw\u0027) || \u0027raw\u0027;\nconst mediaLabel = mediaType === \u0027audio\u0027\n  ? \u0027播客\u0027\n  : mediaType === \u0027video\u0027\n    ? \u0027视频\u0027\n    : mediaType === \u0027text\u0027\n      ? \u0027文章\u0027\n      : normalizeSingleLine($json.media_type || contentKind) || contentKind;\nconst sourceLine = [mediaLabel, sourceDisplayName, publishedDate].filter(Boolean).join(\u0027 · \u0027);\nconst auditLine = [\n  normalizeSingleLine($json.ai_meta?.rubric_version || \u0027\u0027),\n  normalizeSingleLine($json.ai_meta?.model || \u0027\u0027),\n  Number.isFinite(Number($json.ai_meta?.input_chars)) ? `input_chars ${Math.round(Number($json.ai_meta.input_chars))}` : \u0027\u0027\n].filter(Boolean).join(\u0027 · \u0027);\nconst relatedLines = matchedPayload ? [\n  matchedTitle ? `- 相似对象：${matchedTitle}` : \u0027\u0027,\n  Number.isFinite(matchedScore) \u0026\u0026 matchedScore \u003e 0 ? `- matched_score: ${matchedScore.toFixed(4)}` : \u0027\u0027,\n  matchedCanonicalUrl ? `- 原始链接：${matchedCanonicalUrl}` : \u0027\u0027,\n  \u0027- 关系：主题上存在重叠，详细判定见审计 sidecar。\u0027\n].filter(Boolean).join(\u0027\\n\u0027) : \u0027\u0027;\nconst sourceHostLine = $json.source_host ? `source_host: \\\"${yamlEscape($json.source_host)}\\\"\\n` : \u0027\u0027;\nconst originalIdLine = $json.original_id ? `original_id: \\\"${yamlEscape($json.original_id)}\\\"\\n` : \u0027\u0027;\nconst enrichedAtLine = $json.enriched_at ? `enriched_at: \\\"${yamlEscape($json.enriched_at)}\\\"\\n` : \u0027\u0027;\nconst notificationModeLine = notificationMode ? `notification_mode: \\\"${yamlEscape(notificationMode)}\\\"\\n` : \u0027\u0027;\nconst matchedScoreLine = Number.isFinite(matchedScore) \u0026\u0026 matchedScore \u003e 0 ? `matched_score: ${matchedScore}\\n` : \u0027\u0027;\nconst matchedItemIdLine = matchedItemId ? `matched_item_id: \\\"${yamlEscape(matchedItemId)}\\\"\\n` : \u0027\u0027;\nconst matchedCanonicalUrlLine = matchedCanonicalUrl ? `matched_canonical_url: \\\"${yamlEscape(matchedCanonicalUrl)}\\\"\\n` : \u0027\u0027;\nconst matchedSameItemLine = $json.matched_same_item ? \u0027matched_same_item: true\\n\u0027 : \u0027\u0027;\nconst scoreScale = Math.round(toSafeNumber($json.score_scale, 100));\nconst scoreScaleLine = Number.isFinite(scoreScale) ? `score_scale: ${scoreScale}\\n` : \u0027\u0027;\nconst summaryLine = yamlBlock(\u0027summary\u0027, summary);\nconst reasonLine = yamlBlock(\u0027reason\u0027, reason);\nconst aiScoreLine = yamlMapBlock(\u0027ai_score\u0027, $json.ai_score);\nconst scoreDimensionsLine = yamlMapBlock(\u0027score_dimensions\u0027, $json.score_dimensions);\nconst aiMetaLine = yamlMapBlock(\u0027ai_meta\u0027, $json.ai_meta);\nconst viewVersionLine = \u0027view_version: \\\"layered_v2\\\"\\n\u0027;\nconst contentKindLine = `content_kind: \\\"${yamlEscape(contentKind)}\\\"\\n`;\nconst sourceDisplayLine = `source_display_name: \\\"${yamlEscape(sourceDisplayName)}\\\"\\n`;\nconst sequenceLabelLine = sequenceLabel ? `sequence_label: \\\"${yamlEscape(sequenceLabel)}\\\"\\n` : \u0027\u0027;\nconst titleDisplayLine = `title_display: \\\"${yamlEscape(titleDisplay)}\\\"\\n`;\nconst shortIdLine = `short_id: \\\"${yamlEscape(shortId)}\\\"\\n`;\nconst rawVaultPathLine = `raw_vault_path: \\\"${yamlEscape(rawRelativePath)}\\\"\\n`;\nconst auditVaultPathLine = `audit_vault_path: \\\"${yamlEscape(auditRelativePath)}\\\"\\n`;\nconst sourceNameDisplay = normalizeSingleLine($json.source_name || \u0027unknown-source\u0027);\nconst originalMaterialLines = [\n  `- 原始材料：[${rawFileName}](${rawRelativeLink})`,\n  `- LLM 审计：[${auditFileName}](${auditRelativeLink})`,\n  canonicalUrl ? `- 原始链接：${canonicalUrl}` : \u0027\u0027\n].filter(Boolean).join(\u0027\\n\u0027);\nconst markdown = `---\\ntitle: \\\"${yamlEscape($json.title)}\\\"\\nitem_id: \\\"${yamlEscape($json.item_id)}\\\"\\nsource_type: \\\"${yamlEscape($json.source_type)}\\\"\\nsource_name: \\\"${yamlEscape($json.source_name)}\\\"\\n${contentKindLine}${sourceDisplayLine}${sequenceLabelLine}${titleDisplayLine}${shortIdLine}${sourceHostLine}${originalIdLine}canonical_url: \\\"${yamlEscape(canonicalUrl)}\\\"\\npublished_at: \\\"${yamlEscape($json.published_at)}\\\"\\ningested_at: \\\"${yamlEscape($json.ingested_at)}\\\"\\n${enrichedAtLine}media_type: \\\"${yamlEscape($json.media_type)}\\\"\\ncontent_hash: \\\"${yamlEscape($json.content_hash)}\\\"\\nworkflow: \\\"${yamlEscape(workflowLabel)}\\\"\\n${viewVersionLine}${rawVaultPathLine}${auditVaultPathLine}score: ${toSafeNumber($json.score, 0)}\\n${scoreScaleLine}category: \\\"${yamlEscape($json.category || \u0027pending\u0027)}\\\"\\ndedupe_action: \\\"${yamlEscape(dedupeAction)}\\\"\\nstatus: \\\"${yamlEscape($json.status || \u0027raw\u0027)}\\\"\\n${notificationModeLine}${matchedScoreLine}${matchedItemIdLine}${matchedCanonicalUrlLine}${matchedSameItemLine}${$json.author ? `author: \\\"${yamlEscape($json.author)}\\\"\\n` : \u0027\u0027}${summaryLine}${reasonLine}${aiScoreLine}${scoreDimensionsLine}${aiMetaLine}tags:\\n${tagLines}\\n---\\n\\n# ${$json.title}\\n\\n\u003e ${sourceLine || sourceNameDisplay}\\n\u003e Keep ${keepScoreText} / Reference ${referenceScoreText} / Action ${actionScoreText} / Notify ${notifyScoreText}\\n\u003e 状态：${decisionDisplay} · 通知：${notificationDisplay}${auditLine ? `\\n\u003e 审计：${auditLine}` : \u0027\u0027}\\n\\n## 一句话判断\\n\\n${quickTake}\\n\\n${reason ? `## 为什么对我有用\\n\\n${reason}\\n\\n` : \u0027\u0027}${showSummarySection ? `## 内容摘要\\n\\n${summary}\\n\\n` : \u0027\u0027}${relatedLines ? `## 关联对象\\n\\n${relatedLines}\\n\\n` : \u0027\u0027}## 原始材料\\n\\n${originalMaterialLines}\\n`;\n\nconst chunkIndexLines = chunks.map((chunk) =\u003e `- ${chunk.chunk_id} | ${buildChunkMeta(chunk)}`).join(\u0027\\n\u0027);\nconst chunkSections = chunks.map((chunk) =\u003e `### ${chunk.chunk_id}\\n\u003e ${buildChunkMeta(chunk)}\\n\\n${chunk.text}`).join(\u0027\\n\\n\u0027);\nconst rawBody = chunks.length\n  ? `## 分块索引\\n\\n${chunkIndexLines}\\n\\n## 分块正文\\n\\n${chunkSections}\\n`\n  : `${contentText || \u0027No text content extracted from this item.\u0027}\\n`;\nconst rawMarkdown = `---\\ntitle: \\\"${yamlEscape($json.title)}\\\"\\nitem_id: \\\"${yamlEscape($json.item_id)}\\\"\\nparent_note: \\\"${yamlEscape(relativeFilePath)}\\\"\\nsource_type: \\\"${yamlEscape($json.source_type)}\\\"\\nsource_name: \\\"${yamlEscape($json.source_name)}\\\"\\nsource_display_name: \\\"${yamlEscape(sourceDisplayName)}\\\"\\ncanonical_url: \\\"${yamlEscape(canonicalUrl)}\\\"\\nmedia_type: \\\"${yamlEscape($json.media_type)}\\\"\\nraw_kind: \\\"${yamlEscape(rawKind)}\\\"\\ncontent_hash: \\\"${yamlEscape($json.content_hash)}\\\"\\n${chunkCountLine}---\\n\\n# ${rawHeading}\\n\\n- 主笔记：[${fileBaseName}.md](${rawParentLink})\\n${canonicalUrl ? `- 原始链接：${canonicalUrl}\\n` : \u0027\u0027}- 字符数：${contentText.length}\\n${chunks.length ? `- 分块数：${chunkCount}\\n` : \u0027\u0027}\\n${rawBody}`;\n\nconst compactMatchedPayload = matchedPayload ? {\n  item_id: matchedItemId || undefined,\n  title: matchedTitle || undefined,\n  canonical_url: matchedCanonicalUrl || undefined,\n  score: matchedPayload.score ?? undefined,\n  category: normalizeSingleLine(matchedPayload.category || \u0027\u0027) || undefined,\n  summary: truncateText(matchedPayload.summary || \u0027\u0027, 600),\n  tags: Array.isArray(matchedPayload.tags) ? matchedPayload.tags : [],\n  content_hash: normalizeSingleLine(matchedPayload.content_hash || \u0027\u0027) || undefined\n} : null;\n\nconst auditPayload = {\n  version: 2,\n  generated_at: new Date().toISOString(),\n  item_id: normalizeSingleLine($json.item_id || \u0027\u0027),\n  note: {\n    main_vault_path: relativeFilePath,\n    raw_vault_path: rawRelativePath,\n    audit_vault_path: auditRelativePath\n  },\n  naming: {\n    content_kind: contentKind,\n    source_display_name: sourceDisplayName,\n    source_display_path: sourceDisplayPath,\n    sequence_label: sequenceLabel || null,\n    title_display: titleDisplay,\n    short_id: shortId,\n    audit_id: auditId\n  },\n  source: {\n    source_type: normalizeSingleLine($json.source_type || \u0027\u0027),\n    source_name: normalizeSingleLine($json.source_name || \u0027\u0027),\n    source_display_name: sourceDisplayName,\n    source_host: normalizeSingleLine($json.source_host || \u0027\u0027),\n    original_id: normalizeSingleLine($json.original_id || \u0027\u0027),\n    canonical_url: canonicalUrl,\n    title: normalizeSingleLine($json.title || \u0027\u0027),\n    author: normalizeSingleLine($json.author || \u0027\u0027),\n    published_at: normalizeSingleLine($json.published_at || \u0027\u0027),\n    ingested_at: normalizeSingleLine($json.ingested_at || \u0027\u0027),\n    media_type: normalizeSingleLine($json.media_type || \u0027\u0027),\n    content_hash: normalizeSingleLine($json.content_hash || \u0027\u0027),\n    tags: normalizedTags\n  },\n  upstream: {\n    upstream_task_id: normalizeSingleLine($json.upstream_task_id || \u0027\u0027),\n    upstream_view_token: normalizeSingleLine($json.upstream_view_token || \u0027\u0027),\n    upstream_summary: upstreamSummary || \u0027\u0027,\n    transcript_service_meta: cloneJson($json.transcript_service_meta ?? null)\n  },\n  evidence: {\n    chunk_count: chunkCount,\n    chunks: cloneJson(chunks)\n  },\n  scoring: {\n    score: toSafeNumber($json.score, 0),\n    score_scale: scoreScale,\n    category: normalizeSingleLine($json.category || \u0027pending\u0027) || \u0027pending\u0027,\n    summary,\n    reason,\n    ai_score: cloneJson($json.ai_score ?? null),\n    score_dimensions: cloneJson($json.score_dimensions ?? null),\n    ai_meta: cloneJson($json.ai_meta ?? null),\n    status: normalizeSingleLine($json.status || \u0027\u0027),\n    decision_hint: decisionHint || null,\n    notification_mode: notificationDisplay\n  },\n  dedupe: {\n    dedupe_action: dedupeAction,\n    matched_score: Number.isFinite(matchedScore) \u0026\u0026 matchedScore \u003e 0 ? Number(matchedScore.toFixed(8)) : null,\n    matched_same_item: Boolean($json.matched_same_item),\n    matched_payload: compactMatchedPayload\n  },\n  workflow: {\n    workflow_label: workflowLabel,\n    should_write_to_vault: Boolean($json.should_write_to_vault),\n    should_upsert_qdrant: Boolean($json.should_upsert_qdrant),\n    qdrant_operation: normalizeSingleLine($json.qdrant_operation || \u0027\u0027) || \u0027pending\u0027\n  },\n  input_view: {\n    title: normalizeSingleLine($json.title || \u0027\u0027),\n    title_display: titleDisplay,\n    source_name: sourceNameDisplay,\n    source_display_name: sourceDisplayName,\n    source_type: normalizeSingleLine($json.source_type || \u0027\u0027),\n    author: normalizeSingleLine($json.author || \u0027\u0027),\n    canonical_url: canonicalUrl,\n    published_at: normalizeSingleLine($json.published_at || \u0027\u0027),\n    dedupe_action: dedupeAction,\n    upstream_summary: upstreamSummary || \u0027\u0027,\n    nearest_match: compactMatchedPayload ? {\n      item_id: compactMatchedPayload.item_id || \u0027\u0027,\n      title: compactMatchedPayload.title || \u0027\u0027,\n      matched_score: Number.isFinite(matchedScore) \u0026\u0026 matchedScore \u003e 0 ? Number(matchedScore.toFixed(8)) : null,\n      category: compactMatchedPayload.category || \u0027\u0027,\n      summary: compactMatchedPayload.summary || \u0027\u0027\n    } : null,\n    chunk_count: chunkCount,\n    content_text_chars: contentText.length,\n    content_text_preview: truncateText(contentText, 1500)\n  }\n};\n\nreturn {\n  json: {\n    ...$json,\n    vault_path: relativeFilePath,\n    raw_vault_path: rawRelativePath,\n    audit_vault_path: auditRelativePath,\n    vault_write_status: \u0027pending\u0027,\n    vault_write: \u0027pending\u0027\n  },\n  binary: {\n    mainNote: {\n      data: Buffer.from(markdown, \u0027utf8\u0027).toString(\u0027base64\u0027),\n      mimeType: \u0027text/markdown\u0027,\n      fileName: `${fileBaseName}.md`,\n      fileExtension: \u0027md\u0027\n    },\n    rawNote: {\n      data: Buffer.from(rawMarkdown, \u0027utf8\u0027).toString(\u0027base64\u0027),\n      mimeType: \u0027text/markdown\u0027,\n      fileName: rawFileName,\n      fileExtension: \u0027md\u0027\n    },\n    auditNote: {\n      data: Buffer.from(JSON.stringify(auditPayload, null, 2), \u0027utf8\u0027).toString(\u0027base64\u0027),\n      mimeType: \u0027application/json\u0027,\n      fileName: auditFileName,\n      fileExtension: \u0027json\u0027\n    }\n  }\n};"
-                                     },
-                      "id":  "5fd04268-bda8-4f55-ab39-f4677708b1ee",
-                      "name":  "Build Markdown",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1300,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const fs = require(\u0027fs\u0027);\nconst path = require(\u0027path\u0027);\n\nconst vaultRoot = path.resolve(\u0027/vault\u0027);\nconst targetPaths = [\n  String($json.relativeFilePath || $json.vault_path || \u0027\u0027).trim(),\n  String($json.raw_vault_path || \u0027\u0027).trim(),\n  String($json.audit_vault_path || \u0027\u0027).trim()\n].filter(Boolean);\n\nfor (const relativePath of targetPaths) {\n  const absoluteTarget = path.resolve(path.join(vaultRoot, relativePath));\n  if (!(absoluteTarget === vaultRoot || absoluteTarget.startsWith(`${vaultRoot}${path.sep}`))) {\n    throw new Error(`05_common_vault_writer refused to create a directory outside /vault: ${relativePath}`);\n  }\n  fs.mkdirSync(path.dirname(absoluteTarget), { recursive: true });\n}\n\nreturn {\n  json: {\n    ...$json\n  },\n  binary: {\n    ...($binary || {})\n  }\n};"
-                                     },
-                      "id":  "0fd9d4a6-6eb3-4d1b-9d73-5a2af023cf40",
-                      "name":  "Ensure Vault Directories",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1560,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "fileName":  "={{\u0027/vault/\u0027 + $json.relativeFilePath}}",
-                                         "dataPropertyName":  "mainNote",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "9ccb6d4f-f77c-45e6-b6be-0db44240f919",
-                      "name":  "Write Binary File",
-                      "type":  "n8n-nodes-base.writeBinaryFile",
-                      "typeVersion":  1,
-                      "position":  [
-                                       1820,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "fileName":  "={{\u0027/vault/\u0027 + $json.raw_vault_path}}",
-                                         "dataPropertyName":  "rawNote",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "e88a47f1-9f08-4bf5-ae42-f4c36bc7e73a",
-                      "name":  "Write Raw Sidecar",
-                      "type":  "n8n-nodes-base.writeBinaryFile",
-                      "typeVersion":  1,
-                      "position":  [
-                                       2080,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "fileName":  "={{\u0027/vault/\u0027 + $json.audit_vault_path}}",
-                                         "dataPropertyName":  "auditNote",
-                                         "options":  {
-
-                                                     }
-                                     },
-                      "id":  "13f49797-27e6-4ff2-9109-2d3a7552b516",
-                      "name":  "Write Audit Sidecar",
-                      "type":  "n8n-nodes-base.writeBinaryFile",
-                      "typeVersion":  1,
-                      "position":  [
-                                       2340,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const vaultPath = String($json.relativeFilePath || $json.vault_path || \u0027\u0027).trim();\nconst shouldUpsert = Boolean($json.should_upsert_qdrant);\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: \u0027written\u0027,\n    vault_write: \u0027written\u0027,\n    qdrant_operation: shouldUpsert ? \u0027pending\u0027 : \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
-                                     },
-                      "id":  "058fae12-5fd6-4e02-b0b1-4501577ff4e6",
-                      "name":  "Finalize Written Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       2600,
-                                       180
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "const status = String($json.vault_write_status || $json.vault_write || \u0027\u0027).trim() || \u0027skipped\u0027;\nconst vaultPath = String($json.relativeFilePath || $json.vault_path || \u0027\u0027).trim();\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: status,\n    vault_write: status,\n    qdrant_operation: \u0027skipped\u0027,\n    qdrant_upsert_response: null\n  }\n};"
-                                     },
-                      "id":  "7527fe17-2da7-4a13-900d-451d5e15a69c",
-                      "name":  "Finalize Skipped Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       1300,
-                                       380
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "append"
-                                     },
-                      "id":  "ef1a9d76-a634-4ef9-af25-aa4773ec9bda",
-                      "name":  "Merge Vault Result",
-                      "type":  "n8n-nodes-base.merge",
-                      "typeVersion":  3.2,
-                      "position":  [
-                                       2860,
-                                       280
-                                   ]
-                  },
-                  {
-                      "parameters":  {
-                                         "mode":  "runOnceForEachItem",
-                                         "language":  "javaScript",
-                                         "jsCode":  "return {\n  json: {\n    ...$json,\n    vault_path: String($json.vault_path || $json.relativeFilePath || \u0027\u0027).trim(),\n    vault_write_status: String($json.vault_write_status || $json.vault_write || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n    vault_write: String($json.vault_write || $json.vault_write_status || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n    qdrant_operation: String($json.qdrant_operation || \u0027skipped\u0027).trim() || \u0027skipped\u0027,\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
-                                     },
-                      "id":  "14fa83d2-1465-4f4f-a68b-c95dc2d44f6d",
-                      "name":  "Return Vault Result",
-                      "type":  "n8n-nodes-base.code",
-                      "typeVersion":  2,
-                      "position":  [
-                                       3120,
-                                       280
-                                   ]
-                  }
-              ],
-    "connections":  {
-                        "When clicking \u0027Execute workflow\u0027":  {
-                                                                           "main":  [
-                                                                                        [
-                                                                                            {
-                                                                                                "node":  "Example Gate Result",
-                                                                                                "type":  "main",
-                                                                                                "index":  0
-                                                                                            }
-                                                                                        ]
-                                                                                    ]
-                                                                       },
-                        "When Executed by Another Workflow":  {
-                                                                  "main":  [
-                                                                               [
-                                                                                   {
-                                                                                       "node":  "Prepare Vault Write Context",
-                                                                                       "type":  "main",
-                                                                                       "index":  0
-                                                                                   }
-                                                                               ]
-                                                                           ]
-                                                              },
-                        "Example Gate Result":  {
-                                                    "main":  [
-                                                                 [
-                                                                     {
-                                                                         "node":  "Prepare Vault Write Context",
-                                                                         "type":  "main",
-                                                                         "index":  0
-                                                                     }
-                                                                 ]
-                                                             ]
-                                                },
-                        "Prepare Vault Write Context":  {
-                                                            "main":  [
-                                                                         [
-                                                                             {
-                                                                                 "node":  "Should Write To Vault?",
-                                                                                 "type":  "main",
-                                                                                 "index":  0
-                                                                             }
-                                                                         ]
-                                                                     ]
-                                                        },
-                        "Should Write To Vault?":  {
-                                                       "main":  [
-                                                                    [
-                                                                        {
-                                                                            "node":  "Build Markdown",
-                                                                            "type":  "main",
-                                                                            "index":  0
-                                                                        }
-                                                                    ],
-                                                                    [
-                                                                        {
-                                                                            "node":  "Finalize Skipped Result",
-                                                                            "type":  "main",
-                                                                            "index":  0
-                                                                        }
-                                                                    ]
-                                                                ]
-                                                   },
-                        "Build Markdown":  {
-                                               "main":  [
-                                                            [
-                                                                {
-                                                                    "node":  "Ensure Vault Directories",
-                                                                    "type":  "main",
-                                                                    "index":  0
-                                                                }
-                                                            ]
-                                                        ]
-                                           },
-                        "Write Binary File":  {
-                                                  "main":  [
-                                                               [
-                                                                   {
-                                                                       "node":  "Write Raw Sidecar",
-                                                                       "type":  "main",
-                                                                       "index":  0
-                                                                   }
-                                                               ]
-                                                           ]
-                                              },
-                        "Write Raw Sidecar":  {
-                                                  "main":  [
-                                                               [
-                                                                   {
-                                                                       "node":  "Write Audit Sidecar",
-                                                                       "type":  "main",
-                                                                       "index":  0
-                                                                   }
-                                                               ]
-                                                           ]
-                                              },
-                        "Write Audit Sidecar":  {
-                                                    "main":  [
-                                                                 [
-                                                                     {
-                                                                         "node":  "Finalize Written Result",
-                                                                         "type":  "main",
-                                                                         "index":  0
-                                                                     }
-                                                                 ]
-                                                             ]
-                                                },
-                        "Finalize Written Result":  {
-                                                        "main":  [
-                                                                     [
-                                                                         {
-                                                                             "node":  "Merge Vault Result",
-                                                                             "type":  "main",
-                                                                             "index":  0
-                                                                         }
-                                                                     ]
-                                                                 ]
-                                                    },
-                        "Finalize Skipped Result":  {
-                                                        "main":  [
-                                                                     [
-                                                                         {
-                                                                             "node":  "Merge Vault Result",
-                                                                             "type":  "main",
-                                                                             "index":  1
-                                                                         }
-                                                                     ]
-                                                                 ]
-                                                    },
-                        "Merge Vault Result":  {
-                                                   "main":  [
-                                                                [
-                                                                    {
-                                                                        "node":  "Return Vault Result",
-                                                                        "type":  "main",
-                                                                        "index":  0
-                                                                    }
-                                                                ]
-                                                            ]
-                                               },
-                        "Ensure Vault Directories":  {
-                                                         "main":  [
-                                                                      [
-                                                                          {
-                                                                              "node":  "Write Binary File",
-                                                                              "type":  "main",
-                                                                              "index":  0
-                                                                          }
-                                                                      ]
-                                                                  ]
-                                                     }
-                    },
-    "settings":  {
-                     "executionOrder":  "v1"
-                 },
-    "staticData":  null,
-    "meta":  {
-                 "templateCredsSetupCompleted":  true
-             },
-    "pinData":  {
-
-                },
-    "versionId":  "0a04e057-ecb0-46d9-8d9f-2e326573010b",
-    "tags":  [
-
-             ]
+{
+    "id": "5d53f72296534f1c",
+    "name": "05 Common Vault Writer",
+    "description": "Runnable sub-workflow: accept a policy-processed NormalizedTextObject, handle skip/write internally, generate deterministic Markdown, and return a post-write object for deferred Qdrant commit.",
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+        {
+            "parameters": {},
+            "id": "a4b7188d-b982-4ebf-bdf0-7e00fc198c3a",
+            "name": "When clicking 'Execute workflow'",
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                260,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "inputSource": "passthrough"
+            },
+            "id": "3b2401ca-7c43-4ae1-a663-c697f2113ebd",
+            "name": "When Executed by Another Workflow",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                260,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "language": "javaScript",
+                "jsCode": "return [\n  {\n    json: {\n      item_id: '6d6e2f96ab2c4f86c6bfe17f0f3d5c21d7839ed4f3d8fbf35bc7f7f5ec34f7a1',\n      source_type: 'rss',\n      source_name: 'OpenAI YouTube',\n      source_host: 'youtube.com',\n      original_id: 'yt:abc123',\n      canonical_url: 'https://example.com/post',\n      title: 'Example gate result',\n      author: 'OpenAI',\n      published_at: '2026-04-17T09:00:00.000Z',\n      ingested_at: '2026-04-17T09:05:00.000Z',\n      media_type: 'text',\n      content_text: 'Normalized plain text content for the shared vault writer smoke item.',\n      content_html: '<p>Normalized plain text content for the shared vault writer smoke item.</p>',\n      content_hash: 'sha256:example',\n      score: 0.82,\n      score_scale: 100,\n      category: 'AI Infra',\n      summary: 'A concise summary that should be written into a shared Obsidian note.',\n      reason: 'This proves the vault writer can run as a reusable sub-workflow.',\n      ai_score: {\n        keep_score: 82,\n        notify_score: 64,\n        reference_score: 88,\n        action_score: 45,\n        confidence: 0.76,\n        decision_hint: 'keep_reference'\n      },\n      score_dimensions: {\n        personal_relevance: 22,\n        information_density: 18,\n        novelty: 16,\n        actionability: 10,\n        long_term_value: 15,\n        source_quality: 4,\n        penalty: -3\n      },\n      ai_meta: {\n        model_profile: 'scoring_default',\n        provider: 'deepseek',\n        model: 'deepseek-chat',\n        prompt_version: 'scoring_v1',\n        rubric_version: 'personal_info_processor_v1',\n        input_chars: 64,\n        scored_at: '2026-04-17T09:05:05.000Z'\n      },\n      tags: ['inbox', 'ai-information-processor', 'openai'],\n      dedupe_action: 'full_push',\n      notification_mode: 'full',\n      should_write_to_vault: true,\n      status: 'enriched',\n      enriched_at: '2026-04-17T09:05:05.000Z',\n      obsidianInboxDir: '00_Inbox/AI_Information_Processor',\n      workflow_label: 'ai-information-processor-mainline'\n    }\n  }\n];"
+            },
+            "id": "8a527e7d-f0f3-47d8-8364-6cceb5a465d9",
+            "name": "Example Gate Result",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                520,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "language": "javaScript",
+                "jsCode": "const normalizeMultiline = (value = '') => String(value ?? '')\n  .replace(/\\r\\n/g, '\\n')\n  .replace(/\\u0000/g, '')\n  .trim();\n\nconst normalizeSingleLine = (value = '') => normalizeMultiline(value)\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst sanitizePathSegment = (value = '', fallback = 'Untitled') => {\n  const normalized = normalizeSingleLine(value)\n    .normalize('NFKC')\n    .replace(/[<>:\"/\\\\|?*\\u0000-\\u001f]/g, ' ')\n    .replace(/[\\uFF0C\\u3002\\uFF01\\uFF1F\\u3001\\uFF1B\\uFF1A'\"`~!@#$%^&+=\\[\\]{}\\u3010\\u3011\\u300A\\u300B\\u3008\\u3009\\u300C\\u300D\\u300E\\u300F]/g, ' ')\n    .replace(/[()\\uFF08\\uFF09]/g, ' ')\n    .replace(/[\\u00B7\\u2022]/g, ' ')\n    .replace(/\\./g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n  if (!normalized) {\n    return fallback;\n  }\n\n  const hasCjk = /[\\u3400-\\u9fff]/.test(normalized);\n  const separator = hasCjk ? '' : '-';\n  return normalized.replace(/\\s+/g, separator).replace(/^-+|-+$/g, '') || fallback;\n};\n\nconst extractPrimaryName = (value = '') => {\n  const normalized = normalizeSingleLine(value);\n  if (!normalized) {\n    return '';\n  }\n  const parts = normalized\n    .split(/[|\\uFF5C/\\uFF0F]/)\n    .map((part) => normalizeSingleLine(part))\n    .filter(Boolean);\n  return parts[0] || normalized;\n};\n\nconst isLikelyRuntimeLabel = (value = '') => {\n  const normalized = normalizeSingleLine(value).toLowerCase();\n  if (!normalized) {\n    return false;\n  }\n  return [\n    'manual submit',\n    'manual-media-submit',\n    'manual_media_submit',\n    'codex',\n    'runtime',\n    'rerun',\n    'verify',\n    'smoke',\n    'webhook',\n    'mainline'\n  ].some((token) => normalized.includes(token));\n};\n\nconst pickSourceDisplayName = (payload) => {\n  const candidateKeys = [\n    'source_display_name',\n    'series_display_name',\n    'collection_display_name',\n    'feed_display_name',\n    'channel_title',\n    'feed_title'\n  ];\n\n  for (const key of candidateKeys) {\n    const candidate = normalizeSingleLine(payload[key] || '');\n    if (candidate) {\n      return candidate;\n    }\n  }\n\n  const sourceName = normalizeSingleLine(payload.source_name || '');\n  if (sourceName && !isLikelyRuntimeLabel(sourceName)) {\n    return sourceName;\n  }\n\n  const author = normalizeSingleLine(payload.author || '');\n  if (author) {\n    const sourceType = normalizeSingleLine(payload.source_type || '').toLowerCase();\n    return sourceType === 'podcast' ? extractPrimaryName(author) : author;\n  }\n\n  if (sourceName) {\n    return sourceName;\n  }\n\n  const sourceHost = normalizeSingleLine(payload.source_host || '').replace(/^www\\./i, '');\n  return sourceHost || 'UnknownSource';\n};\n\nconst deriveContentKind = (payload) => {\n  const sourceType = normalizeSingleLine(payload.source_type || '').toLowerCase();\n  const mediaType = normalizeSingleLine(payload.media_type || '').toLowerCase();\n\n  if (sourceType === 'podcast' || mediaType === 'audio') {\n    return 'Podcast';\n  }\n  if (mediaType === 'video' || sourceType === 'video' || sourceType === 'transcript') {\n    return 'Video';\n  }\n  if (sourceType === 'article' || sourceType === 'rss' || mediaType === 'text') {\n    return 'Article';\n  }\n  return 'Item';\n};\n\nconst deriveSequenceParts = (payload) => {\n  const rawTitle = normalizeSingleLine(payload.title || '');\n  const explicitKeys = ['sequence_label', 'episode_no', 'episode_number', 'episode_index', 'issue_number'];\n  let sequenceLabel = '';\n\n  for (const key of explicitKeys) {\n    const candidate = normalizeSingleLine(payload[key] || '');\n    if (candidate) {\n      sequenceLabel = candidate;\n      break;\n    }\n  }\n\n  let titleWithoutSequence = rawTitle;\n\n  if (!sequenceLabel && rawTitle) {\n    const match = rawTitle.match(/^((?:EP|ep|No\\.?|NO\\.?)?\\s*\\d{1,4})(?:\\s*[.\\uFF0E:\\uFF1A\\u3001-]\\s*|\\s+)(.+)$/);\n    if (match) {\n      sequenceLabel = normalizeSingleLine(match[1] || '');\n      titleWithoutSequence = normalizeSingleLine(match[2] || rawTitle);\n    }\n  }\n\n  sequenceLabel = sequenceLabel.replace(/\\s+/g, '').replace(/[^A-Za-z0-9-]/g, '');\n  if (/^\\d+$/.test(sequenceLabel)) {\n    sequenceLabel = sequenceLabel.padStart(Math.max(sequenceLabel.length, 3), '0');\n  }\n\n  return {\n    sequenceLabel,\n    titleWithoutSequence: titleWithoutSequence || rawTitle\n  };\n};\n\nconst shouldWriteToVault = Boolean($json.should_write_to_vault);\nconst existingVaultPath = String($json.vault_path || '').trim();\nconst existingWriteStatus = String($json.vault_write_status || $json.vault_write || '').trim();\nconst canonicalObsidianInboxDir = String($json.obsidianInboxDir || '').trim();\nconst legacyObsidianInboxDir = String($json.obsidian_inbox_dir || '').trim();\nif (\n  canonicalObsidianInboxDir &&\n  legacyObsidianInboxDir &&\n  canonicalObsidianInboxDir !== legacyObsidianInboxDir\n) {\n  throw new Error('05_common_vault_writer received conflicting obsidianInboxDir and obsidian_inbox_dir; normalize through 00_common_normalize_text_object before writing');\n}\nconst obsidianInboxDir = canonicalObsidianInboxDir\n  || legacyObsidianInboxDir\n  || String($env.OBSIDIAN_INBOX_DIR || '00_Inbox/AI_Information_Processor').trim()\n  || '00_Inbox/AI_Information_Processor';\nconst workflowLabel = String($json.workflow_label || $json.workflow_name || $json.workflow || 'ai-information-processor-mainline').trim() || 'ai-information-processor-mainline';\n\nlet fileBaseName = '';\nlet relativeFilePath = existingVaultPath;\nconst itemId = String($json.item_id || '').trim();\nconst title = String($json.title || '').trim();\nconst sourceDisplayName = pickSourceDisplayName($json);\nconst sourceDisplayPath = sanitizePathSegment(sourceDisplayName, 'UnknownSource').slice(0, 80) || 'UnknownSource';\nconst { sequenceLabel, titleWithoutSequence } = deriveSequenceParts($json);\nconst titleDisplay = sanitizePathSegment(titleWithoutSequence || title, 'Untitled').slice(0, 100) || 'Untitled';\nconst shortId = sanitizePathSegment(itemId.slice(0, 6) || 'unknown', 'unknown').slice(0, 12) || 'unknown';\nconst contentKind = deriveContentKind($json);\n\nif (itemId && title) {\n  const dateForFile = new Date($json.published_at || Date.now());\n  const safeDate = Number.isNaN(dateForFile.getTime()) ? new Date() : dateForFile;\n  const yyyy = safeDate.getUTCFullYear();\n  const mm = String(safeDate.getUTCMonth() + 1).padStart(2, '0');\n  const dd = String(safeDate.getUTCDate()).padStart(2, '0');\n  const datePrefix = `${yyyy}-${mm}-${dd}`;\n  const stem = sequenceLabel ? `${sequenceLabel}-${titleDisplay}` : titleDisplay;\n  fileBaseName = `${datePrefix}__${stem}__${shortId}`;\n  relativeFilePath = `${obsidianInboxDir}/${contentKind}/${sourceDisplayPath}/${fileBaseName}.md`;\n}\n\nif (shouldWriteToVault && !relativeFilePath) {\n  throw new Error('05_common_vault_writer requires item_id/title/published_at to build a deterministic vault path');\n}\n\nconst vaultWriteStatus = shouldWriteToVault ? 'pending' : (existingWriteStatus || 'skipped');\n\nreturn {\n  json: {\n    ...$json,\n    obsidianInboxDir,\n    workflow_label: workflowLabel,\n    fileBaseName,\n    relativeFilePath,\n    vault_path: relativeFilePath,\n    vault_write_status: vaultWriteStatus,\n    vault_write: vaultWriteStatus,\n    content_kind: contentKind,\n    source_display_name: sourceDisplayName,\n    source_display_path: sourceDisplayPath,\n    sequence_label: sequenceLabel,\n    title_display: titleDisplay,\n    short_id: shortId\n  }\n};"
+            },
+            "id": "b9c75ba9-b7b6-4e80-b4a2-0e3aa380360d",
+            "name": "Prepare Vault Write Context",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                780,
+                280
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{String($json.should_write_to_vault || false)}}",
+                            "operation": "equal",
+                            "value2": "true"
+                        }
+                    ]
+                }
+            },
+            "id": "ce67ce84-a65d-4d2e-b991-8ba7e16b791d",
+            "name": "Should Write To Vault?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1040,
+                280
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "language": "javaScript",
+                "jsCode": "const yamlEscape = (value = '') => String(value)\n  .replace(/\\\\/g, '\\\\\\\\')\n  .replace(/\"/g, '\\\\\"');\n\nconst normalizeMultiline = (value = '') => String(value || '')\n  .replace(/\\r\\n/g, '\\n')\n  .replace(/\\u0000/g, '')\n  .trim();\n\nconst normalizeSingleLine = (value = '') => normalizeMultiline(value)\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst normalizeTimestamp = (value = '') => {\n  const normalized = String(value || '').trim();\n  if (!normalized) {\n    return '';\n  }\n\n  const match = normalized.match(/^(\\d{1,2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?$/);\n  if (!match) {\n    return '';\n  }\n\n  return `${match[1].padStart(2, '0')}:${match[2]}:${match[3]}${match[4] ? `.${match[4].padEnd(3, '0')}` : ''}`;\n};\n\nconst normalizeChunks = (value) => {\n  if (!Array.isArray(value)) {\n    return [];\n  }\n\n  const normalized = [];\n  for (const chunk of value) {\n    if (!chunk || typeof chunk !== 'object') {\n      continue;\n    }\n\n    const text = normalizeMultiline(chunk.text || chunk.content || '');\n    if (!text) {\n      continue;\n    }\n\n    const charStart = Math.max(0, Math.floor(Number(chunk.char_start ?? chunk.charStart ?? 0)));\n    const rawCharEnd = Math.floor(Number(chunk.char_end ?? chunk.charEnd ?? (charStart + text.length)));\n    const charEnd = Number.isFinite(rawCharEnd) ? Math.max(charStart, rawCharEnd) : (charStart + text.length);\n\n    normalized.push({\n      chunk_id: normalizeSingleLine(chunk.chunk_id || chunk.chunkId || `c${String(normalized.length + 1).padStart(3, '0')}`),\n      start_time: normalizeTimestamp(chunk.start_time || chunk.startTime || ''),\n      end_time: normalizeTimestamp(chunk.end_time || chunk.endTime || ''),\n      speaker: normalizeSingleLine(chunk.speaker || ''),\n      text,\n      char_start: charStart,\n      char_end: charEnd,\n      topic_hint: normalizeSingleLine(chunk.topic_hint || chunk.topicHint || '')\n    });\n  }\n\n  return normalized;\n};\n\nconst sanitizePathSegment = (value = '', fallback = 'Untitled') => {\n  const normalized = normalizeSingleLine(value)\n    .normalize('NFKC')\n    .replace(/[<>:\"/\\\\|?*\\u0000-\\u001f]/g, ' ')\n    .replace(/[\\uFF0C\\u3002\\uFF01\\uFF1F\\u3001\\uFF1B\\uFF1A'\"`~!@#$%^&+=\\[\\]{}\\u3010\\u3011\\u300A\\u300B\\u3008\\u3009\\u300C\\u300D\\u300E\\u300F]/g, ' ')\n    .replace(/[()\\uFF08\\uFF09]/g, ' ')\n    .replace(/[\\u00B7\\u2022]/g, ' ')\n    .replace(/\\./g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n  if (!normalized) {\n    return fallback;\n  }\n\n  const hasCjk = /[\\u3400-\\u9fff]/.test(normalized);\n  const separator = hasCjk ? '' : '-';\n  return normalized.replace(/\\s+/g, separator).replace(/^-+|-+$/g, '') || fallback;\n};\n\nconst truncateText = (value = '', maxChars = 140, suffix = '...') => {\n  const normalized = normalizeSingleLine(value);\n  if (!normalized) {\n    return '';\n  }\n  if (normalized.length <= maxChars) {\n    return normalized;\n  }\n  const sliceLength = Math.max(0, maxChars - suffix.length);\n  return `${normalized.slice(0, sliceLength).trim()}${suffix}`;\n};\n\nconst extractQuickTake = (value = '') => {\n  const normalized = normalizeSingleLine(value);\n  if (!normalized) {\n    return '';\n  }\n  const sentenceMatch = normalized.match(/^.{1,140}?[。！？?!](?=\\s|$)/);\n  if (sentenceMatch?.[0]) {\n    return sentenceMatch[0].trim();\n  }\n  return truncateText(normalized, 140);\n};\n\nconst toIsoDate = (value) => {\n  const parsed = new Date(value || Date.now());\n  if (Number.isNaN(parsed.getTime())) {\n    return '';\n  }\n  return parsed.toISOString().slice(0, 10);\n};\n\nconst toSafeNumber = (value, fallback = 0) => {\n  const numericValue = Number(value);\n  return Number.isFinite(numericValue) ? numericValue : fallback;\n};\n\nconst toIntDisplay = (value, fallback = 'n/a') => {\n  const numericValue = Math.round(Number(value));\n  return Number.isFinite(numericValue) ? String(numericValue) : fallback;\n};\n\nconst cloneJson = (value) => {\n  if (value === undefined) {\n    return undefined;\n  }\n  if (value === null) {\n    return null;\n  }\n  return JSON.parse(JSON.stringify(value));\n};\n\nconst splitSegments = (value = '') => String(value || '').split('/').filter(Boolean);\n\nconst getRelativeLink = (fromPath, toPath) => {\n  const fromSegments = splitSegments(fromPath).slice(0, -1);\n  const toSegments = splitSegments(toPath);\n  let index = 0;\n  while (index < fromSegments.length && index < toSegments.length && fromSegments[index] === toSegments[index]) {\n    index += 1;\n  }\n  const upSegments = new Array(fromSegments.length - index).fill('..');\n  const downSegments = toSegments.slice(index);\n  const combined = [...upSegments, ...downSegments];\n  return combined.length ? combined.join('/') : './';\n};\n\nconst buildChunkMeta = (chunk) => {\n  const parts = [];\n  if (chunk.start_time || chunk.end_time) {\n    parts.push([chunk.start_time, chunk.end_time].filter(Boolean).join(' - '));\n  }\n  if (chunk.speaker) {\n    parts.push(chunk.speaker);\n  }\n  parts.push(`chars ${chunk.char_start}-${chunk.char_end}`);\n  if (chunk.topic_hint) {\n    parts.push(chunk.topic_hint);\n  }\n  return parts.join(' · ');\n};\n\nconst normalizeStringList = (value, maxItems = 6) => {\n  const rawItems = Array.isArray(value)\n    ? value\n    : typeof value === 'string'\n      ? value.split(/[\\n,]+/)\n      : [];\n  return rawItems\n    .map((entry) => normalizeSingleLine(entry))\n    .filter(Boolean)\n    .slice(0, maxItems);\n};\n\nconst normalizeKeyPoints = (value) => {\n  const rawItems = Array.isArray(value) ? value : [];\n  const normalized = [];\n\n  for (const rawItem of rawItems) {\n    if (normalized.length >= 4) {\n      break;\n    }\n\n    if (typeof rawItem === 'string') {\n      const text = normalizeSingleLine(rawItem);\n      if (!text) {\n        continue;\n      }\n      normalized.push({\n        heading: text.slice(0, 60),\n        bullets: [text]\n      });\n      continue;\n    }\n\n    if (!rawItem || typeof rawItem !== 'object') {\n      continue;\n    }\n\n    const heading = normalizeSingleLine(\n      rawItem.heading\n      || rawItem.title\n      || rawItem.label\n      || rawItem.point\n      || ''\n    ).slice(0, 60);\n    const bullets = normalizeStringList(\n      Array.isArray(rawItem.bullets)\n        ? rawItem.bullets\n        : Array.isArray(rawItem.points)\n          ? rawItem.points\n          : rawItem.bullets || rawItem.summary || rawItem.text || '',\n      3\n    );\n\n    if (!heading && !bullets.length) {\n      continue;\n    }\n\n    normalized.push({\n      heading: heading || bullets[0].slice(0, 60),\n      bullets: bullets.length ? bullets : [heading]\n    });\n  }\n\n  return normalized;\n};\n\nconst normalizeClaims = (value) => {\n  const rawItems = Array.isArray(value) ? value : [];\n  const normalized = [];\n\n  for (const rawItem of rawItems) {\n    if (normalized.length >= 3) {\n      break;\n    }\n\n    if (typeof rawItem === 'string') {\n      const claim = normalizeSingleLine(rawItem);\n      if (!claim) {\n        continue;\n      }\n      normalized.push({\n        claim,\n        claim_type: '',\n        evidence_anchor: '',\n        system_relation: ''\n      });\n      continue;\n    }\n\n    if (!rawItem || typeof rawItem !== 'object') {\n      continue;\n    }\n\n    const claim = normalizeSingleLine(rawItem.claim || rawItem.statement || rawItem.summary || '');\n    if (!claim) {\n      continue;\n    }\n\n    normalized.push({\n      claim,\n      claim_type: normalizeSingleLine(rawItem.claim_type || rawItem.type || ''),\n      evidence_anchor: normalizeSingleLine(rawItem.evidence_anchor || rawItem.evidence || rawItem.anchor || ''),\n      system_relation: normalizeSingleLine(rawItem.system_relation || rawItem.relation || '')\n    });\n  }\n\n  return normalized;\n};\n\nconst escapeTableCell = (value = '') => normalizeSingleLine(value).replace(/\\|/g, '\\\\|');\n\nconst fileBaseName = String($json.fileBaseName || '').trim();\nconst relativeFilePath = String($json.relativeFilePath || '').trim();\nif (!fileBaseName || !relativeFilePath) {\n  throw new Error('05_common_vault_writer is missing fileBaseName/relativeFilePath before Markdown generation');\n}\nconst relativeDir = relativeFilePath.includes('/') ? relativeFilePath.slice(0, relativeFilePath.lastIndexOf('/')) : '';\n\nconst obsidianInboxDir = String($json.obsidianInboxDir || '').trim();\nif (!obsidianInboxDir) {\n  throw new Error('05_common_vault_writer requires obsidianInboxDir before Markdown generation');\n}\n\nconst mediaType = String($json.media_type || '').trim().toLowerCase();\nconst sourceType = String($json.source_type || '').trim().toLowerCase();\nconst contentKind = String($json.content_kind || '').trim() || 'Item';\nconst sourceDisplayName = normalizeSingleLine($json.source_display_name || $json.author || $json.source_name || 'UnknownSource') || 'UnknownSource';\nconst sourceDisplayPath = sanitizePathSegment($json.source_display_path || sourceDisplayName, 'UnknownSource').slice(0, 80) || 'UnknownSource';\nconst sequenceLabel = normalizeSingleLine($json.sequence_label || '').replace(/\\s+/g, '');\nconst titleDisplay = sanitizePathSegment($json.title_display || $json.title || 'Untitled', 'Untitled').slice(0, 100) || 'Untitled';\nconst shortId = sanitizePathSegment($json.short_id || String($json.item_id || '').slice(0, 6) || 'unknown', 'unknown').slice(0, 12) || 'unknown';\nconst rawKind = ['audio', 'video'].includes(mediaType) || ['podcast', 'transcript', 'audio'].includes(sourceType)\n  ? 'transcript'\n  : 'raw';\nconst rawHeading = rawKind === 'transcript' ? '原始转写' : '原始文本';\nconst publishedDate = toIsoDate($json.published_at);\nconst datePrefix = publishedDate || toIsoDate(Date.now());\nconst auditPromptVersion = sanitizePathSegment($json.ai_meta?.prompt_version || 'scoring_v2_cn_note', 'scoring_v2_cn_note').slice(0, 60) || 'scoring_v2_cn_note';\nconst auditRubricVersion = sanitizePathSegment($json.ai_meta?.rubric_version || 'audit_v1', 'audit_v1').slice(0, 80) || 'audit_v1';\nconst auditId = sanitizePathSegment(String($json.item_id || '').slice(0, 13) || shortId, shortId).slice(0, 20) || shortId;\nconst rawSequenceSegment = sequenceLabel ? `__${sequenceLabel}` : '';\nconst rawFileName = `${datePrefix}__${sourceDisplayPath}${rawSequenceSegment}__${rawKind}__${shortId}.md`;\nconst auditFileName = `${shortId}__${auditPromptVersion}.json`;\nconst rawRelativePath = `${relativeDir}/raw/${rawFileName}`;\nconst auditRelativePath = `${relativeDir}/audit/${auditFileName}`;\nconst rawRelativeLink = getRelativeLink(relativeFilePath, rawRelativePath);\nconst auditRelativeLink = getRelativeLink(relativeFilePath, auditRelativePath);\nconst rawParentLink = getRelativeLink(rawRelativePath, relativeFilePath);\n\nconst canonicalUrl = String($json.canonical_url || '').trim();\nconst workflowLabel = String($json.workflow_label || 'ai-information-processor-mainline').trim() || 'ai-information-processor-mainline';\nconst summary = normalizeMultiline($json.summary || '');\nconst reason = normalizeMultiline($json.reason || '');\nconst contentText = normalizeMultiline($json.content_text || '');\nconst upstreamSummary = normalizeMultiline($json.upstream_summary || '');\nconst chunks = normalizeChunks($json.chunks);\nconst chunkCount = chunks.length;\nconst chunkCountLine = chunkCount ? `chunk_count: ${chunkCount}\\n` : '';\nconst noteQuickTake = normalizeMultiline($json.note_quick_take || '');\nconst noteWhyUseful = normalizeMultiline($json.note_why_useful || '');\nconst keyPoints = normalizeKeyPoints($json.note_key_points);\nconst claims = normalizeClaims($json.note_claims);\nconst actionItems = normalizeStringList($json.note_action_items, 4);\nconst quickTake = noteQuickTake || extractQuickTake(summary) || extractQuickTake(reason) || truncateText(contentText, 140) || '暂无。';\nconst whyUseful = noteWhyUseful || reason || summary || '暂无。';\nconst fallbackKeyPoint = truncateText(summary || contentText, 220) || '暂无可用摘要。';\nconst renderedKeyPoints = (keyPoints.length ? keyPoints : [{\n  heading: '内容概览',\n  bullets: [fallbackKeyPoint]\n}]).map((point, index) => {\n  const bulletLines = point.bullets.map((bullet) => `- ${bullet}`).join('\\n');\n  return `### ${index + 1}. ${point.heading}\\n\\n${bulletLines}`;\n}).join('\\n\\n');\nconst claimsMarkdown = claims.length\n  ? [\n      '| Claim | 类型 | 证据锚点 | 与我系统的关系 |',\n      '|---|---|---|---|',\n      ...claims.map((claim) => `| ${escapeTableCell(claim.claim)} | ${escapeTableCell(claim.claim_type || '待补充')} | ${escapeTableCell(claim.evidence_anchor || '待补充')} | ${escapeTableCell(claim.system_relation || '待补充')} |`)\n    ].join('\\n')\n  : '暂无明确可沉淀 claims。';\nconst actionItemsMarkdown = (actionItems.length ? actionItems : ['暂无明确行动项。'])\n  .map((item) => `- ${item}`)\n  .join('\\n');\nconst dedupeAction = String($json.dedupe_action || 'full_push').trim() || 'full_push';\nconst notificationMode = String($json.notification_mode || '').trim();\nconst notificationDisplay = notificationMode || 'silent';\nconst matchedPayload = $json.matched_payload && typeof $json.matched_payload === 'object' ? $json.matched_payload : null;\nconst matchedScore = toSafeNumber($json.matched_score, NaN);\nconst matchedTitle = matchedPayload ? normalizeSingleLine(matchedPayload.title || '') : '';\nconst matchedItemId = matchedPayload ? normalizeSingleLine(matchedPayload.item_id || '') : '';\nconst matchedCanonicalUrl = matchedPayload ? normalizeSingleLine(matchedPayload.canonical_url || '') : '';\nconst tags = Array.isArray($json.tags) && $json.tags.length\n  ? $json.tags.filter(Boolean)\n  : ['inbox', 'ai-information-processor'];\nconst normalizedTags = [...new Set([...tags, `dedupe-${dedupeAction}`].filter(Boolean))];\nconst aiScore = $json.ai_score && typeof $json.ai_score === 'object' ? $json.ai_score : null;\nconst keepScoreText = toIntDisplay(aiScore?.keep_score, toIntDisplay(toSafeNumber($json.score, 0) * 100));\nconst referenceScoreText = toIntDisplay(aiScore?.reference_score);\nconst actionScoreText = toIntDisplay(aiScore?.action_score);\nconst notifyScoreText = toIntDisplay(aiScore?.notify_score);\nconst decisionHint = normalizeSingleLine(aiScore?.decision_hint || '');\nconst decisionDisplay = decisionHint || normalizeSingleLine($json.status || 'raw') || 'raw';\nconst mediaLabel = mediaType === 'audio'\n  ? '播客'\n  : mediaType === 'video'\n    ? '视频'\n    : mediaType === 'text'\n      ? '文章'\n      : normalizeSingleLine($json.media_type || contentKind) || contentKind;\nconst sourceLineName = normalizeSingleLine($json.author || '') || sourceDisplayName;\nconst sourceLine = [mediaLabel, sourceLineName, publishedDate].filter(Boolean).join(' · ');\nconst relatedLines = matchedPayload ? [\n  matchedTitle ? `- 相似对象：${matchedTitle}` : '',\n  Number.isFinite(matchedScore) && matchedScore > 0 ? `- matched_score: ${matchedScore.toFixed(4)}` : '',\n  matchedCanonicalUrl ? `- 原始链接：${matchedCanonicalUrl}` : '',\n  '- 关系：主题上有重叠，可结合审计 sidecar 判断是补充还是重复。'\n].filter(Boolean).join('\\n') : '';\nconst originalMaterialLines = [\n  `- ${rawHeading}：[${rawFileName}](${rawRelativeLink})`,\n  `- LLM 审计：[${auditFileName}](${auditRelativeLink})`,\n  canonicalUrl ? `- 原始链接：${canonicalUrl}` : ''\n].filter(Boolean).join('\\n');\n\nconst markdownSections = [\n  `# ${$json.title}`,\n  '',\n  `> ${sourceLine || sourceDisplayName}`,\n  `> Keep ${keepScoreText} / Reference ${referenceScoreText} / Action ${actionScoreText} / Notify ${notifyScoreText}`,\n  `> 状态：${decisionDisplay} · 通知：${notificationDisplay}`,\n  '',\n  '## 一句话判断',\n  '',\n  quickTake,\n  '',\n  '## 为什么对我有用',\n  '',\n  whyUseful,\n  '',\n  '## 关键观点',\n  '',\n  renderedKeyPoints,\n  '',\n  '## 可沉淀 Claims',\n  '',\n  claimsMarkdown,\n  '',\n  '## 可能的行动项',\n  '',\n  actionItemsMarkdown\n];\n\nif (relatedLines) {\n  markdownSections.push('', '## 关联对象', '', relatedLines);\n}\n\nmarkdownSections.push('', '## 原始材料', '', originalMaterialLines, '');\nconst markdown = markdownSections.join('\\n');\n\nconst chunkIndexLines = chunks.map((chunk) => `- ${chunk.chunk_id} | ${buildChunkMeta(chunk)}`).join('\\n');\nconst chunkSections = chunks.map((chunk) => `### ${chunk.chunk_id}\\n> ${buildChunkMeta(chunk)}\\n\\n${chunk.text}`).join('\\n\\n');\nconst rawBody = chunks.length\n  ? `## 分块索引\\n\\n${chunkIndexLines}\\n\\n## 分块正文\\n\\n${chunkSections}\\n`\n  : `${contentText || 'No text content extracted from this item.'}\\n`;\nconst rawMarkdown = `---\\ntitle: \"${yamlEscape($json.title)}\"\\nitem_id: \"${yamlEscape($json.item_id)}\"\\nparent_note: \"${yamlEscape(relativeFilePath)}\"\\nsource_type: \"${yamlEscape($json.source_type)}\"\\nsource_name: \"${yamlEscape($json.source_name)}\"\\nsource_display_name: \"${yamlEscape(sourceDisplayName)}\"\\ncanonical_url: \"${yamlEscape(canonicalUrl)}\"\\nmedia_type: \"${yamlEscape($json.media_type)}\"\\nraw_kind: \"${yamlEscape(rawKind)}\"\\ncontent_hash: \"${yamlEscape($json.content_hash)}\"\\n${chunkCountLine}---\\n\\n# ${rawHeading}\\n\\n- 主笔记：[${fileBaseName}.md](${rawParentLink})\\n${canonicalUrl ? `- 原始链接：${canonicalUrl}\\n` : ''}- 字符数：${contentText.length}\\n${chunks.length ? `- 分块数：${chunkCount}\\n` : ''}\\n${rawBody}`;\n\nconst compactMatchedPayload = matchedPayload ? {\n  item_id: matchedItemId || undefined,\n  title: matchedTitle || undefined,\n  canonical_url: matchedCanonicalUrl || undefined,\n  score: matchedPayload.score ?? undefined,\n  category: normalizeSingleLine(matchedPayload.category || '') || undefined,\n  summary: truncateText(matchedPayload.summary || '', 600),\n  tags: Array.isArray(matchedPayload.tags) ? matchedPayload.tags : [],\n  content_hash: normalizeSingleLine(matchedPayload.content_hash || '') || undefined\n} : null;\n\nconst auditPayload = {\n  version: 3,\n  generated_at: new Date().toISOString(),\n  item_id: normalizeSingleLine($json.item_id || ''),\n  note: {\n    main_vault_path: relativeFilePath,\n    raw_vault_path: rawRelativePath,\n    audit_vault_path: auditRelativePath\n  },\n  naming: {\n    content_kind: contentKind,\n    source_display_name: sourceDisplayName,\n    source_display_path: sourceDisplayPath,\n    sequence_label: sequenceLabel || null,\n    title_display: titleDisplay,\n    short_id: shortId,\n    audit_id: auditId\n  },\n  source: {\n    source_type: normalizeSingleLine($json.source_type || ''),\n    source_name: normalizeSingleLine($json.source_name || ''),\n    source_display_name: sourceDisplayName,\n    source_host: normalizeSingleLine($json.source_host || ''),\n    original_id: normalizeSingleLine($json.original_id || ''),\n    canonical_url: canonicalUrl,\n    title: normalizeSingleLine($json.title || ''),\n    author: normalizeSingleLine($json.author || ''),\n    published_at: normalizeSingleLine($json.published_at || ''),\n    ingested_at: normalizeSingleLine($json.ingested_at || ''),\n    media_type: normalizeSingleLine($json.media_type || ''),\n    content_hash: normalizeSingleLine($json.content_hash || ''),\n    tags: normalizedTags\n  },\n  upstream: {\n    upstream_task_id: normalizeSingleLine($json.upstream_task_id || ''),\n    upstream_view_token: normalizeSingleLine($json.upstream_view_token || ''),\n    upstream_summary: upstreamSummary || '',\n    transcript_service_meta: cloneJson($json.transcript_service_meta ?? null)\n  },\n  evidence: {\n    chunk_count: chunkCount,\n    chunks: cloneJson(chunks)\n  },\n  scoring: {\n    score: toSafeNumber($json.score, 0),\n    score_scale: Math.round(toSafeNumber($json.score_scale, 100)),\n    category: normalizeSingleLine($json.category || 'pending') || 'pending',\n    summary,\n    reason,\n    ai_score: cloneJson($json.ai_score ?? null),\n    score_dimensions: cloneJson($json.score_dimensions ?? null),\n    ai_meta: cloneJson($json.ai_meta ?? null),\n    status: normalizeSingleLine($json.status || ''),\n    decision_hint: decisionHint || null,\n    notification_mode: notificationDisplay\n  },\n  presentation: {\n    view_version: normalizeSingleLine($json.note_view_version || 'zh_reader_v1') || 'zh_reader_v1',\n    quick_take: quickTake,\n    why_useful: whyUseful,\n    key_points: cloneJson(keyPoints),\n    claims: cloneJson(claims),\n    action_items: cloneJson(actionItems)\n  },\n  dedupe: {\n    dedupe_action: dedupeAction,\n    matched_score: Number.isFinite(matchedScore) && matchedScore > 0 ? Number(matchedScore.toFixed(8)) : null,\n    matched_same_item: Boolean($json.matched_same_item),\n    matched_payload: compactMatchedPayload\n  },\n  workflow: {\n    workflow_label: workflowLabel,\n    should_write_to_vault: Boolean($json.should_write_to_vault),\n    should_upsert_qdrant: Boolean($json.should_upsert_qdrant),\n    qdrant_operation: normalizeSingleLine($json.qdrant_operation || '') || 'pending'\n  },\n  input_view: {\n    title: normalizeSingleLine($json.title || ''),\n    title_display: titleDisplay,\n    source_name: normalizeSingleLine($json.source_name || 'unknown-source'),\n    source_display_name: sourceDisplayName,\n    source_type: normalizeSingleLine($json.source_type || ''),\n    author: normalizeSingleLine($json.author || ''),\n    canonical_url: canonicalUrl,\n    published_at: normalizeSingleLine($json.published_at || ''),\n    dedupe_action: dedupeAction,\n    upstream_summary: upstreamSummary || '',\n    nearest_match: compactMatchedPayload ? {\n      item_id: compactMatchedPayload.item_id || '',\n      title: compactMatchedPayload.title || '',\n      matched_score: Number.isFinite(matchedScore) && matchedScore > 0 ? Number(matchedScore.toFixed(8)) : null,\n      category: compactMatchedPayload.category || '',\n      summary: compactMatchedPayload.summary || ''\n    } : null,\n    chunk_count: chunkCount,\n    content_text_chars: contentText.length,\n    content_text_preview: truncateText(contentText, 1500)\n  }\n};\n\nreturn {\n  json: {\n    ...$json,\n    vault_path: relativeFilePath,\n    raw_vault_path: rawRelativePath,\n    audit_vault_path: auditRelativePath,\n    vault_write_status: 'pending',\n    vault_write: 'pending'\n  },\n  binary: {\n    mainNote: {\n      data: Buffer.from(markdown, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: `${fileBaseName}.md`,\n      fileExtension: 'md'\n    },\n    rawNote: {\n      data: Buffer.from(rawMarkdown, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: rawFileName,\n      fileExtension: 'md'\n    },\n    auditNote: {\n      data: Buffer.from(JSON.stringify(auditPayload, null, 2), 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: auditFileName,\n      fileExtension: 'json'\n    }\n  }\n};\n"
+            },
+            "id": "5fd04268-bda8-4f55-ab39-f4677708b1ee",
+            "name": "Build Markdown",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1300,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "language": "javaScript",
+                "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst vaultRoot = path.resolve('/vault');\nconst targetPaths = [\n  String($json.relativeFilePath || $json.vault_path || '').trim(),\n  String($json.raw_vault_path || '').trim(),\n  String($json.audit_vault_path || '').trim()\n].filter(Boolean);\n\nfor (const relativePath of targetPaths) {\n  const absoluteTarget = path.resolve(path.join(vaultRoot, relativePath));\n  if (!(absoluteTarget === vaultRoot || absoluteTarget.startsWith(`${vaultRoot}${path.sep}`))) {\n    throw new Error(`05_common_vault_writer refused to create a directory outside /vault: ${relativePath}`);\n  }\n  fs.mkdirSync(path.dirname(absoluteTarget), { recursive: true });\n}\n\nconst inputBinary = ($input.item && typeof $input.item === 'object' && $input.item.binary && typeof $input.item.binary === 'object')\n  ? $input.item.binary\n  : {};\n\nreturn {\n  json: {\n    ...$json\n  },\n  binary: inputBinary\n};\n"
+            },
+            "id": "0fd9d4a6-6eb3-4d1b-9d73-5a2af023cf40",
+            "name": "Ensure Vault Directories",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1560,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "fileName": "={{'/vault/' + $json.relativeFilePath}}",
+                "dataPropertyName": "mainNote",
+                "options": {}
+            },
+            "id": "9ccb6d4f-f77c-45e6-b6be-0db44240f919",
+            "name": "Write Binary File",
+            "type": "n8n-nodes-base.writeBinaryFile",
+            "typeVersion": 1,
+            "position": [
+                1820,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "fileName": "={{'/vault/' + $json.raw_vault_path}}",
+                "dataPropertyName": "rawNote",
+                "options": {}
+            },
+            "id": "e88a47f1-9f08-4bf5-ae42-f4c36bc7e73a",
+            "name": "Write Raw Sidecar",
+            "type": "n8n-nodes-base.writeBinaryFile",
+            "typeVersion": 1,
+            "position": [
+                2080,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "fileName": "={{'/vault/' + $json.audit_vault_path}}",
+                "dataPropertyName": "auditNote",
+                "options": {}
+            },
+            "id": "13f49797-27e6-4ff2-9109-2d3a7552b516",
+            "name": "Write Audit Sidecar",
+            "type": "n8n-nodes-base.writeBinaryFile",
+            "typeVersion": 1,
+            "position": [
+                2340,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "language": "javaScript",
+                "jsCode": "const vaultPath = String($json.relativeFilePath || $json.vault_path || '').trim();\nconst shouldUpsert = Boolean($json.should_upsert_qdrant);\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: 'written',\n    vault_write: 'written',\n    qdrant_operation: shouldUpsert ? 'pending' : 'skipped',\n    qdrant_upsert_response: null\n  }\n};"
+            },
+            "id": "058fae12-5fd6-4e02-b0b1-4501577ff4e6",
+            "name": "Finalize Written Result",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2600,
+                180
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "language": "javaScript",
+                "jsCode": "const status = String($json.vault_write_status || $json.vault_write || '').trim() || 'skipped';\nconst vaultPath = String($json.relativeFilePath || $json.vault_path || '').trim();\nreturn {\n  json: {\n    ...$json,\n    vault_path: vaultPath,\n    vault_write_status: status,\n    vault_write: status,\n    qdrant_operation: 'skipped',\n    qdrant_upsert_response: null\n  }\n};"
+            },
+            "id": "7527fe17-2da7-4a13-900d-451d5e15a69c",
+            "name": "Finalize Skipped Result",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1300,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "append"
+            },
+            "id": "ef1a9d76-a634-4ef9-af25-aa4773ec9bda",
+            "name": "Merge Vault Result",
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 3.2,
+            "position": [
+                2860,
+                280
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "language": "javaScript",
+                "jsCode": "return {\n  json: {\n    ...$json,\n    vault_path: String($json.vault_path || $json.relativeFilePath || '').trim(),\n    vault_write_status: String($json.vault_write_status || $json.vault_write || 'skipped').trim() || 'skipped',\n    vault_write: String($json.vault_write || $json.vault_write_status || 'skipped').trim() || 'skipped',\n    qdrant_operation: String($json.qdrant_operation || 'skipped').trim() || 'skipped',\n    qdrant_upsert_response: $json.qdrant_upsert_response ?? null\n  }\n};"
+            },
+            "id": "14fa83d2-1465-4f4f-a68b-c95dc2d44f6d",
+            "name": "Return Vault Result",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                3120,
+                280
+            ]
+        }
+    ],
+    "connections": {
+        "When clicking 'Execute workflow'": {
+            "main": [
+                [
+                    {
+                        "node": "Example Gate Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "When Executed by Another Workflow": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Vault Write Context",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Example Gate Result": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Vault Write Context",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Vault Write Context": {
+            "main": [
+                [
+                    {
+                        "node": "Should Write To Vault?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Should Write To Vault?": {
+            "main": [
+                [
+                    {
+                        "node": "Build Markdown",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Finalize Skipped Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Markdown": {
+            "main": [
+                [
+                    {
+                        "node": "Ensure Vault Directories",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Write Binary File": {
+            "main": [
+                [
+                    {
+                        "node": "Write Raw Sidecar",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Write Raw Sidecar": {
+            "main": [
+                [
+                    {
+                        "node": "Write Audit Sidecar",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Write Audit Sidecar": {
+            "main": [
+                [
+                    {
+                        "node": "Finalize Written Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Finalize Written Result": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Vault Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Finalize Skipped Result": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Vault Result",
+                        "type": "main",
+                        "index": 1
+                    }
+                ]
+            ]
+        },
+        "Merge Vault Result": {
+            "main": [
+                [
+                    {
+                        "node": "Return Vault Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Ensure Vault Directories": {
+            "main": [
+                [
+                    {
+                        "node": "Write Binary File",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "meta": {
+        "templateCredsSetupCompleted": true
+    },
+    "pinData": {},
+    "versionId": "0a04e057-ecb0-46d9-8d9f-2e326573010b",
+    "tags": []
 }

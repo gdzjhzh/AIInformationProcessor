@@ -1,4 +1,4 @@
-﻿{
+{
     "id":  "acb525fca8ea4dc4",
     "name":  "04 Video Transcript Ingest",
     "description":  "Runnable transcript adapter: submit a media URL to VideoTranscriptAPI, poll task completion over HTTP nodes, normalize transcript chunks, and return a NormalizedTextObject-compatible ingress input. VideoTranscriptAPI summary/cache/LLM outputs are treated only as upstream context via upstream_summary or transcript_service_meta. This workflow does not run scoring, dedupe, action policy, or Vault writing.",

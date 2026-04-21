@@ -1,4 +1,4 @@
-﻿{
+{
     "id":  "d4f093a8e2f74e39",
     "name":  "00 Common Normalize Text Object",
     "description":  "Runnable sub-workflow: normalize source-adapter input into the shared Stage-0 NormalizedTextObject baseline while preserving mainline-equivalent IDs, tags, source_host, chunk anchors, and Obsidian routing context.",
