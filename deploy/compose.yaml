@@ -159,6 +159,23 @@ services:
     depends_on:
       - funasr-spk-server
 
+  collector-web:
+    build:
+      context: ../services/collector_web
+      dockerfile: docker/Dockerfile
+    image: ${COLLECTOR_WEB_IMAGE:-ai-information-processor-collector-web:local}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${COLLECTOR_WEB_PORT:-8300}:8300"
+    volumes:
+      - ./data/collector_web:/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+      COLLECTOR_WEB_HOST: 0.0.0.0
+      COLLECTOR_WEB_PORT: 8300
+      COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
+      RSS_SOURCE_URLS_JSON: ${RSS_SOURCE_URLS_JSON:-[]}
+
   rsshub:
     image: ${RSSHUB_IMAGE:-diygod/rsshub:latest}
     restart: unless-stopped

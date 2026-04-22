@@ -1,0 +1,28 @@
+[project]
+name = "collector-web"
+version = "0.1.0"
+description = "Subscription dashboard for AI Information Processor"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.101.1",
+    "jinja2>=3.1.0",
+    "uvicorn==0.23.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx<0.25",
+    "pytest>=8.3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/collector_web"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"

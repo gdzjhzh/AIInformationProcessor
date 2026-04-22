@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}订阅首页 - Collector Web{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-copy">
+        <p class="eyebrow">先把首页看顺</p>
+        <h2>按平台查看订阅</h2>
+        <p class="hero-text">
+            底层仍然保留“合集”这个分组模型，但首页先按平台看，避免把 B站、小宇宙误读成两个合集。
+        </p>
+    </div>
+    <div class="metric-grid">
+        <article class="metric-card">
+            <span class="metric-label">平台数</span>
+            <strong class="metric-value">{{ summary.platform_count }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">订阅总数</span>
+            <strong class="metric-value">{{ summary.subscription_count }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">启用中</span>
+            <strong class="metric-value">{{ summary.active_subscription_count }}</strong>
+        </article>
+    </div>
+</section>
+
+<section class="collection-list">
+    {% if platform_groups %}
+        {% for group in platform_groups %}
+        <article class="collection-card">
+            <header class="collection-header">
+                <div>
+                    <div class="collection-title-row">
+                        <h3>{{ group.label }}</h3>
+                        <span class="status-badge">{{ group.platform }}</span>
+                    </div>
+                    <p class="collection-meta">按平台展示，合集仍在后台保留。</p>
+                </div>
+                <div class="collection-stats">
+                    <span>{{ group.subscription_count }} 个订阅</span>
+                    <span>{{ group.active_subscription_count }} 个启用中</span>
+                </div>
+            </header>
+
+            <div class="subscription-list">
+                {% for subscription in group.subscriptions %}
+                <article class="subscription-item">
+                    <div class="subscription-main">
+                        <div class="subscription-heading">
+                            <strong>{{ subscription.display_name }}</strong>
+                            <span class="platform-badge">{{ subscription.platform_label }}</span>
+                            <span class="status-badge muted">{{ subscription.status }}</span>
+                        </div>
+                        <p class="subscription-meta">
+                            {{ subscription.source_type }} ·
+                            <a href="{{ subscription.source_url }}" target="_blank" rel="noopener">{{ subscription.source_url }}</a>
+                        </p>
+                        <p class="subscription-meta secondary">
+                            ingest: {{ subscription.ingest_url }}
+                        </p>
+                        <p class="subscription-meta secondary">
+                            合集: {{ subscription.collection_name }}
+                        </p>
+                    </div>
+                    <div class="subscription-side">
+                        <span>更新于</span>
+                        <strong>{{ subscription.updated_at }}</strong>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </article>
+        {% endfor %}
+    {% else %}
+    <article class="collection-card">
+        <div class="empty-state">
+            <p>现在还没有导入任何订阅。</p>
+            <p>后面会继续补“新增订阅”表单；当前也会优先尝试从现有 RSS_SOURCE_URLS_JSON 启动导入。</p>
+        </div>
+    </article>
+    {% endif %}
+</section>
+{% endblock %}
