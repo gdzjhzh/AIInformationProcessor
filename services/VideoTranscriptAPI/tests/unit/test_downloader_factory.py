@@ -14,6 +14,7 @@ import pytest
 from video_transcript_api.downloaders.factory import create_downloader
 from video_transcript_api.downloaders.youtube import YoutubeDownloader
 from video_transcript_api.downloaders.bilibili import BilibiliDownloader
+from video_transcript_api.downloaders.dedao import DedaoDownloader
 from video_transcript_api.downloaders.douyin import DouyinDownloader
 from video_transcript_api.downloaders.xiaohongshu import XiaohongshuDownloader
 from video_transcript_api.downloaders.xiaoyuzhou import XiaoyuzhouDownloader
@@ -63,6 +64,26 @@ class TestBilibiliRouting:
         downloader = create_downloader(url)
         assert isinstance(downloader, BilibiliDownloader), (
             f"Expected BilibiliDownloader for {url}, got {type(downloader).__name__}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Dedao
+# ---------------------------------------------------------------------------
+
+class TestDedaoRouting:
+    """Factory should return DedaoDownloader for Dedao share URLs."""
+
+    @pytest.mark.parametrize("url", [
+        "https://d.dedao.cn/GCTnMYcf1f6tUyxd",
+        "https://www.dedao.cn/share/course/article?id=7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj",
+        "http://dedao.cn/share/course/article?id=7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj",
+        "https://www.dedao.cn/share/course/article/article_id/117219",
+    ])
+    def test_dedao_urls(self, url):
+        downloader = create_downloader(url)
+        assert isinstance(downloader, DedaoDownloader), (
+            f"Expected DedaoDownloader for {url}, got {type(downloader).__name__}"
         )
 
 

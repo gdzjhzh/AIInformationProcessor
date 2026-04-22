@@ -70,6 +70,11 @@ class URLParser:
             r'douyin\.com/(?:video|note)/(\d+)',  # 标准链接
             r'v\.douyin\.com/(\w+)',  # 短链接（需要解析）
         ],
+        'dedao': [
+            r'dedao\.cn/share/course/article/article_id/(\d+)',
+            r'dedao\.cn/share/course/article(?:\?[^#]*)?[?&]id=([^&#]+)',
+            r'd\.dedao\.cn/([A-Za-z0-9]+)',
+        ],
         'xiaoyuzhou': [
             r'xiaoyuzhoufm\.com/episode/([a-z0-9]+)',  # 小宇宙播客
         ],
@@ -82,6 +87,7 @@ class URLParser:
     # 短链接域名映射
     SHORT_URL_DOMAINS = {
         'b23.tv': 'bilibili',
+        'd.dedao.cn': 'dedao',
         'youtu.be': 'youtube',
         'v.douyin.com': 'douyin',
         'xhslink.com': 'xiaohongshu',
@@ -276,6 +282,8 @@ class URLParser:
             return 'bilibili'
         elif 'douyin.com' in url_lower:
             return 'douyin'
+        elif 'dedao.cn' in url_lower:
+            return 'dedao'
         elif 'xiaoyuzhoufm.com' in url_lower:
             return 'xiaoyuzhou'
         elif 'xiaohongshu.com' in url_lower or 'xhslink.com' in url_lower:

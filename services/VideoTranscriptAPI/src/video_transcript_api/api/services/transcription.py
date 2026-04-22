@@ -314,6 +314,7 @@ def process_transcription(
     display_url = url
     platform = None
     media_id = None
+    canonical_url = url
     video_title = ""
     author = ""
 
@@ -345,6 +346,8 @@ def process_transcription(
             data["download_file_relative_path"] = relative_path
         if download_url:
             data["download_url"] = download_url
+        if canonical_url:
+            data["canonical_url"] = canonical_url
         if video_title:
             data["video_title"] = video_title
         if author:
@@ -582,6 +585,7 @@ def process_transcription(
                         "video_title": video_title,
                         "author": author,
                         "transcript": transcript,
+                        "canonical_url": canonical_url,
                         "cached": True,
                         "speaker_recognition": has_speaker_recognition,
                         "transcription_data": transcription_data,
@@ -632,6 +636,7 @@ def process_transcription(
                     "video_title": video_title,
                     "author": author,
                     "transcript": transcript,
+                    "canonical_url": canonical_url,
                     "cached": True,
                     "speaker_recognition": has_speaker_recognition,
                     "transcription_data": transcription_data,
@@ -663,6 +668,7 @@ def process_transcription(
                         "author": metadata_obj.author,
                         "description": metadata_obj.description,
                         "platform": metadata_obj.platform,
+                        **(metadata_obj.extra or {}),
                     }
                     logger.info(
                         f"[元数据获取] 成功: platform={metadata_obj.platform}, "
@@ -683,6 +689,7 @@ def process_transcription(
                 # 更新 platform 和 video_id（用完整数据覆盖 URLParser 提取的值）
                 platform = final_metadata.get('platform', platform)
                 video_id = final_metadata.get('video_id', video_id)
+                canonical_url = final_metadata.get('canonical_url', canonical_url) or canonical_url
                 logger.info(f"[元数据合并] 元数据解析成功，metadata_override 作为补充")
             else:
                 # 元数据获取失败，使用 metadata_override 或默认值
@@ -690,6 +697,7 @@ def process_transcription(
                 video_title = final_metadata.get('title') or extract_filename_from_url(url) or "Untitled"
                 author = final_metadata.get('author', 'Unknown')
                 description = final_metadata.get('description', '')
+                canonical_url = final_metadata.get('canonical_url', canonical_url) or canonical_url
                 logger.info(f"[元数据合并] 元数据解析失败，使用 metadata_override 或默认值")
 
             media_id = video_id
@@ -961,13 +969,14 @@ def process_transcription(
                         return {
                             "status": "success",
                             "message": "使用 YouTube API Server 下载并转录成功",
-                            "data": {
-                                "video_title": video_title,
-                                "author": author,
-                                "transcript": transcript,
-                                "speaker_recognition": use_speaker_recognition,
-                                "transcription_data": transcription_data,
-                            },
+                        "data": {
+                            "video_title": video_title,
+                            "author": author,
+                            "transcript": transcript,
+                            "canonical_url": canonical_url,
+                            "speaker_recognition": use_speaker_recognition,
+                            "transcription_data": transcription_data,
+                        },
                         }
 
                 except YouTubeApiError as api_error:
@@ -1081,6 +1090,7 @@ def process_transcription(
                         "video_title": video_title,
                         "author": author,
                         "transcript": subtitle,
+                        "canonical_url": canonical_url,
                     },
                 }
                 cache_manager.update_task_status(
@@ -1341,6 +1351,7 @@ def process_transcription(
                             "video_title": video_title,
                             "author": author,
                             "transcript": transcript,
+                            "canonical_url": canonical_url,
                             "speaker_recognition": use_speaker_recognition,
                             "transcription_data": transcription_result.get(
                                 "transcription_data"

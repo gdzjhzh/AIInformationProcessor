@@ -1,5 +1,6 @@
 from .douyin import DouyinDownloader
 from .bilibili import BilibiliDownloader
+from .dedao import DedaoDownloader
 from .xiaohongshu import XiaohongshuDownloader
 from .youtube import YoutubeDownloader
 from .xiaoyuzhou import XiaoyuzhouDownloader
@@ -23,6 +24,7 @@ def create_downloader(url):
     platform_downloaders = [
         DouyinDownloader(),
         BilibiliDownloader(),
+        DedaoDownloader(),
         XiaohongshuDownloader(),
         YoutubeDownloader(),
         XiaoyuzhouDownloader()

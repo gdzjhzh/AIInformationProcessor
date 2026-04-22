@@ -96,6 +96,23 @@ class TestURLParserBasic:
         assert result.platform == "douyin"
         assert result.video_id == "7123456789012345678"
 
+    def test_dedao_long_url(self):
+        """Test Dedao long share URL."""
+        parser = URLParser()
+        result = parser.parse("https://www.dedao.cn/share/course/article?id=7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj")
+
+        assert result.platform == "dedao"
+        assert result.video_id == "7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj"
+        assert not result.is_short_url
+
+    def test_dedao_article_id_url(self):
+        """Test Dedao article_id URL."""
+        parser = URLParser()
+        result = parser.parse("https://www.dedao.cn/share/course/article/article_id/117219")
+
+        assert result.platform == "dedao"
+        assert result.video_id == "117219"
+
     def test_xiaohongshu_url(self):
         """Test Xiaohongshu URL"""
         parser = URLParser()
@@ -165,6 +182,21 @@ class TestURLParserShortURL:
             assert result.is_short_url
             assert result.normalized_url == "https://youtu.be/short123"
 
+    def test_dedao_short_url_resolution_success(self):
+        """Test Dedao short URL resolution."""
+        parser = URLParser()
+        with patch('requests.head') as mock_head:
+            mock_response = Mock()
+            mock_response.url = "https://www.dedao.cn/share/course/article?id=7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj"
+            mock_response.status_code = 200
+            mock_head.return_value = mock_response
+
+            result = parser.parse("https://d.dedao.cn/GCTnMYcf1f6tUyxd")
+
+            assert result.platform == "dedao"
+            assert result.video_id == "7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj"
+            assert result.is_short_url
+
 
 class TestURLParserErrorHandling:
     """Test error handling"""
@@ -208,6 +240,9 @@ class TestURLParserConvenienceFunctions:
 
         platform = extract_platform("https://www.bilibili.com/video/BV1test")
         assert platform == "bilibili"
+
+        platform = extract_platform("https://www.dedao.cn/share/course/article?id=7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj")
+        assert platform == "dedao"
 
         platform = extract_platform("https://example.com/video/123")
         assert platform == "generic"
