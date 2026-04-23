@@ -14,9 +14,24 @@
                 <h1 class="site-title">Collector Web</h1>
             </div>
             <nav class="site-nav">
-                <a href="/">订阅合集</a>
-                <a href="/api/collections">基础 API</a>
-                <a href="/health">健康检查</a>
+                <a
+                    href="/"
+                    class="{% if request.url.path == '/' %}is-active{% endif %}"
+                >
+                    订阅概览
+                </a>
+                <a
+                    href="/manual-media-submit"
+                    class="{% if request.url.path == '/manual-media-submit' %}is-active{% endif %}"
+                >
+                    手动提交
+                </a>
+                <a
+                    href="/status"
+                    class="{% if request.url.path == '/status' %}is-active{% endif %}"
+                >
+                    服务状态
+                </a>
             </nav>
         </header>
         <main>

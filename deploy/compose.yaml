@@ -25,6 +25,7 @@ services:
       - ./data/n8n:/home/node/.n8n
       - ./data/n8n/storage:/home/node/.n8n-files
       - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
+      - "${AI_WIKI_RAW_EXPORT_PATH:-C:/Users/hewqb/Documents/Obsidian Vault/AI_Wiki/raw}:/ai_wiki_raw"
     environment:
       TZ: ${TZ:-America/New_York}
       GENERIC_TIMEZONE: ${TZ:-America/New_York}
@@ -35,7 +36,7 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       NODE_FUNCTION_ALLOW_BUILTIN: "fs,path"
-      N8N_RESTRICT_FILE_ACCESS_TO: "/vault;/home/node/.n8n-files"
+      N8N_RESTRICT_FILE_ACCESS_TO: "/vault;/home/node/.n8n-files;/ai_wiki_raw"
       N8N_RUNNERS_TASK_REQUEST_TIMEOUT: ${N8N_RUNNERS_TASK_REQUEST_TIMEOUT:-600}
       N8N_RUNNERS_TASK_TIMEOUT: ${N8N_RUNNERS_TASK_TIMEOUT:-1800}
       OBSIDIAN_VAULT_PATH: /vault
@@ -44,6 +45,7 @@ services:
       RSS_SOURCE_URLS_JSON: ${RSS_SOURCE_URLS_JSON}
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_API_KEY: ${LLM_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_MODEL: ${LLM_MODEL}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
@@ -169,11 +171,22 @@ services:
       - "127.0.0.1:${COLLECTOR_WEB_PORT:-8300}:8300"
     volumes:
       - ./data/collector_web:/data
+      - ./data/n8n/storage/poll_runs:/data/n8n_poll_runs:ro
+      - ../services/collector_web/src:/app/src:ro
+      - ../services/collector_web/main.py:/app/main.py:ro
     environment:
       TZ: ${TZ:-America/New_York}
       COLLECTOR_WEB_HOST: 0.0.0.0
       COLLECTOR_WEB_PORT: 8300
       COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
+      COLLECTOR_WEB_POLL_RUNS_DIR: /data/n8n_poll_runs
+      COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL: ${COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL:-http://n8n:5678/webhook/6b8eaf7c41d2439a/manual-media-submit-webhook/aip/local/manual-media-submit}
+      COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_TIMEOUT_SECONDS: ${COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_TIMEOUT_SECONDS:-420}
+      COLLECTOR_WEB_MANUAL_MEDIA_PRECHECK_TIMEOUT_SECONDS: ${COLLECTOR_WEB_MANUAL_MEDIA_PRECHECK_TIMEOUT_SECONDS:-10}
+      COLLECTOR_WEB_QDRANT_BASE_URL: ${COLLECTOR_WEB_QDRANT_BASE_URL:-http://qdrant:6333}
+      COLLECTOR_WEB_QDRANT_COLLECTION: ${QDRANT_COLLECTION:-article_embeddings}
+      COLLECTOR_WEB_QDRANT_TIMEOUT_SECONDS: ${COLLECTOR_WEB_QDRANT_TIMEOUT_SECONDS:-30}
+      COLLECTOR_WEB_MANUAL_SUBMISSION_HISTORY_LIMIT: ${COLLECTOR_WEB_MANUAL_SUBMISSION_HISTORY_LIMIT:-12}
       RSS_SOURCE_URLS_JSON: ${RSS_SOURCE_URLS_JSON:-[]}
 
   rsshub:

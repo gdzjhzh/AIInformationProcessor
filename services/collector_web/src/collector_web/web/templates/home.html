@@ -1,15 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}订阅首页 - Collector Web{% endblock %}
+{% block title %}订阅概览 - Collector Web{% endblock %}
 
 {% block content %}
 <section class="hero">
     <div class="hero-copy">
-        <p class="eyebrow">先把首页看顺</p>
+        <p class="eyebrow">当前订阅概览</p>
         <h2>按平台查看订阅</h2>
         <p class="hero-text">
-            底层仍然保留“合集”这个分组模型，但首页先按平台看，避免把 B站、小宇宙误读成两个合集。
+            这里是主页面，只展示当前已接入的订阅源，方便确认每个平台有哪些订阅正在运行。
         </p>
+        <div class="hero-actions">
+            <a class="text-link-button" href="/manual-media-submit">进入手动提交页</a>
+        </div>
     </div>
     <div class="metric-grid">
         <article class="metric-card">
@@ -37,7 +40,7 @@
                         <h3>{{ group.label }}</h3>
                         <span class="status-badge">{{ group.platform }}</span>
                     </div>
-                    <p class="collection-meta">按平台展示，合集仍在后台保留。</p>
+                    <p class="collection-meta">当前平台下的订阅列表。</p>
                 </div>
                 <div class="collection-stats">
                     <span>{{ group.subscription_count }} 个订阅</span>
@@ -55,14 +58,14 @@
                             <span class="status-badge muted">{{ subscription.status }}</span>
                         </div>
                         <p class="subscription-meta">
-                            {{ subscription.source_type }} ·
+                            {{ subscription.source_type }}：
                             <a href="{{ subscription.source_url }}" target="_blank" rel="noopener">{{ subscription.source_url }}</a>
                         </p>
                         <p class="subscription-meta secondary">
                             ingest: {{ subscription.ingest_url }}
                         </p>
                         <p class="subscription-meta secondary">
-                            合集: {{ subscription.collection_name }}
+                            合集：{{ subscription.collection_name }}
                         </p>
                     </div>
                     <div class="subscription-side">

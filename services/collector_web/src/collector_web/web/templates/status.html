@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}服务状态 - Collector Web{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-copy">
+        <p class="eyebrow">服务状态</p>
+        <h2>先看系统能不能用，再看哪一段需要处理。</h2>
+        <p class="hero-text">
+            这里是给人看的状态页，不再直接把机器探活 JSON 暴露成导航页面。
+            `/health` 继续留给探活和脚本，当前页面负责解释最近的 RSS 轮询、手动提交和向量库状态。
+        </p>
+        <div class="hero-actions">
+            <a class="text-link-button" href="{{ links.health_json }}" target="_blank" rel="noopener">机器探活 JSON</a>
+            <a class="text-link-button" href="{{ links.status_api }}" target="_blank" rel="noopener">状态数据 JSON</a>
+            <a class="text-link-button" href="{{ links.manual_submit }}">进入手动提交页</a>
+        </div>
+    </div>
+    <div class="metric-grid">
+        <article class="metric-card">
+            <span class="metric-label">总体状态</span>
+            <strong class="metric-value">{{ overall.status_label }}</strong>
+            <p class="history-text">{{ overall.summary }}</p>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">最近 RSS 轮询</span>
+            <strong class="metric-value">{{ metrics.rss_poll_finished_at }}</strong>
+            <p class="history-text">最近一轮实际写入 {{ metrics.rss_poll_items_written }} 条，不是配置值。</p>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">最近手动提交</span>
+            <strong class="metric-value">{{ metrics.manual_submit_latest_status_label }}</strong>
+            <p class="history-text">{{ metrics.manual_submit_latest_created_at }}</p>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">处理中任务</span>
+            <strong class="metric-value">{{ metrics.manual_submit_active_count }}</strong>
+            <p class="history-text">最近 {{ metrics.manual_submit_recent_count }} 条手动提交里仍在处理的数量。</p>
+        </article>
+    </div>
+</section>
+
+<section class="collection-list">
+    {% for check in checks %}
+    <article class="collection-card">
+        <header class="collection-header">
+            <div>
+                <div class="collection-title-row">
+                    <h3>{{ check.title }}</h3>
+                    <span class="status-badge tone-{{ check.status_tone }}">{{ check.status_label }}</span>
+                </div>
+                <p class="collection-meta">{{ check.summary }}</p>
+            </div>
+        </header>
+        <div class="status-body">
+            {% for line in check.detail_lines %}
+            <p class="status-line">{{ line }}</p>
+            {% endfor %}
+        </div>
+    </article>
+    {% endfor %}
+</section>
+
+<section class="collection-list">
+    <article class="collection-card">
+        <header class="collection-header">
+            <div>
+                <div class="collection-title-row">
+                    <h3>当前配置定位</h3>
+                    <span class="status-badge muted">配置</span>
+                </div>
+                <p class="collection-meta">
+                    这一组只回答“它现在连到了哪里”。如果状态异常，先看上面的链路，再根据这里的路径和 URL 去排障。
+                </p>
+            </div>
+        </header>
+        <div class="subscription-list">
+            {% for item in config_items %}
+            <article class="subscription-item">
+                <div class="subscription-main">
+                    <div class="subscription-heading">
+                        <strong>{{ item.label }}</strong>
+                    </div>
+                    <p class="subscription-meta">{{ item.value }}</p>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

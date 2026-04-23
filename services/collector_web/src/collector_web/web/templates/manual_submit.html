@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}手动提交 - Collector Web{% endblock %}
+
+{% block content %}
+<section class="submit-panel">
+    <div class="submit-card">
+        <div>
+            <p class="eyebrow">手动提交</p>
+            <h2 class="submit-title">放一个链接，直接开始处理</h2>
+            <p class="submit-text">
+                这里继续复用现有的 `06_manual_media_submit` 主链。你只需要填一个 URL，
+                `collector_web` 会代你发起请求、记录历史，并在发现重复时提供“删除旧向量后重跑”入口。
+            </p>
+            <p class="submit-hint">
+                当前支持 YouTube、小宇宙单集、B站视频、得到分享页，以及直链音视频文件。
+            </p>
+        </div>
+
+        <form class="submit-form" data-manual-submit-form>
+            <label class="submit-label" for="manual-media-url">URL</label>
+            <div class="submit-input-row">
+                <input
+                    id="manual-media-url"
+                    class="submit-input"
+                    type="url"
+                    name="url"
+                    placeholder="https://d.dedao.cn/GCTnMYcf1f6tUyxd"
+                    required
+                    data-manual-submit-url
+                >
+                <button class="submit-button" type="submit" data-manual-submit-button>开始处理</button>
+            </div>
+            <p class="submit-note">
+                这一层只做控制面，不新建下载/转写链路。
+            </p>
+        </form>
+
+        <div class="submit-result" data-manual-submit-result hidden></div>
+    </div>
+</section>
+
+<section
+    class="status-panel"
+    data-selected-submission-id="{{ selected_submission.id if selected_submission else '' }}"
+    data-selected-submission-active="{{ 'true' if selected_submission and selected_submission.is_active else 'false' }}"
+>
+    <div class="status-card" data-submission-detail>
+        {% if selected_submission %}
+        <header class="status-header">
+            <div>
+                <p class="eyebrow">处理状态</p>
+                <div class="status-title-row">
+                    <h2>{{ selected_submission.title or selected_submission.request_url }}</h2>
+                    <span class="status-badge tone-{{ selected_submission.status_tone }}">
+                        {{ selected_submission.status_label }}
+                    </span>
+                </div>
+                <p class="status-text">
+                    当前阶段：{{ selected_submission.stage }}
+                    {% if selected_submission.is_active %}
+                    ，页面会自动刷新状态。
+                    {% endif %}
+                </p>
+            </div>
+            <div class="status-side">
+                <span>提交 #{{ selected_submission.id }}</span>
+                <strong>{{ selected_submission.created_at }}</strong>
+            </div>
+        </header>
+
+        <div class="status-grid">
+            <article class="detail-card">
+                <span class="detail-label">原始 URL</span>
+                <strong class="detail-value break-all">{{ selected_submission.request_url }}</strong>
+            </article>
+            <article class="detail-card">
+                <span class="detail-label">耗时</span>
+                <strong class="detail-value">
+                    {{ selected_submission.duration_label or '等待开始' }}
+                </strong>
+            </article>
+            <article class="detail-card">
+                <span class="detail-label">写入状态</span>
+                <strong class="detail-value">
+                    {{ selected_submission.vault_write_status or 'pending' }}
+                </strong>
+            </article>
+            <article class="detail-card">
+                <span class="detail-label">去重动作</span>
+                <strong class="detail-value">
+                    {{ selected_submission.dedupe_action or 'pending' }}
+                </strong>
+            </article>
+        </div>
+
+        <div class="status-body">
+            {% if selected_submission.summary %}
+            <p class="status-line">{{ selected_submission.summary }}</p>
+            {% endif %}
+            {% if selected_submission.canonical_url %}
+            <p class="status-line">
+                规范链接：
+                <a href="{{ selected_submission.canonical_url }}" target="_blank" rel="noopener">
+                    {{ selected_submission.canonical_url }}
+                </a>
+            </p>
+            {% endif %}
+            {% if selected_submission.vault_path %}
+            <p class="status-line">笔记路径：{{ selected_submission.vault_path }}</p>
+            {% endif %}
+            {% if selected_submission.item_id %}
+            <p class="status-line">item_id：{{ selected_submission.item_id }}</p>
+            {% endif %}
+            {% if selected_submission.cancellation_note %}
+            <p class="status-line">说明：{{ selected_submission.cancellation_note }}</p>
+            {% elif selected_submission.error %}
+            <p class="status-line is-error">错误：{{ selected_submission.error }}</p>
+            {% endif %}
+            {% if selected_submission.rerun_of_submission_id %}
+            <p class="status-line">
+                这是一次重跑，来源于提交 #{{ selected_submission.rerun_of_submission_id }}。
+            </p>
+            {% endif %}
+            {% if selected_submission.qdrant_delete_detail %}
+            <p class="status-line">
+                这次重跑前已尝试删除旧向量：删除前 {{ selected_submission.qdrant_delete_detail.count_before }} 条，
+                删除后 {{ selected_submission.qdrant_delete_detail.count_after }} 条。
+            </p>
+            {% endif %}
+        </div>
+
+        {% if selected_submission.can_cancel %}
+        <div class="status-actions">
+            <button
+                class="secondary-button"
+                type="button"
+                data-cancel-submission
+                data-submission-id="{{ selected_submission.id }}"
+                data-cancel-label="{{ selected_submission.cancel_action_label }}"
+            >
+                {{ selected_submission.cancel_action_label }}
+            </button>
+            <p class="status-action-hint">
+                {{ selected_submission.cancel_action_hint }}
+            </p>
+        </div>
+        {% endif %}
+
+        {% if selected_submission.can_delete_vector_and_rerun %}
+        <div class="status-actions">
+            <button
+                class="action-button"
+                type="button"
+                data-delete-vector-and-rerun
+                data-submission-id="{{ selected_submission.id }}"
+            >
+                删除旧向量并重跑
+            </button>
+            <p class="status-action-hint">
+                当前这条提交被静默去重拦住了。这个动作只删除 Qdrant 里的旧向量，不删除历史笔记。
+            </p>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="empty-state">
+            <p>还没有手动提交记录。</p>
+            <p>上面贴一个 URL 之后，这里会显示处理状态和结果摘要。</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="history-panel">
+    <header class="history-header">
+        <div>
+            <p class="eyebrow">最近提交</p>
+            <h2>手动提交历史</h2>
+            <p class="history-text">
+                先保留最近几次请求，方便回看结果、处理重复，和确认哪次已经真正写进主链。
+            </p>
+        </div>
+        <div class="history-summary">
+            <span>最近 {{ manual_submission_summary.recent_count }} 条</span>
+            <span>{{ manual_submission_summary.active_count }} 条处理中</span>
+        </div>
+    </header>
+
+    <div class="history-list">
+        {% if manual_submissions %}
+            {% for submission in manual_submissions %}
+            <a
+                class="history-item {% if selected_submission and selected_submission.id == submission.id %}is-selected{% endif %}"
+                href="/manual-media-submit?submission_id={{ submission.id }}"
+            >
+                <div class="history-main">
+                    <div class="history-title-row">
+                        <strong>{{ submission.title or submission.request_url }}</strong>
+                        <span class="status-badge tone-{{ submission.status_tone }}">
+                            {{ submission.status_label }}
+                        </span>
+                    </div>
+                    <p class="history-meta">{{ submission.request_url }}</p>
+                    <p class="history-meta secondary">
+                        阶段：{{ submission.stage }}
+                        {% if submission.vault_write_status %}
+                        · 写入：{{ submission.vault_write_status }}
+                        {% endif %}
+                        {% if submission.dedupe_action %}
+                        · 去重：{{ submission.dedupe_action }}
+                        {% endif %}
+                    </p>
+                    {% if submission.rerun_of_submission_id %}
+                    <p class="history-meta secondary">
+                        重跑自提交 #{{ submission.rerun_of_submission_id }}
+                    </p>
+                    {% endif %}
+                    {% if submission.error %}
+                    <p class="history-meta is-error">{{ submission.error }}</p>
+                    {% endif %}
+                </div>
+                <div class="history-side">
+                    <span>#{{ submission.id }}</span>
+                    <strong>{{ submission.created_at }}</strong>
+                </div>
+            </a>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <p>还没有历史记录。</p>
+            <p>第一次提交之后，这里会开始积累处理记录。</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+<script src="/static/js/home.js"></script>
+{% endblock %}

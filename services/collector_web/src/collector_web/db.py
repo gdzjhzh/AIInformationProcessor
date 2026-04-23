@@ -82,59 +82,121 @@ def _derive_source_identity(source_type: str, feed_url: str) -> tuple[str, str]:
     return (f"rss:{feed_url}", feed_url)
 
 
-def _bootstrap_subscriptions(conn: sqlite3.Connection, collection_id: int) -> None:
-    has_subscriptions = conn.execute("SELECT COUNT(*) FROM subscriptions").fetchone()[0]
-    if has_subscriptions != 0:
-        return
-
+def _sync_env_subscriptions(conn: sqlite3.Connection, collection_id: int) -> None:
     sources = _load_env_subscription_sources()
     if not sources:
         return
 
     now = utc_now()
-    imported = 0
+    changed = False
     for source in sources:
         source_key, resolved_url = _derive_source_identity(
             source["source_type"], source["feed_url"]
         )
         platform = _guess_platform(source["source_type"], source["feed_url"])
-        conn.execute(
+        existing = conn.execute(
             """
-            INSERT OR IGNORE INTO subscriptions (
+            SELECT
+                id,
                 collection_id,
                 display_name,
                 platform,
                 source_type,
-                source_key,
                 source_url,
                 resolved_url,
                 ingest_url,
-                status,
-                notes,
-                tags_json,
-                created_at,
-                updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status
+            FROM subscriptions
+            WHERE source_key = ?
+            LIMIT 1
+            """,
+            (source_key,),
+        ).fetchone()
+
+        if existing is None:
+            conn.execute(
+                """
+                INSERT INTO subscriptions (
+                    collection_id,
+                    display_name,
+                    platform,
+                    source_type,
+                    source_key,
+                    source_url,
+                    resolved_url,
+                    ingest_url,
+                    status,
+                    notes,
+                    tags_json,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    collection_id,
+                    source["source_name"],
+                    platform,
+                    source["source_type"],
+                    source_key,
+                    source["feed_url"],
+                    resolved_url,
+                    source["feed_url"],
+                    "active",
+                    None,
+                    "[]",
+                    now,
+                    now,
+                ),
+            )
+            changed = True
+            continue
+
+        next_status = "active" if existing["status"] == "archived" else existing["status"]
+        should_update = any(
+            [
+                existing["collection_id"] != collection_id,
+                existing["display_name"] != source["source_name"],
+                existing["platform"] != platform,
+                existing["source_type"] != source["source_type"],
+                existing["source_url"] != source["feed_url"],
+                (existing["resolved_url"] or "") != resolved_url,
+                existing["ingest_url"] != source["feed_url"],
+                existing["status"] != next_status,
+            ]
+        )
+        if not should_update:
+            continue
+
+        conn.execute(
+            """
+            UPDATE subscriptions
+            SET collection_id = ?,
+                display_name = ?,
+                platform = ?,
+                source_type = ?,
+                source_url = ?,
+                resolved_url = ?,
+                ingest_url = ?,
+                status = ?,
+                updated_at = ?
+            WHERE id = ?
             """,
             (
                 collection_id,
                 source["source_name"],
                 platform,
                 source["source_type"],
-                source_key,
                 source["feed_url"],
                 resolved_url,
                 source["feed_url"],
-                "active",
-                None,
-                "[]",
+                next_status,
                 now,
-                now,
+                existing["id"],
             ),
         )
-        imported += 1
+        changed = True
 
-    if imported:
+    if changed:
         conn.execute(
             "UPDATE collections SET updated_at = ? WHERE id = ?",
             (now, collection_id),
@@ -144,9 +206,14 @@ def _bootstrap_subscriptions(conn: sqlite3.Connection, collection_id: int) -> No
 @contextmanager
 def connect(db_path: Path) -> Iterator[sqlite3.Connection]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, timeout=30)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA busy_timeout = 30000")
+    try:
+        connection.execute("PRAGMA journal_mode = WAL")
+    except sqlite3.OperationalError:
+        connection.execute("PRAGMA journal_mode = DELETE")
     try:
         yield connection
         connection.commit()
@@ -198,6 +265,28 @@ def init_database(settings: Settings) -> None:
                 last_item_published_at TEXT,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS manual_submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_url TEXT NOT NULL,
+                request_payload_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'queued'
+                    CHECK (status IN ('queued', 'running', 'completed', 'needs_confirmation', 'error')),
+                stage TEXT NOT NULL DEFAULT 'collector_web_queue',
+                error TEXT,
+                response_json TEXT,
+                rerun_of_submission_id INTEGER REFERENCES manual_submissions(id),
+                qdrant_delete_detail TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_manual_submissions_created_at
+                ON manual_submissions(created_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_manual_submissions_status
+                ON manual_submissions(status, created_at DESC, id DESC);
             """
         )
 
@@ -226,8 +315,9 @@ def init_database(settings: Settings) -> None:
                     now,
                 ),
             )
+
         default_collection = conn.execute(
             "SELECT id FROM collections WHERE slug = 'default' LIMIT 1"
         ).fetchone()
         if default_collection is not None:
-            _bootstrap_subscriptions(conn, default_collection["id"])
+            _sync_env_subscriptions(conn, default_collection["id"])
