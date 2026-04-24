@@ -454,10 +454,13 @@ def process_transcription(
                 transcription_data = cache_data.get("transcription_data")
                 logger.info("使用 CapsWriter 缓存文本")
 
-            has_llm_calibrated = "llm_calibrated" in cache_data
-            has_llm_summary = "llm_summary" in cache_data
+            cached_calibrated_text = str(cache_data.get("llm_calibrated", "") or "").strip()
+            cached_summary_text = str(cache_data.get("llm_summary", "") or "").strip()
+            has_llm_calibrated = bool(cached_calibrated_text)
+            has_llm_summary = bool(cached_summary_text)
+            summary_enabled = bool(config.get("llm", {}).get("enable_summary", True))
 
-            if has_llm_calibrated and has_llm_summary:
+            if has_llm_calibrated and (has_llm_summary or not summary_enabled):
                 logger.info("缓存中已有 LLM 结果，直接使用")
                 cache_type = "含说话人识别" if has_speaker_recognition else "普通转录"
                 engine_info = "FunASR" if has_speaker_recognition else "CapsWriter"
@@ -466,11 +469,11 @@ def process_transcription(
                     f"使用已有缓存({cache_type}-{engine_info}，含LLM结果)",
                     title=video_title,
                     author=author,
-                    transcript="使用缓存的校对和总结文本...",
+                    transcript="使用缓存的校对文本..." if not has_llm_summary else "使用缓存的校对和总结文本...",
                 )
 
-                # 直接发送缓存的 LLM 结果（仅发送总结文本）
-                logger.info("缓存模式 - 发送总结文本")
+                # 直接发送缓存的 LLM 结果
+                logger.info("缓存模式 - 发送缓存的 LLM 结果")
 
                 # 获取查看链接
                 task_info = cache_manager.get_task_by_id(task_id)
@@ -482,11 +485,11 @@ def process_transcription(
                 # 计算统计信息
                 original_length = len(transcript)
                 calibrated_length = len(cache_data.get("llm_calibrated", ""))
-                summary_text = cache_data["llm_summary"]
-                calibrated_text = cache_data.get("llm_calibrated", "")
+                summary_text = cached_summary_text
+                calibrated_text = cached_calibrated_text
 
-                # 判断是否跳过了总结（总结文本和校对文本相同）
-                skip_summary = summary_text == calibrated_text
+                # 判断是否跳过了总结（未启用、无总结文件或总结文本与校对文本相同）
+                skip_summary = (not summary_enabled) or (not has_llm_summary) or summary_text == calibrated_text
 
                 # 构建完整的消息格式
                 speaker_info = "（含说话人识别）" if has_speaker_recognition else ""
@@ -500,7 +503,7 @@ def process_transcription(
 原始 {original_length:,} 字 | 校对 {calibrated_length:,} 字 | 总结 未生成
 
 ## 校对文本{speaker_info}
-{summary_text}"""
+{calibrated_text}"""
                     logger.info("缓存模式 - 发送校对文本（未总结）")
                 else:
                     # 长文本，有总结
@@ -585,6 +588,9 @@ def process_transcription(
                         "video_title": video_title,
                         "author": author,
                         "transcript": transcript,
+                        "calibrated_transcript": cache_data.get("llm_calibrated", ""),
+                        "summary_text": cached_summary_text if not skip_summary else "",
+                        "llm_summary": cached_summary_text if not skip_summary else "",
                         "canonical_url": canonical_url,
                         "cached": True,
                         "speaker_recognition": has_speaker_recognition,
@@ -629,9 +635,20 @@ def process_transcription(
                 logger.exception(f"将LLM任务加入队列失败（缓存）: {exc}")
                 task_notifier.send_text(f"【LLM任务加入队列失败】{exc}")
 
+            cache_manager.update_task_status(
+                task_id,
+                "processing",
+                platform=cache_data.get("platform"),
+                media_id=cache_data.get("media_id"),
+                title=video_title,
+                author=author,
+                cache_id=cache_data.get("cache_id"),
+                download_url=download_url,
+            )
+
             return {
-                "status": "success",
-                "message": "使用已有缓存成功",
+                "status": "processing",
+                "message": "已命中转录缓存，等待校对完成",
                 "data": {
                     "video_title": video_title,
                     "author": author,
@@ -832,7 +849,7 @@ def process_transcription(
 
                         cache_manager.update_task_status(
                             task_id,
-                            "success",
+                            "processing",
                             platform=platform,
                             media_id=media_id,
                             title=video_title,
@@ -840,12 +857,14 @@ def process_transcription(
                             download_url=download_url,
                         )
                         return {
-                            "status": "success",
-                            "message": "使用 YouTube API Server 获取字幕成功",
+                            "status": "processing",
+                            "message": "YouTube API Server 字幕已获取，等待校对完成",
                             "data": {
                                 "video_title": video_title,
                                 "author": author,
                                 "transcript": transcript,
+                                "canonical_url": canonical_url,
+                                "speaker_recognition": False,
                             },
                         }
                     else:
@@ -959,7 +978,7 @@ def process_transcription(
 
                         cache_manager.update_task_status(
                             task_id,
-                            "success",
+                            "processing",
                             platform=platform,
                             media_id=media_id,
                             title=video_title,
@@ -967,16 +986,16 @@ def process_transcription(
                             download_url=download_url,
                         )
                         return {
-                            "status": "success",
-                            "message": "使用 YouTube API Server 下载并转录成功",
-                        "data": {
-                            "video_title": video_title,
-                            "author": author,
-                            "transcript": transcript,
-                            "canonical_url": canonical_url,
-                            "speaker_recognition": use_speaker_recognition,
-                            "transcription_data": transcription_data,
-                        },
+                            "status": "processing",
+                            "message": "YouTube API Server 转录完成，等待校对完成",
+                            "data": {
+                                "video_title": video_title,
+                                "author": author,
+                                "transcript": transcript,
+                                "canonical_url": canonical_url,
+                                "speaker_recognition": use_speaker_recognition,
+                                "transcription_data": transcription_data,
+                            },
                         }
 
                 except YouTubeApiError as api_error:
@@ -1084,8 +1103,8 @@ def process_transcription(
                     task_notifier.send_text(f"【LLM任务加入队列失败】{exc}")
 
                 result = {
-                    "status": "success",
-                    "message": "使用平台字幕成功",
+                    "status": "processing",
+                    "message": "平台字幕已获取，等待校对完成",
                     "data": {
                         "video_title": video_title,
                         "author": author,
@@ -1095,7 +1114,7 @@ def process_transcription(
                 }
                 cache_manager.update_task_status(
                     task_id,
-                    "success",
+                    "processing",
                     platform=platform,
                     media_id=video_id,
                     title=video_title,
@@ -1345,8 +1364,8 @@ def process_transcription(
 
                     # 返回结果
                     result = {
-                        "status": "success",
-                        "message": "转录成功",
+                        "status": "processing",
+                        "message": "转录完成，等待校对完成",
                         "data": {
                             "video_title": video_title,
                             "author": author,
@@ -1363,10 +1382,10 @@ def process_transcription(
                 finally:
                     pass
 
-                # 更新任务状态为成功
+                # 转录完成后继续等待 LLM 校对，再由 llm_ops 将任务标记为 success
                 cache_manager.update_task_status(
                     task_id,
-                    "success",
+                    "processing",
                     platform=platform,
                     media_id=video_id,
                     title=video_title,

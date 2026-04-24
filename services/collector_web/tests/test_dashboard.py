@@ -77,7 +77,7 @@ def test_home_page_shows_subscription_overview_only(monkeypatch, tmp_path):
     assert "服务状态" in response.text
     assert 'href="/api/collections"' not in response.text
     assert "当前订阅概览" in response.text
-    assert "按平台查看订阅" in response.text
+    assert "订阅总览" in response.text
     assert "进入手动提交页" in response.text
     assert "B站" in response.text
     assert "小宇宙" in response.text
@@ -147,8 +147,9 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
     assert 'href="/health"' in response.text
     assert 'href="/api/status"' in response.text
     assert "服务状态" in response.text
-    assert "机器探活 JSON" in response.text
-    assert "状态数据 JSON" in response.text
+    assert "运行状态总览" in response.text
+    assert "查看探活详情" in response.text
+    assert "查看状态明细" in response.text
     assert "最近 RSS 轮询" in response.text
 
 

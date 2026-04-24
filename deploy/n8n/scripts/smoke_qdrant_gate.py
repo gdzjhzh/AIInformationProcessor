@@ -64,6 +64,7 @@ def qdrant_uuid(name: str) -> str:
 def decide_action(
     item_id: str,
     content_hash: str,
+    source_type: str,
     match: dict | None,
     diff_threshold: float,
     silent_threshold: float,
@@ -76,10 +77,18 @@ def decide_action(
     matched_payload = match.get("payload") if match else None
     matched_score = float(match.get("score", 0)) if match else 0.0
 
+    normalized_source_type = source_type.strip().lower()
     same_item = bool(matched_payload and matched_payload.get("item_id") == item_id)
     same_content = bool(same_item and matched_payload.get("content_hash") == content_hash)
+    same_transcript_item = bool(same_item and normalized_source_type == "transcript")
 
     if same_content:
+        dedupe_action = "silent"
+        notification_mode = "silent"
+        should_write_to_vault = False
+        should_notify = False
+        should_upsert_qdrant = False
+    elif same_transcript_item:
         dedupe_action = "silent"
         notification_mode = "silent"
         should_write_to_vault = False
@@ -201,6 +210,7 @@ def run_smoke(
             "name": "full_push_new_event",
             "item_id": "smoke-new-item",
             "content_hash": "sha256:new",
+            "source_type": "rss",
             "vector": make_unit_vector(qdrant_vector_size, 0.5),
             "expected": "full_push",
         },
@@ -208,6 +218,7 @@ def run_smoke(
             "name": "diff_push_similar_event",
             "item_id": "smoke-similar-item",
             "content_hash": "sha256:similar",
+            "source_type": "rss",
             "vector": make_unit_vector(qdrant_vector_size, 0.9),
             "expected": "diff_push",
         },
@@ -215,15 +226,25 @@ def run_smoke(
             "name": "silent_exact_duplicate",
             "item_id": "smoke-base-item",
             "content_hash": "sha256:base",
+            "source_type": "rss",
             "vector": make_unit_vector(qdrant_vector_size, 1.0),
             "expected": "silent",
         },
         {
-            "name": "diff_push_same_item_updated",
+            "name": "diff_push_same_item_updated_text",
             "item_id": "smoke-base-item",
             "content_hash": "sha256:updated",
+            "source_type": "rss",
             "vector": make_unit_vector(qdrant_vector_size, 1.0),
             "expected": "diff_push",
+        },
+        {
+            "name": "silent_same_transcript_item_updated",
+            "item_id": "smoke-base-item",
+            "content_hash": "sha256:transcript-updated",
+            "source_type": "transcript",
+            "vector": make_unit_vector(qdrant_vector_size, 1.0),
+            "expected": "silent",
         },
     ]
 
@@ -244,6 +265,7 @@ def run_smoke(
         outcome = decide_action(
             item_id=str(scenario["item_id"]),
             content_hash=str(scenario["content_hash"]),
+            source_type=str(scenario["source_type"]),
             match=match,
             diff_threshold=diff_threshold,
             silent_threshold=silent_threshold,

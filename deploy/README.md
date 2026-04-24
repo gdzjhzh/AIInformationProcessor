@@ -181,13 +181,26 @@ docker compose --profile headless up -d browserless rsshub
 
 ## 现在就需要你补的内容
 
-- `LLM_API_KEY`: 用于摘要和打分
+- `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY`: 用于 `02_enrich_with_llm` 的摘要和打分；切 provider 前先看 `deploy/LLM_PROVIDER_PLAYBOOK.md`
 - `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL`: 用于向量去重
   `EMBEDDING_MODEL` 和 `QDRANT_VECTOR_SIZE` 要成对调整，避免 collection 维度错配
 - `EMBEDDING_INPUT_MAX_CHARS`: 控制 `01a_rule_prefilter` 生成的 `event_fingerprint_text` 上限，默认 `6000`；不再表示“直接截断正文前 6000 字符”
 - `QDRANT_DIFF_THRESHOLD` / `QDRANT_SILENT_THRESHOLD`: 控制 `full_push -> diff_push -> silent` 的分界值，默认分别为 `0.85 / 0.97`
 - `VIDEO_TRANSCRIPT_BASE_URL` / `VIDEO_TRANSCRIPT_API_KEY`: 用于音视频转文本
 - `FEISHU_WEBHOOK_URL`: 用于 n8n 最终推送飞书
+
+## LLM Provider 切换
+
+如果以后要把 `deepseek` 换成别的 OpenAI-compatible provider，不要再从 workflow 和 transcript 代码反推。直接看：
+
+- `deploy/LLM_PROVIDER_PLAYBOOK.md`
+
+这份手册已经把下面几个问题集中写清楚：
+
+- 主链 `02_enrich_with_llm` 和 `VideoTranscriptAPI` 各自改哪里
+- 为什么两边的 `base_url` 语义不一样
+- embedding 为什么是另一条线
+- 新 provider 的标准变更顺序和验证顺序
 
 ## 关键约定
 

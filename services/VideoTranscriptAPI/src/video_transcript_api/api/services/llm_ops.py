@@ -147,8 +147,33 @@ def _handle_llm_task(llm_task: dict):
                 # 任务成功完成，输出完整性能摘要
                 tracker.log_summary()
 
-                # calibrate_only 模式更新状态
-                if calibrate_only and platform and media_id:
+                calibrated_text = result_dict.get("校对文本", "")
+                summary_text = result_dict.get("内容总结")
+                effective_summary_text = summary_text if summary_text is not None else ""
+
+                existing_task_result = task_results.get(task_id)
+                existing_data = (
+                    existing_task_result.get("data")
+                    if isinstance(existing_task_result, dict)
+                    and isinstance(existing_task_result.get("data"), dict)
+                    else {}
+                )
+                merged_data = {**existing_data}
+                merged_data.update(
+                    {
+                        "video_title": video_title,
+                        "author": llm_task.get("author", "") or existing_data.get("author", ""),
+                        "transcript": transcript,
+                        "calibrated_transcript": calibrated_text,
+                        "summary_text": effective_summary_text,
+                        "summary": effective_summary_text,
+                        "llm_summary": effective_summary_text,
+                        "speaker_recognition": use_speaker_recognition,
+                        "body_text_source": "calibrated",
+                    }
+                )
+
+                if platform and media_id:
                     cache_manager.update_task_status(
                         task_id,
                         "success",
@@ -157,11 +182,13 @@ def _handle_llm_task(llm_task: dict):
                         title=video_title,
                         author=llm_task.get("author", ""),
                     )
-                    task_results[task_id] = {
-                        "status": "success",
-                        "message": "重新校对完成",
-                    }
-                    logger.info(f"重新校对任务状态已更新为 success: {task_id}")
+
+                task_results[task_id] = {
+                    "status": "success",
+                    "message": "重新校对完成" if calibrate_only else "校对完成",
+                    "data": merged_data,
+                }
+                logger.info(f"任务状态已更新为 success: {task_id}")
 
             except Exception as exc:
                 logger.exception(f"LLM任务处理异常: {task_id}, 错误: {exc}")
@@ -177,6 +204,32 @@ def _handle_llm_task(llm_task: dict):
                             "message": f"重新校对失败: {exc}",
                         }
                         logger.info(f"重新校对任务状态已更新为 failed: {task_id}")
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        existing_task_result = task_results.get(task_id)
+                        existing_data = (
+                            existing_task_result.get("data")
+                            if isinstance(existing_task_result, dict)
+                            and isinstance(existing_task_result.get("data"), dict)
+                            else {}
+                        )
+                        cache_manager.update_task_status(
+                            task_id,
+                            "failed",
+                            platform=platform,
+                            media_id=media_id,
+                            title=video_title,
+                            author=llm_task.get("author", ""),
+                            error_message=str(exc),
+                        )
+                        task_results[task_id] = {
+                            "status": "failed",
+                            "message": f"校对失败: {exc}",
+                            "data": existing_data,
+                        }
+                        logger.info(f"任务状态已更新为 failed: {task_id}")
                     except Exception:
                         pass
     finally:
@@ -311,7 +364,7 @@ def _build_result_dict(coordinator_result: dict) -> dict:
     """
     calibrated_text = coordinator_result.get("calibrated_text", "")
     summary_text = coordinator_result.get("summary_text")
-    should_skip_summary = summary_text is None
+    should_skip_summary = bool(coordinator_result.get("summary_skipped", summary_text is None))
 
     result_dict = {
         "校对文本": calibrated_text,
@@ -320,7 +373,7 @@ def _build_result_dict(coordinator_result: dict) -> dict:
         "stats": coordinator_result.get("stats", {}),
         "models_used": coordinator_result.get("models_used", {}),
         "calibrate_success": True,
-        "summary_success": summary_text is not None,
+        "summary_success": (summary_text is not None) or should_skip_summary,
     }
 
     if "structured_data" in coordinator_result:
@@ -381,29 +434,20 @@ def _save_llm_results(
     # 保存总结文本
     if calibrate_only:
         logger.info(f"仅校对模式，保留原有总结文件: {task_id}")
+    elif skip_summary:
+        logger.info(f"已跳过上游总结，不保存总结文件: {task_id}")
     elif summary_success:
-        if skip_summary:
-            if calibrate_success:
-                logger.info(f"文本过短，保存校对文本作为总结: {task_id}")
-                cache_manager.save_llm_result(
-                    platform=platform,
-                    media_id=media_id,
-                    use_speaker_recognition=use_speaker_recognition,
-                    llm_type="summary",
-                    content=calibrated_text,
-                )
+        if summary_text is not None:
+            logger.info(f"保存LLM总结到缓存: {task_id}")
+            cache_manager.save_llm_result(
+                platform=platform,
+                media_id=media_id,
+                use_speaker_recognition=use_speaker_recognition,
+                llm_type="summary",
+                content=summary_text,
+            )
         else:
-            if summary_text is not None:
-                logger.info(f"保存LLM总结到缓存: {task_id}")
-                cache_manager.save_llm_result(
-                    platform=platform,
-                    media_id=media_id,
-                    use_speaker_recognition=use_speaker_recognition,
-                    llm_type="summary",
-                    content=summary_text,
-                )
-            else:
-                logger.warning(f"总结生成失败，跳过保存: {task_id}")
+            logger.warning(f"总结生成失败，跳过保存: {task_id}")
     else:
         logger.warning(f"总结失败，跳过保存总结文件: {task_id}")
 

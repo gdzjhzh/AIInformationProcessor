@@ -17,6 +17,7 @@ class LLMConfig:
     # 可选参数（有默认值）
     calibrate_reasoning_effort: Optional[str] = None
     summary_reasoning_effort: Optional[str] = None
+    enable_summary: bool = True
 
     # 关键信息提取模型
     key_info_model: Optional[str] = None  # 默认使用 calibrate_model
@@ -155,6 +156,7 @@ class LLMConfig:
             summary_reasoning_effort=normalize_reasoning_effort(
                 llm_config.get("summary_reasoning_effort")
             ),
+            enable_summary=llm_config.get("enable_summary", True),
 
             # 关键信息提取模型（默认使用校对模型）
             key_info_model=llm_config.get("key_info_model", llm_config["calibrate_model"]),

@@ -149,9 +149,11 @@ class LLMCoordinator:
         speaker_count = self._extract_speaker_count(content, calibration_result)
 
         # 步骤 3: 总结生成（基于校对文本，可跳过）
+        should_skip_summary = skip_summary or not self.config.enable_summary
         summary_text = None
-        if skip_summary:
-            logger.info("Step 2/2: Summary generation SKIPPED (skip_summary=True)")
+        if should_skip_summary:
+            skip_reason = "skip_summary=True" if skip_summary else "enable_summary=False"
+            logger.info(f"Step 2/2: Summary generation SKIPPED ({skip_reason})")
         else:
             logger.info("Step 2/2: Summary generation")
             summary_text = self._generate_summary_if_needed(
@@ -168,6 +170,7 @@ class LLMCoordinator:
         return {
             "calibrated_text": calibrated_text,
             "summary_text": summary_text,
+            "summary_skipped": should_skip_summary,
             "key_info": calibration_result.get("key_info"),
             "stats": {
                 **calibration_result.get("stats", {}),

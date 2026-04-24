@@ -107,6 +107,7 @@
     // ============================================================
     "llm": {
         "api_key": "your-llm-api-key-here",     // LLM API 密钥
+        // Full chat/completions endpoint. This service POSTs directly to base_url.
         "base_url": "your-base-url-here",       // LLM API 基础 URL（兼容 OpenAI 格式）
 
         // ------------------------------------------------------
@@ -206,6 +207,7 @@
             // 可选值：json_schema（严格模式）、json_object（兼容模式）
             "mode_by_model": {
                 "deepseek*": "json_object",     // DeepSeek 系列不支持 json_schema
+                "ep-*": "json_object",          // Endpoint-id style model names should start with compatibility mode
                 "qwen*": "json_object",         // 通义千问部分支持
                 "glm*": "json_object",          // 智谱 GLM 系列
                 "*": "json_schema"              // 其他模型使用严格模式

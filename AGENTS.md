@@ -26,6 +26,10 @@
 
 这个目录属于 runtime 排障证据，不属于 Obsidian 知识库内容。
 
+濡傛灉浠诲姟娑夊強鍒囨崲 `LLM_*` provider銆佹帴鍏ユ柊鐨勫ぇ妯″瀷 API銆佸垽鏂?`02_enrich_with_llm` 鍜?`VideoTranscriptAPI` 鍚勮鏀瑰摢閲屻€佹垨鑰呮帓鏌ヤ负浠€涔堟崲 provider 鍚庢姤鍏煎鎬ч敊璇紝鍏堢湅锛?
+6. `deploy/LLM_PROVIDER_PLAYBOOK.md`
+
+涓嶈鍏堝幓 workflow JSON 鍜?transcript 浠ｇ爜閲岄噸鏂板弽鎺?`base_url`銆乣model`銆乣json_output` 鐨勮涔夈€傚厛鎸夎繖浠芥墜鍐岀‘璁ゆ槸涓婚摼 LLM銆乪mbedding锛岃繕鏄?transcript LLM锛屽啀鍐冲畾鏀瑰姩闈㈠拰楠岃瘉椤哄簭銆?
 ## Transcript Runtime Boundary
 
 - `CapsWriter` 是宿主机本地服务，不在 Docker 里。
@@ -42,6 +46,20 @@
 2. `video-transcript-api` 容器内配置是否仍然是 `ws://host.docker.internal:6016`
 3. `funasr-spk-server` 容器是否真的启动并在 Docker 网络内可达 `8767`
 4. `video-transcript-api` 的 `/health` 是哪一项失败，而不是直接把 `04` 或 n8n workflow 当成根因
+
+## Speaker Recognition Default Policy
+
+- 不要把 `use_speaker_recognition` 的默认行为写死成“小宇宙特例”。
+- `01_rss_to_obsidian_raw` 和 `06_manual_media_submit` 入口层必须保留三态语义：
+  - 显式 `true`
+  - 显式 `false`
+  - 未设置 / `null`
+- 默认推断只放在 `04_video_transcript_ingest`，不要在各入口各自重新推理一套。
+- `04_video_transcript_ingest` 的推断应当是通用 media 规则，而不是平台硬编码：
+  - 优先尊重显式 `true / false`
+  - 仅在未设置时，根据 `source_type`、`media_type`、URL、标题、来源名、描述、feed URL 等线索统一推断
+  - 对 `podcast / podcast_rss`、音频内容、以及标题/描述含 `播客 / 对谈 / 访谈 / podcast / interview` 等对话型线索的内容，可默认打开 speaker recognition
+- 后续如果新增别的 media ingress，也复用这套 contract：入口保留三态，`04` 统一决定默认值。
 
 ## n8n Runtime Reminder
 

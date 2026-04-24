@@ -3,18 +3,18 @@
 {% block title %}服务状态 - Collector Web{% endblock %}
 
 {% block content %}
-<section class="hero">
+<section class="hero status-hero">
     <div class="hero-copy">
         <p class="eyebrow">服务状态</p>
-        <h2>先看系统能不能用，再看哪一段需要处理。</h2>
+        <h2>运行状态总览</h2>
         <p class="hero-text">
-            这里是给人看的状态页，不再直接把机器探活 JSON 暴露成导航页面。
-            `/health` 继续留给探活和脚本，当前页面负责解释最近的 RSS 轮询、手动提交和向量库状态。
+            这里汇总 Collector Web、RSS 轮询、手动提交和向量库的最近状态。
+            如果右侧出现“需关注”或“处理失败”，先看下面的检查项；如果只是继续处理内容，直接进入手动提交页。
         </p>
         <div class="hero-actions">
-            <a class="text-link-button" href="{{ links.health_json }}" target="_blank" rel="noopener">机器探活 JSON</a>
-            <a class="text-link-button" href="{{ links.status_api }}" target="_blank" rel="noopener">状态数据 JSON</a>
-            <a class="text-link-button" href="{{ links.manual_submit }}">进入手动提交页</a>
+            <a class="text-link-button" href="{{ links.manual_submit }}">进入手动提交</a>
+            <a class="text-link-button" href="{{ links.status_api }}" target="_blank" rel="noopener">查看状态明细</a>
+            <a class="text-link-button" href="{{ links.health_json }}" target="_blank" rel="noopener">查看探活详情</a>
         </div>
     </div>
     <div class="metric-grid">

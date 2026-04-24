@@ -32,6 +32,19 @@
 - `CapsWriter` 当前服务端要求 WebSocket subprotocol `binary`
 - 仓库里的 `VideoTranscriptAPI` client 和 `/health` 检查已经按这个要求接好了
 
+## Speaker Recognition Default Contract
+
+- 不要把 `use_speaker_recognition` 的默认值写死成“小宇宙专用开关”。
+- `01_rss_to_obsidian_raw` 和 `06_manual_media_submit` 这些 ingress 只负责保留输入语义，不负责决定默认值：
+  - 显式 `true` 原样透传
+  - 显式 `false` 原样透传
+  - 未设置时继续保持 `null` / 未设置
+- 统一默认推断只放在 `04_video_transcript_ingest`：
+  - 先尊重显式 `true / false`
+  - 仅在未设置时，再根据 `source_type`、`media_type`、URL、标题、来源名、描述、feed URL 等线索做通用推断
+  - 这套推断是 generic media contract，不是平台硬编码；目标是覆盖 future podcast / audio / conversation-style sources，而不只是小宇宙
+- 后续如果新增别的 media ingress，也沿用这套 contract：入口保留三态，`04` 统一决定默认 speaker recognition。
+
 ## Semantic Boundary
 
 - `VideoTranscriptAPI` 不是 canonical enrichment 或 action policy 层。

@@ -1020,9 +1020,9 @@ class CacheManager:
                 if cache_data:
                     # 缓存存在，返回完整数据
                     # 确保返回的是字符串类型
-                    summary = cache_data.get('llm_summary', '总结处理中...')
+                    summary = cache_data.get('llm_summary', '')
                     if not isinstance(summary, str):
-                        summary = str(summary) if summary is not None else '总结处理中...'
+                        summary = str(summary) if summary is not None else ''
 
                     transcript = cache_data.get('llm_calibrated') or cache_data.get('transcript_data', '转录文本获取中...')
                     if not isinstance(transcript, str):
