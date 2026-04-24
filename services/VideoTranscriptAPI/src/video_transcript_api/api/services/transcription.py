@@ -3,6 +3,7 @@ import datetime
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Optional, Dict, Any
 
 from fastapi import HTTPException, Header, Request
@@ -142,6 +143,96 @@ def generate_media_id_from_url(url: str) -> str:
     """
     import hashlib
     return hashlib.md5(url.encode()).hexdigest()[:16]
+
+
+def _path_is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _audio_cleanup_roots() -> list[Path]:
+    storage_config = config.get("storage", {}) if isinstance(config, dict) else {}
+    roots: list[Path] = []
+    for key in ("temp_dir", "cache_dir"):
+        configured = storage_config.get(key)
+        if not configured:
+            continue
+        try:
+            roots.append(Path(configured).expanduser().resolve())
+        except Exception as exc:
+            logger.warning(f"Unable to resolve audio cleanup root {key}: {configured}, error: {exc}")
+    return roots
+
+
+def _cleanup_successful_transcription_audio(
+    local_file: Optional[str],
+    download_artifact: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Delete downloaded audio after transcript content has been persisted."""
+    candidate_values = []
+    if local_file:
+        candidate_values.append(local_file)
+    artifact_path = (download_artifact or {}).get("download_file_path")
+    if artifact_path:
+        candidate_values.append(artifact_path)
+
+    if not candidate_values:
+        return None
+
+    roots = _audio_cleanup_roots()
+    deleted_files = []
+    skipped_files = []
+    deleted_bytes = 0
+    seen = set()
+
+    for raw_path in candidate_values:
+        try:
+            candidate = Path(str(raw_path)).expanduser().resolve()
+        except Exception as exc:
+            skipped_files.append({"path": str(raw_path), "reason": f"resolve_failed: {exc}"})
+            continue
+
+        normalized = os.path.normcase(str(candidate))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+
+        if not candidate.exists():
+            skipped_files.append({"path": str(candidate), "reason": "missing"})
+            continue
+        if not candidate.is_file():
+            skipped_files.append({"path": str(candidate), "reason": "not_file"})
+            continue
+        if roots and not any(
+            candidate == root or _path_is_relative_to(candidate, root)
+            for root in roots
+        ):
+            skipped_files.append({"path": str(candidate), "reason": "outside_storage_roots"})
+            logger.warning(f"Skip deleting audio outside storage roots: {candidate}")
+            continue
+
+        try:
+            size = candidate.stat().st_size
+            candidate.unlink()
+            deleted_bytes += size
+            deleted_files.append(str(candidate))
+            logger.info(f"Deleted successful transcription audio file: {candidate}")
+        except Exception as exc:
+            skipped_files.append({"path": str(candidate), "reason": f"delete_failed: {exc}"})
+            logger.warning(f"Failed to delete successful transcription audio file: {candidate}, error: {exc}")
+
+    if not deleted_files and not skipped_files:
+        return None
+
+    return {
+        "deleted_count": len(deleted_files),
+        "deleted_bytes": deleted_bytes,
+        "deleted_files": deleted_files,
+        "skipped_files": skipped_files,
+    }
 
 
 def merge_metadata(parsed_metadata: Optional[dict], metadata_override: Optional[dict], url: str) -> dict:
@@ -995,6 +1086,16 @@ def process_transcription(
                                 "canonical_url": canonical_url,
                                 "speaker_recognition": use_speaker_recognition,
                                 "transcription_data": transcription_data,
+                                **(
+                                    {
+                                        "audio_cleanup": _cleanup_successful_transcription_audio(
+                                            local_file,
+                                            None,
+                                        )
+                                    }
+                                    if cache_result
+                                    else {}
+                                ),
                             },
                         }
 
@@ -1377,6 +1478,16 @@ def process_transcription(
                             )
                             or transcription_result.get("funasr_json_data"),
                             **(download_data or {}),
+                            **(
+                                {
+                                    "audio_cleanup": _cleanup_successful_transcription_audio(
+                                        local_file,
+                                        download_artifact,
+                                    )
+                                }
+                                if cache_result
+                                else {}
+                            ),
                         },
                     }
                 finally:

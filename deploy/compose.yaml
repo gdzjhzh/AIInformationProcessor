@@ -152,7 +152,7 @@ services:
     image: ${VIDEO_TRANSCRIPT_IMAGE:-ai-information-processor-video-transcript-api:local}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${VIDEO_TRANSCRIPT_HOST_PORT:-18080}:8000"
     volumes:
       - ../services/VideoTranscriptAPI/config:/app/config
       - ./data/video-transcript-api:/app/data

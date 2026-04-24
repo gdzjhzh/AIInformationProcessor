@@ -1,4 +1,6 @@
 import types
+import shutil
+from pathlib import Path
 
 import pytest
 
@@ -30,8 +32,10 @@ class DummyNotifier:
 
 
 class DummyCacheManager:
-    def __init__(self, cache_data=None):
+    def __init__(self, cache_data=None, artifact_dir=None):
         self.cache_data = cache_data
+        self.artifact_dir = Path(artifact_dir) if artifact_dir else None
+        self.artifacts = []
         self.saved = []
         self.status_updates = []
         self.tasks = {}
@@ -42,6 +46,23 @@ class DummyCacheManager:
     def save_cache(self, **kwargs):
         self.saved.append(kwargs)
         return True
+
+    def save_download_artifact(self, platform, media_id, source_file, filename=None):
+        if not self.artifact_dir:
+            return None
+        source_path = Path(source_file)
+        target_dir = self.artifact_dir / platform / media_id
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / (filename or source_path.name)
+        shutil.copy2(source_path, target_path)
+        result = {
+            "download_file_path": str(target_path),
+            "download_file_relative_path": str(target_path.relative_to(self.artifact_dir)).replace("\\", "/"),
+            "download_file_name": target_path.name,
+            "download_file_size": target_path.stat().st_size,
+        }
+        self.artifacts.append(result)
+        return result
 
     def update_task_status(self, task_id, status, **kwargs):
         self.status_updates.append((task_id, status, kwargs))
@@ -73,10 +94,17 @@ class DummyFunASR:
 
 
 class YoutubeDownloader:
-    def __init__(self, subtitle=None, download_url="http://example.com/audio.mp3", filename="test.mp3"):
+    def __init__(
+        self,
+        subtitle=None,
+        download_url="http://example.com/audio.mp3",
+        filename="test.mp3",
+        local_file=None,
+    ):
         self._subtitle = subtitle
         self._download_url = download_url
         self._filename = filename
+        self._local_file = local_file
         self.use_api_server = False
 
     def get_metadata(self, url):
@@ -99,7 +127,7 @@ class YoutubeDownloader:
         return self._subtitle
 
     def download_file(self, url, filename):
-        return "C:/tmp/test.mp3"
+        return self._local_file or "C:/tmp/test.mp3"
 
     def fetch_for_transcription(self, *args, **kwargs):
         raise AssertionError("fetch_for_transcription should not be called in this test")
@@ -177,7 +205,7 @@ def test_flow_subtitle_preferred(monkeypatch, patch_runtime):
         metadata_override=None,
     )
 
-    assert result["status"] == "success"
+    assert result["status"] == "processing"
     assert result["data"]["transcript"] == "subtitle text"
     assert cache_manager.saved
     saved = cache_manager.saved[0]
@@ -201,7 +229,7 @@ def test_flow_download_capswriter(monkeypatch, patch_runtime):
         metadata_override=None,
     )
 
-    assert result["status"] == "success"
+    assert result["status"] == "processing"
     assert result["data"]["transcript"] == "transcribed text"
     assert cache_manager.saved
     saved = cache_manager.saved[0]
@@ -225,7 +253,7 @@ def test_flow_download_funasr(monkeypatch, patch_runtime):
         metadata_override=None,
     )
 
-    assert result["status"] == "success"
+    assert result["status"] == "processing"
     assert result["data"]["speaker_recognition"] is True
     assert cache_manager.saved
     saved = cache_manager.saved[0]
@@ -253,10 +281,113 @@ def test_flow_separate_download_url(monkeypatch, patch_runtime):
         metadata_override=None,
     )
 
-    assert result["status"] == "success"
+    assert result["status"] == "processing"
     assert generic_downloader.calls
     assert generic_downloader.calls[0][0] == "http://example.com/file.mp3"
     assert generic_downloader.calls[0][1] == "file.mp3"
+
+
+def test_flow_download_capswriter_deletes_audio_after_transcription(
+    monkeypatch, patch_runtime, tmp_path
+):
+    temp_dir = tmp_path / "temp"
+    cache_dir = tmp_path / "cache"
+    temp_dir.mkdir()
+    cache_dir.mkdir()
+    local_audio = temp_dir / "audio.mp3"
+    local_audio.write_bytes(b"audio bytes")
+
+    monkeypatch.setattr(
+        transcription,
+        "config",
+        {
+            "storage": {
+                "temp_dir": str(temp_dir),
+                "cache_dir": str(cache_dir),
+            }
+        },
+    )
+    cache_manager = DummyCacheManager(cache_data=None, artifact_dir=cache_dir)
+    monkeypatch.setattr(transcription, "cache_manager", cache_manager)
+
+    downloader = YoutubeDownloader(
+        subtitle=None,
+        download_url="http://example.com/audio.mp3",
+        filename="audio.mp3",
+        local_file=str(local_audio),
+    )
+    monkeypatch.setattr(transcription, "create_downloader", lambda url: downloader)
+
+    result = transcription.process_transcription(
+        task_id="task_delete_audio",
+        url="https://www.youtube.com/watch?v=abc123",
+        use_speaker_recognition=False,
+        wechat_webhook=None,
+        download_url=None,
+        metadata_override=None,
+    )
+
+    assert result["status"] == "processing"
+    assert not local_audio.exists()
+    assert cache_manager.artifacts
+    artifact_path = Path(cache_manager.artifacts[0]["download_file_path"])
+    assert not artifact_path.exists()
+    cleanup = result["data"]["audio_cleanup"]
+    assert cleanup["deleted_count"] == 2
+    assert cleanup["deleted_bytes"] == len(b"audio bytes") * 2
+
+
+def test_flow_youtube_api_deletes_audio_after_transcription(
+    monkeypatch, patch_runtime, tmp_path
+):
+    temp_dir = tmp_path / "temp"
+    cache_dir = tmp_path / "cache"
+    temp_dir.mkdir()
+    cache_dir.mkdir()
+    local_audio = temp_dir / "api-audio.m4a"
+    local_audio.write_bytes(b"api audio bytes")
+
+    monkeypatch.setattr(
+        transcription,
+        "config",
+        {
+            "storage": {
+                "temp_dir": str(temp_dir),
+                "cache_dir": str(cache_dir),
+            }
+        },
+    )
+    cache_manager = DummyCacheManager(cache_data=None)
+    monkeypatch.setattr(transcription, "cache_manager", cache_manager)
+
+    downloader = YoutubeDownloader(subtitle=None)
+    downloader.use_api_server = True
+    downloader.fetch_for_transcription = lambda url, use_speaker_recognition=False: {
+        "video_id": "abc123",
+        "video_title": "api title",
+        "author": "api author",
+        "description": "api desc",
+        "platform": "youtube",
+        "transcript": None,
+        "audio_path": str(local_audio),
+        "need_transcription": True,
+    }
+    monkeypatch.setattr(transcription, "create_downloader", lambda url: downloader)
+
+    result = transcription.process_transcription(
+        task_id="task_delete_youtube_api_audio",
+        url="https://www.youtube.com/watch?v=abc123",
+        use_speaker_recognition=False,
+        wechat_webhook=None,
+        download_url=None,
+        metadata_override=None,
+    )
+
+    assert result["status"] == "processing"
+    assert not local_audio.exists()
+    cleanup = result["data"]["audio_cleanup"]
+    assert cleanup["deleted_count"] == 1
+    assert cleanup["deleted_bytes"] == len(b"api audio bytes")
 
 
 def test_flow_download_url_skips_youtube_api(monkeypatch, patch_runtime):
@@ -280,5 +411,5 @@ def test_flow_download_url_skips_youtube_api(monkeypatch, patch_runtime):
         metadata_override=None,
     )
 
-    assert result["status"] == "success"
+    assert result["status"] == "processing"
     assert generic_downloader.calls

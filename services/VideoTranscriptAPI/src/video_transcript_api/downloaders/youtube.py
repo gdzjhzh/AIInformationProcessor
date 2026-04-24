@@ -68,6 +68,11 @@ class YoutubeDownloader(BaseDownloader):
         """是否使用 YouTube API Server"""
         return self._youtube_api_client is not None
 
+    def _youtube_api_audio_target_dir(self) -> str:
+        temp_dir = self.config.get("storage", {}).get("temp_dir", "./data/temp")
+        Path(temp_dir).mkdir(parents=True, exist_ok=True)
+        return str(temp_dir)
+
     def fetch_for_transcription(self, url: str, use_speaker_recognition: bool = False) -> dict:
         """
         一次性获取 YouTube 视频的所有转录所需资源（仅当启用 API Server 时使用）
@@ -133,7 +138,10 @@ class YoutubeDownloader(BaseDownloader):
         if use_speaker_recognition:
             # 必须下载音频用于说话人识别
             if result.audio and result.audio.url:
-                audio_path = self._youtube_api_client.download_to_local(result.audio.url)
+                audio_path = self._youtube_api_client.download_to_local(
+                    result.audio.url,
+                    target_dir=self._youtube_api_audio_target_dir(),
+                )
                 need_transcription = True
                 logger.info(f"[youtube] Audio downloaded for speaker recognition: {audio_path}")
             else:
@@ -155,7 +163,10 @@ class YoutubeDownloader(BaseDownloader):
                 )
             elif result.audio and result.audio.url:
                 # 无字幕，下载 fallback 的音频
-                audio_path = self._youtube_api_client.download_to_local(result.audio.url)
+                audio_path = self._youtube_api_client.download_to_local(
+                    result.audio.url,
+                    target_dir=self._youtube_api_audio_target_dir(),
+                )
                 need_transcription = True
                 logger.info(f"[youtube] No transcript, audio fallback: {audio_path}")
             else:
