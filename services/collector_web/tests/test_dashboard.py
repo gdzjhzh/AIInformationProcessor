@@ -352,6 +352,42 @@ def test_cancel_manual_submission_api_keeps_cancelled_state_after_running_result
     assert final_submission["status"] == "cancelled"
 
 
+def test_manual_media_submit_callback_api_completes_running_submission(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    settings = get_settings()
+
+    with TestClient(create_app()) as client:
+        submission = create_manual_submission(
+            settings,
+            {"url": "https://www.xiaoyuzhoufm.com/episode/callback"},
+        )
+        assert mark_manual_submission_running(settings, submission["id"]) is True
+
+        response = client.post(
+            "/api/internal/manual-media-submit-callback",
+            json={
+                "submission_id": submission["id"],
+                "result": {
+                    "ok": True,
+                    "stage": "vault_write",
+                    "title": "鍥炶皟瀹屾垚",
+                    "item_id": "item-callback",
+                    "canonical_url": "https://www.xiaoyuzhoufm.com/episode/callback",
+                    "dedupe_action": "full_push",
+                    "vault_write_status": "written",
+                    "qdrant_operation": "upserted",
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["submission"]
+    assert payload["status"] == "completed"
+    assert payload["stage"] == "vault_write"
+    assert payload["item_id"] == "item-callback"
+    assert payload["is_active"] is False
+
+
 def test_manual_submission_detail_api_reads_persisted_history(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     settings = get_settings()

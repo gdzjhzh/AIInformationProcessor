@@ -12,6 +12,7 @@ from .repository import (
     create_manual_submission,
     fail_manual_submission,
     get_manual_submission,
+    mark_manual_submission_dispatched,
     mark_manual_submission_running,
     record_qdrant_delete_detail,
 )
@@ -32,7 +33,7 @@ def submit_manual_media(settings: Settings, payload: dict[str, Any]) -> dict[str
     try:
         with urllib.request.urlopen(
             request,
-            timeout=settings.manual_media_submit_timeout_seconds,
+            timeout=settings.manual_media_submit_dispatch_timeout_seconds,
         ) as response:
             body = response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
@@ -68,14 +69,23 @@ def _run_manual_submission(settings: Settings, submission_id: int) -> None:
     if not mark_manual_submission_running(settings, submission_id):
         return
     try:
-        result = submit_manual_media(settings, submission["request_payload"])
+        request_payload = {
+            **submission["request_payload"],
+            "manual_submission_id": submission_id,
+            "collector_callback_url": settings.manual_media_submit_callback_url,
+        }
+        result = submit_manual_media(settings, request_payload)
     except ManualMediaSubmitError as exc:
         fail_manual_submission(
             settings,
             submission_id,
             str(exc),
-            stage="06_manual_media_submit",
+            stage="06_manual_media_submit_dispatch",
         )
+        return
+
+    if result.get("accepted") is True:
+        mark_manual_submission_dispatched(settings, submission_id, result)
         return
 
     complete_manual_submission(settings, submission_id, result)

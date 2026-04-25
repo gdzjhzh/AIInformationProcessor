@@ -16,6 +16,7 @@ from ..manual_submit import (
 )
 from ..precheck import precheck_manual_media_submission
 from ..repository import (
+    complete_manual_submission,
     get_dashboard_data,
     get_manual_submission,
     list_recent_manual_submissions,
@@ -32,6 +33,11 @@ class ManualMediaSubmitRequest(BaseModel):
 
 class ManualMediaPrecheckRequest(BaseModel):
     url: str = Field(min_length=1)
+
+
+class ManualMediaSubmitCallbackRequest(BaseModel):
+    submission_id: int = Field(ge=1)
+    result: dict[str, Any]
 
 
 def _build_submit_payload(payload: ManualMediaSubmitRequest) -> dict[str, Any]:
@@ -173,6 +179,22 @@ def create_app() -> FastAPI:
             "ok": True,
             "submission": rerun_submission,
             "deleted_vector": delete_detail,
+        }
+
+    @app.post("/api/internal/manual-media-submit-callback")
+    async def manual_media_submit_callback_api(
+        payload: ManualMediaSubmitCallbackRequest,
+    ) -> dict[str, Any]:
+        submission = complete_manual_submission(
+            settings,
+            payload.submission_id,
+            payload.result,
+        )
+        if submission is None:
+            raise HTTPException(status_code=404, detail="manual submission not found")
+        return {
+            "ok": True,
+            "submission": submission,
         }
 
     @app.get("/", response_class=HTMLResponse)

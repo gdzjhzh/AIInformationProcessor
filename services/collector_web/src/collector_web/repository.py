@@ -265,6 +265,39 @@ def complete_manual_submission(
     return get_manual_submission(settings, submission_id)
 
 
+def mark_manual_submission_dispatched(
+    settings: Settings,
+    submission_id: int,
+    dispatch_result: dict[str, Any],
+) -> dict[str, Any]:
+    now = utc_now()
+    with connect(settings.db_path) as conn:
+        cursor = conn.execute(
+            """
+            UPDATE manual_submissions
+            SET status = ?,
+                stage = ?,
+                response_json = ?,
+                updated_at = ?
+            WHERE id = ?
+              AND status = ?
+              AND stage != 'cancelled'
+            """,
+            (
+                "running",
+                "06_manual_media_submit_dispatched",
+                json.dumps(dispatch_result, ensure_ascii=False, sort_keys=True),
+                now,
+                submission_id,
+                "running",
+            ),
+        )
+        if cursor.rowcount == 0:
+            return get_manual_submission(settings, submission_id)
+
+    return get_manual_submission(settings, submission_id)
+
+
 def fail_manual_submission(
     settings: Settings,
     submission_id: int,

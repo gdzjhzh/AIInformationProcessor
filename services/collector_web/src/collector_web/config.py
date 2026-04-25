@@ -18,6 +18,8 @@ class Settings:
     poll_runs_dir: Path
     manual_media_submit_url: str
     manual_media_submit_timeout_seconds: int
+    manual_media_submit_dispatch_timeout_seconds: int
+    manual_media_submit_callback_url: str
     manual_media_precheck_timeout_seconds: int
     qdrant_base_url: str
     qdrant_collection: str
@@ -62,7 +64,17 @@ def get_settings() -> Settings:
             f"http://127.0.0.1:5780/webhook/{DEFAULT_MANUAL_MEDIA_SUBMIT_WEBHOOK_PATH}",
         ).strip(),
         manual_media_submit_timeout_seconds=int(
-            os.getenv("COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_TIMEOUT_SECONDS", "420")
+            os.getenv("COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_TIMEOUT_SECONDS", "1800")
+        ),
+        manual_media_submit_dispatch_timeout_seconds=int(
+            os.getenv("COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_DISPATCH_TIMEOUT_SECONDS", "30")
+        ),
+        manual_media_submit_callback_url=(
+            os.getenv("COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_CALLBACK_URL", "").strip()
+            or (
+                os.getenv("COLLECTOR_WEB_CALLBACK_BASE_URL", "http://127.0.0.1:8300").strip().rstrip("/")
+                + "/api/internal/manual-media-submit-callback"
+            )
         ),
         manual_media_precheck_timeout_seconds=int(
             os.getenv("COLLECTOR_WEB_MANUAL_MEDIA_PRECHECK_TIMEOUT_SECONDS", "10")
