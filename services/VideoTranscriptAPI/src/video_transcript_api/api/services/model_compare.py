@@ -6,7 +6,7 @@ import os
 import re
 import threading
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -45,19 +45,29 @@ class ModelCandidate:
     retry_delay: int | None = None
 
     def public_dict(self) -> dict[str, str]:
-        return {
+        data = {
             "key": self.key,
             "label": self.label,
             "model": self.model,
         }
+        if self.reasoning_effort:
+            data["reasoning_effort"] = self.reasoning_effort
+        if self.thinking_type:
+            data["thinking_type"] = self.thinking_type
+        return data
 
 
-def submit_model_compare_job(url: str, config: dict[str, Any]) -> dict[str, Any]:
+def submit_model_compare_job(
+    url: str,
+    config: dict[str, Any],
+    *,
+    enable_thinking: bool = False,
+) -> dict[str, Any]:
     normalized_url = (url or "").strip()
     if not normalized_url:
         raise ValueError("url is required")
 
-    candidates = get_required_model_candidates(config)
+    candidates = get_required_model_candidates(config, enable_thinking=enable_thinking)
     job_id = uuid.uuid4().hex
     now = _now_iso()
     job = {
@@ -70,6 +80,7 @@ def submit_model_compare_job(url: str, config: dict[str, Any]) -> dict[str, Any]
         "created_at": now,
         "updated_at": now,
         "models": [candidate.public_dict() for candidate in candidates],
+        "enable_thinking": enable_thinking,
         "output_dir": "",
         "directory_url": f"/model-compare/{job_id}",
         "file_links": [],
@@ -79,7 +90,7 @@ def submit_model_compare_job(url: str, config: dict[str, Any]) -> dict[str, Any]
 
     worker = threading.Thread(
         target=_run_model_compare_job,
-        args=(job_id, normalized_url, candidates, config),
+        args=(job_id, normalized_url, candidates, config, enable_thinking),
         daemon=True,
         name=f"model-compare-{job_id[:8]}",
     )
@@ -93,7 +104,11 @@ def get_model_compare_job(job_id: str) -> dict[str, Any] | None:
         return copy.deepcopy(job) if job else None
 
 
-def get_required_model_candidates(config: dict[str, Any]) -> list[ModelCandidate]:
+def get_required_model_candidates(
+    config: dict[str, Any],
+    *,
+    enable_thinking: bool = False,
+) -> list[ModelCandidate]:
     candidates = list_model_candidates(config)
     by_key = {candidate.key: candidate for candidate in candidates}
     required_keys = _required_model_keys()
@@ -107,7 +122,7 @@ def get_required_model_candidates(config: dict[str, Any]) -> list[ModelCandidate
             f"configured: {configured}"
         )
 
-    return [by_key[key] for key in required_keys]
+    return [_apply_request_thinking_mode(by_key[key], enable_thinking) for key in required_keys]
 
 
 def list_model_candidates(config: dict[str, Any]) -> list[ModelCandidate]:
@@ -140,6 +155,7 @@ def _run_model_compare_job(
     url: str,
     candidates: list[ModelCandidate],
     config: dict[str, Any],
+    enable_thinking: bool,
 ) -> None:
     output_dir: Path | None = None
     metadata: dict[str, Any] = {}
@@ -239,6 +255,7 @@ def _run_model_compare_job(
             "url": url,
             "generated_at": generated_at,
             "metadata": metadata,
+            "enable_thinking": enable_thinking,
             "models": [candidate.public_dict() for candidate in candidates],
             "files": files,
             "errors": errors,
@@ -341,17 +358,32 @@ def _build_candidate_config(config: dict[str, Any], candidate: ModelCandidate) -
             "enable_summary": False,
         }
     )
+    reasoning_fields = (
+        "calibrate_reasoning_effort",
+        "summary_reasoning_effort",
+        "key_info_reasoning_effort",
+        "speaker_reasoning_effort",
+    )
     if candidate.reasoning_effort is not None:
         llm_config["calibrate_reasoning_effort"] = candidate.reasoning_effort
         llm_config["summary_reasoning_effort"] = candidate.reasoning_effort
         llm_config["key_info_reasoning_effort"] = candidate.reasoning_effort
         llm_config["speaker_reasoning_effort"] = candidate.reasoning_effort
+    else:
+        for field in reasoning_fields:
+            llm_config.pop(field, None)
+
+    request_options = copy.deepcopy(llm_config.get("request_options", {}))
+    if not isinstance(request_options, dict):
+        request_options = {}
     if candidate.thinking_type is not None:
-        request_options = copy.deepcopy(llm_config.get("request_options", {}))
-        if not isinstance(request_options, dict):
-            request_options = {}
         request_options["thinking"] = {"type": candidate.thinking_type}
+    else:
+        request_options.pop("thinking", None)
+    if request_options:
         llm_config["request_options"] = request_options
+    else:
+        llm_config.pop("request_options", None)
     if candidate.max_retries is not None:
         llm_config["max_retries"] = candidate.max_retries
     if candidate.retry_delay is not None:
@@ -441,6 +473,39 @@ def _required_model_keys() -> tuple[str, ...]:
     raw = os.getenv("MODEL_COMPARE_MODEL_KEYS", "")
     keys = [item.strip().lower() for item in raw.split(",") if item.strip()]
     return tuple(keys) if keys else DEFAULT_REQUIRED_MODEL_KEYS
+
+
+def _apply_request_thinking_mode(candidate: ModelCandidate, enable_thinking: bool) -> ModelCandidate:
+    if enable_thinking:
+        return replace(
+            candidate,
+            reasoning_effort=candidate.reasoning_effort or _thinking_effort_default(candidate.key),
+            thinking_type=candidate.thinking_type or _thinking_type_default(candidate.key),
+        )
+    return replace(
+        candidate,
+        reasoning_effort=_non_thinking_effort_default(candidate.key),
+        thinking_type=None,
+    )
+
+
+def _thinking_effort_default(key: str) -> str | None:
+    return {
+        "deepseek": "high",
+        "doubao": "medium",
+    }.get(key)
+
+
+def _thinking_type_default(key: str) -> str | None:
+    return {
+        "deepseek": "enabled",
+    }.get(key)
+
+
+def _non_thinking_effort_default(key: str) -> str | None:
+    return {
+        "doubao": "minimal",
+    }.get(key)
 
 
 def _guess_model_key(*, model: str, base_url: str) -> str:

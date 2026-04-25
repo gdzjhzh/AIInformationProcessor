@@ -48,6 +48,7 @@ class ManualMediaSubmitCallbackRequest(BaseModel):
 
 class CalibrationCompareRequest(BaseModel):
     url: str = Field(min_length=1)
+    enable_thinking: bool = False
 
 
 def _build_submit_payload(payload: ManualMediaSubmitRequest) -> dict[str, Any]:
@@ -102,7 +103,11 @@ def create_app() -> FastAPI:
         payload: CalibrationCompareRequest,
     ) -> dict[str, Any]:
         try:
-            result = submit_calibration_compare(settings, payload.url.strip())
+            result = submit_calibration_compare(
+                settings,
+                payload.url.strip(),
+                enable_thinking=payload.enable_thinking,
+            )
         except CalibrationCompareError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return publicize_calibration_compare_payload(settings, result)

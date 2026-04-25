@@ -20,6 +20,7 @@ router = APIRouter(tags=["model-compare"])
 
 class ModelCompareRequest(BaseModel):
     url: str = Field(min_length=1)
+    enable_thinking: bool = False
 
 
 @router.post("/api/model-compare", status_code=202)
@@ -28,7 +29,11 @@ async def create_model_compare_job(
     user_info: dict = Depends(verify_token),
 ) -> dict[str, object]:
     try:
-        job = submit_model_compare_job(payload.url, get_config())
+        job = submit_model_compare_job(
+            payload.url,
+            get_config(),
+            enable_thinking=payload.enable_thinking,
+        )
     except ModelCompareConfigError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:

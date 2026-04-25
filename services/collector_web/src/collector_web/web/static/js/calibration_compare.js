@@ -1,5 +1,6 @@
 const compareForm = document.querySelector("[data-calibration-compare-form]");
 const compareUrlInput = document.querySelector("[data-calibration-compare-url]");
+const compareThinkingInput = document.querySelector("[data-calibration-compare-thinking]");
 const compareButton = document.querySelector("[data-calibration-compare-button]");
 const compareResultPanel = document.querySelector("[data-calibration-compare-result]");
 
@@ -30,10 +31,20 @@ function compareTone(status) {
   if (status === "failed") {
     return "error";
   }
-  if (status === "partial") {
-    return "warning";
-  }
   return "warning";
+}
+
+function renderCompareModels(models) {
+  if (!models || models.length === 0) {
+    return "";
+  }
+  return models
+    .map((model) => {
+      const effort = model.reasoning_effort ? ` / reasoning: ${model.reasoning_effort}` : "";
+      const thinking = model.thinking_type ? ` / thinking: ${model.thinking_type}` : "";
+      return `<span class="status-badge tone-muted">${escapeCompareHtml(model.label || model.key)}: ${escapeCompareHtml(model.model || "")}${escapeCompareHtml(effort + thinking)}</span>`;
+    })
+    .join("");
 }
 
 function renderCompareJob(job) {
@@ -59,6 +70,7 @@ function renderCompareJob(job) {
   const errors = (job.errors || [])
     .map((item) => `<p class="status-line is-error">${escapeCompareHtml(item.model)}：${escapeCompareHtml(item.message)}</p>`)
     .join("");
+  const thinkingLabel = job.enable_thinking ? "已启用思考模式" : "未启用思考模式";
 
   compareResultPanel.className = `submit-result is-${tone}`;
   compareResultPanel.innerHTML = `
@@ -66,8 +78,10 @@ function renderCompareJob(job) {
     <div class="submit-result-body">
       <p>${escapeCompareHtml(job.message || "")}</p>
       <p>任务：${escapeCompareHtml(job.job_id || "")}</p>
+      <p>思考：${escapeCompareHtml(thinkingLabel)}</p>
       ${job.title ? `<p>标题：${escapeCompareHtml(job.title)}</p>` : ""}
       ${job.output_dir ? `<p>本地目录：${escapeCompareHtml(job.output_dir)}</p>` : ""}
+      <div class="compare-model-list">${renderCompareModels(job.models || [])}</div>
       ${errors}
     </div>
     <div class="submit-result-actions">
@@ -116,7 +130,7 @@ async function pollCompareJob(jobId) {
       setCompareButton("开始对比", false);
     }
   } catch {
-    // Keep polling. The backend may still be starting or processing.
+    // Keep polling while the backend is still processing.
   }
 }
 
@@ -137,14 +151,17 @@ async function handleCompareSubmit(event) {
     comparePollTimer = null;
   }
 
+  const enableThinking = Boolean(compareThinkingInput && compareThinkingInput.checked);
+  const thinkingNote = enableThinking ? "，并为两个模型启用思考模式" : "";
+
   setCompareButton("正在提交...", true);
-  renderCompareMessage("已提交任务，正在等待后端下载、转录并生成两个模型的校对稿。");
+  renderCompareMessage(`已提交任务，正在等待后端下载、转录并生成两份校对稿${thinkingNote}。`);
 
   try {
     const { response, payload } = await requestCompareJson("/api/calibration-compare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, enable_thinking: enableThinking }),
     });
 
     if (!response.ok) {

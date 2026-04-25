@@ -251,6 +251,22 @@ main {
     gap: 10px;
 }
 
+.compare-thinking-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    color: var(--ink);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.compare-thinking-option input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
 .submit-input {
     width: 100%;
     min-height: 48px;
@@ -731,6 +747,12 @@ a.action-button {
 .status-badge.tone-error {
     background: var(--danger-soft);
     color: var(--danger);
+}
+
+.compare-model-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .empty-state {

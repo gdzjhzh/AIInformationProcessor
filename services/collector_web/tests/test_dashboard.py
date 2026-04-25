@@ -112,6 +112,7 @@ def test_calibration_compare_page_shows_url_submit_tool(monkeypatch, tmp_path):
     assert "校对对比" in response.text
     assert "XIAOYUZHOU URL" in response.text
     assert "开始对比" in response.text
+    assert "data-calibration-compare-thinking" in response.text
     assert "/static/js/calibration_compare.js" in response.text
 
 
@@ -123,13 +124,15 @@ def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path)
     )
     get_settings.cache_clear()
 
-    def fake_submit(settings, url):
+    def fake_submit(settings, url, *, enable_thinking=False):
         assert url == "https://www.xiaoyuzhoufm.com/episode/abc"
+        assert enable_thinking is True
         return {
             "ok": True,
             "job": {
                 "job_id": "job-1",
                 "status": "queued",
+                "enable_thinking": True,
                 "directory_url": "/model-compare/job-1",
                 "file_links": [
                     {
@@ -146,11 +149,12 @@ def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path)
     with TestClient(create_app()) as client:
         response = client.post(
             "/api/calibration-compare",
-            json={"url": "https://www.xiaoyuzhoufm.com/episode/abc"},
+            json={"url": "https://www.xiaoyuzhoufm.com/episode/abc", "enable_thinking": True},
         )
 
     assert response.status_code == 202
     job = response.json()["job"]
+    assert job["enable_thinking"] is True
     assert job["directory_url"] == "http://127.0.0.1:18080/model-compare/job-1"
     assert job["file_links"][0]["url"] == (
         "http://127.0.0.1:18080/model-compare/job-1/2026-04-25_deepseek.md"

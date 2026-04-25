@@ -27,8 +27,12 @@
                 >
                 <button class="submit-button" type="submit" data-calibration-compare-button>开始对比</button>
             </div>
+            <label class="compare-thinking-option">
+                <input type="checkbox" data-calibration-compare-thinking>
+                <span>启用思考模式</span>
+            </label>
             <p class="submit-note">
-                结果不会写入 Obsidian 主库，只会落到模型对比目录，目录和文件链接会在完成后显示在这里。
+                结果不会写入 Obsidian 主库，只会落到模型对比目录；勾选思考模式时，DeepSeek 和豆包都会按各自接口启用 reasoning。
             </p>
         </form>
 
@@ -71,5 +75,5 @@
     </div>
 </section>
 
-<script src="/static/js/calibration_compare.js?v=20260425"></script>
+<script src="/static/js/calibration_compare.js?v=20260425-thinking"></script>
 {% endblock %}

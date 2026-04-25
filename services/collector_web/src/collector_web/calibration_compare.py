@@ -10,12 +10,17 @@ class CalibrationCompareError(RuntimeError):
     pass
 
 
-def submit_calibration_compare(settings: Settings, url: str) -> dict[str, Any]:
+def submit_calibration_compare(
+    settings: Settings,
+    url: str,
+    *,
+    enable_thinking: bool = False,
+) -> dict[str, Any]:
     return _request_json(
         settings,
         settings.calibration_compare_api_base_url,
         method="POST",
-        payload={"url": url},
+        payload={"url": url, "enable_thinking": enable_thinking},
     )
 
 
