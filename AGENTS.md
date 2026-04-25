@@ -68,3 +68,11 @@
 - 对外唯一发布入口是 `python deploy/n8n/scripts/publish_runtime.py`。
 - 调试或验证前，先确认 repo JSON 和 runtime SQLite 已对齐。
 - 不要默认 `n8n-nodes-base.executeCommand` 在当前 live runtime 可用。本机这套 n8n 在 workflow activation 阶段会把它识别成 unknown node type；即使容器里能看到 node 源码，也必须先做 live 验证，再决定能不能把它接进共享 workflow。
+
+## Git Publish Default
+
+- 本仓库以后如果完成了实际文件修改，默认在验证通过后执行 `git commit` 并 `git push`。
+- 提交信息使用中文清楚说明本次改动；可以保留 `feat:` / `fix:` 等前缀，但有效描述必须是中文。
+- 提交前必须先检查 `git status --short --branch`、本次 diff 和 staged diff，只 stage 当前任务相关文件。
+- 不要把无关运行时文件、缓存、日志、`deploy/tmp/` 或用户未要求提交的改动一起打进 commit。
+- 如果验证失败、改动未完成，或工作区里存在无法安全区分的改动，不要自动提交；先说明阻塞点和保留的文件。
