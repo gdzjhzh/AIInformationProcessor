@@ -188,6 +188,10 @@ main {
     grid-column: 1 / -1;
 }
 
+.compare-card .submit-title {
+    max-width: 28rem;
+}
+
 .submit-title {
     max-width: 18rem;
     margin: 0 0 12px;
@@ -295,6 +299,13 @@ main {
 
 .action-button {
     min-height: 42px;
+}
+
+a.action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
 }
 
 .submit-button:disabled,

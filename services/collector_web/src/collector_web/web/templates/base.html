@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Collector Web{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=20260424-dashboard-2">
+    <link rel="stylesheet" href="/static/css/app.css?v=20260425-compare">
 </head>
 <body>
     <div class="page-shell">
@@ -25,6 +25,12 @@
                     class="{% if request.url.path == '/manual-media-submit' %}is-active{% endif %}"
                 >
                     手动提交
+                </a>
+                <a
+                    href="/calibration-compare"
+                    class="{% if request.url.path == '/calibration-compare' %}is-active{% endif %}"
+                >
+                    校对对比
                 </a>
                 <a
                     href="/status"

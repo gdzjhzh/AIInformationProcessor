@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}校对对比 - Collector Web{% endblock %}
+
+{% block content %}
+<section class="submit-panel">
+    <div class="submit-card compare-card">
+        <div>
+            <p class="eyebrow">校对对比</p>
+            <h2 class="submit-title">同一条小宇宙，生成两份模型校对稿</h2>
+            <p class="submit-hint">
+                这个页面只做人工评测辅助：把同一个小宇宙 URL 交给 DeepSeek 和豆包分别校对，生成带日期的 Markdown 文件，你再按自己的阅读习惯判断哪份更顺。
+            </p>
+        </div>
+
+        <form class="submit-form" data-calibration-compare-form>
+            <label class="submit-label" for="calibration-compare-url">XIAOYUZHOU URL</label>
+            <div class="submit-input-row">
+                <input
+                    id="calibration-compare-url"
+                    class="submit-input"
+                    type="url"
+                    name="url"
+                    placeholder="https://www.xiaoyuzhoufm.com/episode/..."
+                    required
+                    data-calibration-compare-url
+                >
+                <button class="submit-button" type="submit" data-calibration-compare-button>开始对比</button>
+            </div>
+            <p class="submit-note">
+                结果不会写入 Obsidian 主库，只会落到模型对比目录，目录和文件链接会在完成后显示在这里。
+            </p>
+        </form>
+
+        <div class="submit-result" data-calibration-compare-result hidden></div>
+    </div>
+</section>
+
+<section class="status-panel">
+    <div class="status-card">
+        <header class="status-header">
+            <div>
+                <p class="eyebrow">输出说明</p>
+                <div class="status-title-row">
+                    <h2>文件名会带生成日期</h2>
+                    <span class="status-badge tone-accent">DeepSeek vs 豆包</span>
+                </div>
+                <p class="status-text">
+                    每次任务会生成原始转录、DeepSeek 校对稿、豆包校对稿和任务元数据。完成后点目录链接可以直接打开文件列表。
+                </p>
+            </div>
+        </header>
+        <div class="status-grid">
+            <article class="detail-card">
+                <span class="detail-label">输入</span>
+                <strong class="detail-value">小宇宙单集 URL</strong>
+            </article>
+            <article class="detail-card">
+                <span class="detail-label">输出</span>
+                <strong class="detail-value">YYYY-MM-DD_model.md</strong>
+            </article>
+            <article class="detail-card">
+                <span class="detail-label">评分</span>
+                <strong class="detail-value">人工阅读判断</strong>
+            </article>
+            <article class="detail-card">
+                <span class="detail-label">写入</span>
+                <strong class="detail-value">不进主知识库</strong>
+            </article>
+        </div>
+    </div>
+</section>
+
+<script src="/static/js/calibration_compare.js?v=20260425"></script>
+{% endblock %}

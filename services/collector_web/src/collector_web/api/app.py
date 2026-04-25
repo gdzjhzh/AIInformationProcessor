@@ -6,6 +6,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from ..calibration_compare import (
+    CalibrationCompareError,
+    get_calibration_compare_job,
+    publicize_calibration_compare_payload,
+    submit_calibration_compare,
+)
 from ..config import get_settings
 from ..db import init_database
 from ..manual_submit import (
@@ -38,6 +44,10 @@ class ManualMediaPrecheckRequest(BaseModel):
 class ManualMediaSubmitCallbackRequest(BaseModel):
     submission_id: int = Field(ge=1)
     result: dict[str, Any]
+
+
+class CalibrationCompareRequest(BaseModel):
+    url: str = Field(min_length=1)
 
 
 def _build_submit_payload(payload: ManualMediaSubmitRequest) -> dict[str, Any]:
@@ -86,6 +96,24 @@ def create_app() -> FastAPI:
     @app.get("/api/status")
     async def status_api() -> dict[str, object]:
         return get_service_status(settings)
+
+    @app.post("/api/calibration-compare", status_code=status.HTTP_202_ACCEPTED)
+    async def calibration_compare_api(
+        payload: CalibrationCompareRequest,
+    ) -> dict[str, Any]:
+        try:
+            result = submit_calibration_compare(settings, payload.url.strip())
+        except CalibrationCompareError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return publicize_calibration_compare_payload(settings, result)
+
+    @app.get("/api/calibration-compare/{job_id}")
+    async def calibration_compare_status_api(job_id: str) -> dict[str, Any]:
+        try:
+            result = get_calibration_compare_job(settings, job_id)
+        except CalibrationCompareError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return publicize_calibration_compare_payload(settings, result)
 
     def build_page_context(submission_id: int | None = None) -> dict[str, Any]:
         dashboard = get_dashboard_data(settings)
@@ -215,6 +243,13 @@ def create_app() -> FastAPI:
             **build_page_context(submission_id=submission_id),
         }
         return templates.TemplateResponse("manual_submit.html", context)
+
+    @app.get("/calibration-compare", response_class=HTMLResponse)
+    async def calibration_compare_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            "calibration_compare.html",
+            {"request": request},
+        )
 
     @app.get("/status", response_class=HTMLResponse)
     async def status_page(request: Request) -> HTMLResponse:

@@ -21,6 +21,10 @@ class Settings:
     manual_media_submit_dispatch_timeout_seconds: int
     manual_media_submit_callback_url: str
     manual_media_precheck_timeout_seconds: int
+    calibration_compare_api_base_url: str
+    calibration_compare_api_key: str
+    calibration_compare_public_base_url: str
+    calibration_compare_timeout_seconds: int
     qdrant_base_url: str
     qdrant_collection: str
     qdrant_timeout_seconds: int
@@ -78,6 +82,21 @@ def get_settings() -> Settings:
         ),
         manual_media_precheck_timeout_seconds=int(
             os.getenv("COLLECTOR_WEB_MANUAL_MEDIA_PRECHECK_TIMEOUT_SECONDS", "10")
+        ),
+        calibration_compare_api_base_url=os.getenv(
+            "COLLECTOR_WEB_CALIBRATION_COMPARE_API_BASE_URL",
+            "http://127.0.0.1:18080/api/model-compare",
+        ).strip().rstrip("/"),
+        calibration_compare_api_key=os.getenv(
+            "COLLECTOR_WEB_CALIBRATION_COMPARE_API_KEY",
+            "",
+        ).strip(),
+        calibration_compare_public_base_url=os.getenv(
+            "COLLECTOR_WEB_CALIBRATION_COMPARE_PUBLIC_BASE_URL",
+            "http://127.0.0.1:18080",
+        ).strip().rstrip("/"),
+        calibration_compare_timeout_seconds=int(
+            os.getenv("COLLECTOR_WEB_CALIBRATION_COMPARE_TIMEOUT_SECONDS", "30")
         ),
         qdrant_base_url=os.getenv(
             "COLLECTOR_WEB_QDRANT_BASE_URL",

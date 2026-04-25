@@ -9,7 +9,7 @@ from ..utils.notifications import init_global_notifier, shutdown_global_notifier
 from ..utils.ytdlp import YtdlpConfigBuilder
 from ..llm import set_default_config, log_llm_stats
 from .context import get_config, get_logger, get_static_dir, get_temp_manager
-from .routes import audit, health, tasks, users, views
+from .routes import audit, health, model_compare, tasks, users, views
 from .services.transcription import process_llm_queue, process_task_queue
 
 
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router)
     app.include_router(users.router)
     app.include_router(views.router)
+    app.include_router(model_compare.router)
 
     @app.on_event("startup")
     async def startup_event():

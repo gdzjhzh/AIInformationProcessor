@@ -101,6 +101,62 @@ def test_manual_media_submit_page_shows_submit_tools_and_history(monkeypatch, tm
     assert "按平台查看订阅" not in response.text
 
 
+def test_calibration_compare_page_shows_url_submit_tool(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+
+    with TestClient(create_app()) as client:
+        response = client.get("/calibration-compare")
+
+    assert response.status_code == 200
+    assert 'href="/calibration-compare"' in response.text
+    assert "校对对比" in response.text
+    assert "XIAOYUZHOU URL" in response.text
+    assert "开始对比" in response.text
+    assert "/static/js/calibration_compare.js" in response.text
+
+
+def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "COLLECTOR_WEB_CALIBRATION_COMPARE_PUBLIC_BASE_URL",
+        "http://127.0.0.1:18080",
+    )
+    get_settings.cache_clear()
+
+    def fake_submit(settings, url):
+        assert url == "https://www.xiaoyuzhoufm.com/episode/abc"
+        return {
+            "ok": True,
+            "job": {
+                "job_id": "job-1",
+                "status": "queued",
+                "directory_url": "/model-compare/job-1",
+                "file_links": [
+                    {
+                        "label": "DeepSeek 校对稿",
+                        "filename": "2026-04-25_deepseek.md",
+                        "url": "/model-compare/job-1/2026-04-25_deepseek.md",
+                    }
+                ],
+            },
+        }
+
+    monkeypatch.setattr(app_module, "submit_calibration_compare", fake_submit)
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/calibration-compare",
+            json={"url": "https://www.xiaoyuzhoufm.com/episode/abc"},
+        )
+
+    assert response.status_code == 202
+    job = response.json()["job"]
+    assert job["directory_url"] == "http://127.0.0.1:18080/model-compare/job-1"
+    assert job["file_links"][0]["url"] == (
+        "http://127.0.0.1:18080/model-compare/job-1/2026-04-25_deepseek.md"
+    )
+
+
 def test_manual_media_submit_page_shows_cancel_action_for_active_submission(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     settings = get_settings()
