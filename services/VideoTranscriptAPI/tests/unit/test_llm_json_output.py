@@ -11,6 +11,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from video_transcript_api.llm.llm import (
+    _apply_provider_request_options,
     _get_json_mode_for_model,
     _validate_required_fields,
     _extract_json_from_response,
@@ -118,6 +119,25 @@ class TestGetJsonModeForModel:
 
         assert _get_json_mode_for_model("deepseek-chat", config) == "json_object"
         assert _get_json_mode_for_model("deepseek-coder", config) == "json_schema"
+
+
+class TestProviderRequestOptions:
+    """Tests for provider-specific request option injection."""
+
+    def test_applies_thinking_type(self):
+        data = {"model": "deepseek-v4-flash", "messages": [], "stream": False}
+        config = {"llm": {"request_options": {"thinking": {"type": "enabled"}}}}
+
+        _apply_provider_request_options(data, config)
+
+        assert data["thinking"] == {"type": "enabled"}
+
+    def test_ignores_missing_request_options(self):
+        data = {"model": "deepseek-chat", "messages": [], "stream": False}
+
+        _apply_provider_request_options(data, {"llm": {}})
+
+        assert "thinking" not in data
 
 
 class TestValidateRequiredFields:

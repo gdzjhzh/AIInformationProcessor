@@ -40,6 +40,7 @@ class ModelCandidate:
     base_url: str
     api_key: str
     reasoning_effort: str | None = None
+    thinking_type: str | None = None
     max_retries: int | None = None
     retry_delay: int | None = None
 
@@ -345,6 +346,12 @@ def _build_candidate_config(config: dict[str, Any], candidate: ModelCandidate) -
         llm_config["summary_reasoning_effort"] = candidate.reasoning_effort
         llm_config["key_info_reasoning_effort"] = candidate.reasoning_effort
         llm_config["speaker_reasoning_effort"] = candidate.reasoning_effort
+    if candidate.thinking_type is not None:
+        request_options = copy.deepcopy(llm_config.get("request_options", {}))
+        if not isinstance(request_options, dict):
+            request_options = {}
+        request_options["thinking"] = {"type": candidate.thinking_type}
+        llm_config["request_options"] = request_options
     if candidate.max_retries is not None:
         llm_config["max_retries"] = candidate.max_retries
     if candidate.retry_delay is not None:
@@ -362,6 +369,9 @@ def _candidate_from_active_llm(config: dict[str, Any]) -> ModelCandidate | None:
         return None
 
     key = _guess_model_key(model=model, base_url=base_url)
+    request_options = llm_config.get("request_options", {}) or {}
+    thinking = request_options.get("thinking") if isinstance(request_options, dict) else None
+    thinking_type = thinking.get("type") if isinstance(thinking, dict) else None
     return ModelCandidate(
         key=key,
         label=_default_label(key),
@@ -369,6 +379,7 @@ def _candidate_from_active_llm(config: dict[str, Any]) -> ModelCandidate | None:
         base_url=base_url,
         api_key=api_key,
         reasoning_effort=llm_config.get("calibrate_reasoning_effort"),
+        thinking_type=thinking_type,
         max_retries=llm_config.get("max_retries"),
         retry_delay=llm_config.get("retry_delay"),
     )
@@ -393,6 +404,7 @@ def _candidate_from_config(candidate_config: dict[str, Any]) -> ModelCandidate |
         base_url=base_url,
         api_key=api_key,
         reasoning_effort=candidate_config.get("reasoning_effort"),
+        thinking_type=candidate_config.get("thinking_type"),
         max_retries=candidate_config.get("max_retries"),
         retry_delay=candidate_config.get("retry_delay"),
     )
@@ -411,6 +423,7 @@ def _candidate_from_env(key: str, prefix: str) -> ModelCandidate | None:
         base_url=base_url,
         api_key=api_key,
         reasoning_effort=os.getenv(f"{prefix}_REASONING_EFFORT") or None,
+        thinking_type=os.getenv(f"{prefix}_THINKING_TYPE") or None,
         max_retries=_optional_int(os.getenv(f"{prefix}_MAX_RETRIES")),
         retry_delay=_optional_int(os.getenv(f"{prefix}_RETRY_DELAY")),
     )

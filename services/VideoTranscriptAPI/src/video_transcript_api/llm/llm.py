@@ -190,6 +190,17 @@ def _get_json_mode_for_model(model_name: str, config: Dict[str, Any]) -> str:
     return "json_schema"
 
 
+def _apply_provider_request_options(data: Dict[str, Any], config: Optional[Dict[str, Any]]) -> None:
+    if not config:
+        return
+    request_options = config.get("llm", {}).get("request_options", {})
+    if not isinstance(request_options, dict):
+        return
+    thinking = request_options.get("thinking")
+    if isinstance(thinking, dict) and thinking.get("type"):
+        data["thinking"] = {"type": str(thinking["type"])}
+
+
 def _schema_to_prompt_instruction(schema: Dict[str, Any]) -> str:
     """
     将 JSON Schema 转换为 Prompt 中的格式说明
@@ -284,7 +295,8 @@ def _call_with_text_output(
     max_retries: int,
     retry_delay: int,
     reasoning_effort: Optional[str],
-    task_type: str
+    task_type: str,
+    config: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     纯文本输出调用
@@ -322,6 +334,7 @@ def _call_with_text_output(
 
     if reasoning_effort is not None:
         data["reasoning_effort"] = reasoning_effort
+    _apply_provider_request_options(data, config)
 
     last_error = None
     start_time = time.time()
@@ -371,7 +384,8 @@ def _call_with_json_schema_mode(
     max_retries: int,
     retry_delay: int,
     reasoning_effort: Optional[str],
-    task_type: str
+    task_type: str,
+    config: Optional[Dict[str, Any]] = None,
 ) -> StructuredResult:
     """
     使用 json_schema 模式调用（严格模式）
@@ -418,6 +432,7 @@ def _call_with_json_schema_mode(
 
     if reasoning_effort is not None:
         data["reasoning_effort"] = reasoning_effort
+    _apply_provider_request_options(data, config)
 
     last_error = None
     for attempt in range(max_retries + 1):
@@ -518,6 +533,7 @@ def _call_with_json_object_mode(
 
             if reasoning_effort is not None:
                 data["reasoning_effort"] = reasoning_effort
+            _apply_provider_request_options(data, config)
 
             logger.info(f"[{task_type.upper()}] json_object mode | Attempt {attempt + 1}/{json_object_retries + 1}")
 
@@ -694,7 +710,8 @@ def call_llm_api(
             max_retries=max_retries,
             retry_delay=retry_delay,
             reasoning_effort=reasoning_effort,
-            task_type=task_type
+            task_type=task_type,
+            config=config,
         )
 
     # 结构化输出路径：优先使用传入的 config，否则使用默认配置
@@ -718,7 +735,8 @@ def call_llm_api(
             max_retries=max_retries,
             retry_delay=retry_delay,
             reasoning_effort=reasoning_effort,
-            task_type=task_type
+            task_type=task_type,
+            config=effective_config,
         )
     else:
         return _call_with_json_object_mode(
