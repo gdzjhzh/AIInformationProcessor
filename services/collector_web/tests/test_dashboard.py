@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
+import collector_web.calibration_compare as calibration_compare_module
 import collector_web.db as db_module
 import collector_web.precheck as precheck_module
 import collector_web.status as status_module
@@ -113,6 +114,7 @@ def test_calibration_compare_page_shows_url_submit_tool(monkeypatch, tmp_path):
     assert "XIAOYUZHOU URL" in response.text
     assert "开始对比" in response.text
     assert "data-calibration-compare-thinking" in response.text
+    assert "open-dir" in response.text
     assert "/static/js/calibration_compare.js" in response.text
 
 
@@ -159,6 +161,59 @@ def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path)
     assert job["file_links"][0]["url"] == (
         "http://127.0.0.1:18080/model-compare/job-1/2026-04-25_deepseek.md"
     )
+
+
+def test_calibration_compare_open_directory_api(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+
+    def fake_open_directory(settings, job_id):
+        assert job_id == "job-1"
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "path": str(tmp_path / "model_compare" / "job-1"),
+        }
+
+    monkeypatch.setattr(app_module, "open_calibration_compare_directory", fake_open_directory)
+
+    with TestClient(create_app()) as client:
+        response = client.post("/api/calibration-compare/job-1/open-directory")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["job_id"] == "job-1"
+    assert payload["path"].endswith("job-1")
+
+
+def test_open_calibration_compare_directory_maps_container_path(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    local_root = tmp_path / "model_compare"
+    result_dir = local_root / "2026-04-25_demo_job-1"
+    result_dir.mkdir(parents=True)
+    monkeypatch.setenv("COLLECTOR_WEB_CALIBRATION_COMPARE_LOCAL_OUTPUT_DIR", str(local_root))
+    monkeypatch.setenv("COLLECTOR_WEB_CALIBRATION_COMPARE_CONTAINER_OUTPUT_DIR", "/app/data/model_compare")
+    get_settings.cache_clear()
+
+    def fake_get_job(settings, job_id):
+        return {
+            "ok": True,
+            "job": {
+                "job_id": job_id,
+                "output_dir": "/app/data/model_compare/2026-04-25_demo_job-1",
+            },
+        }
+
+    opened = []
+    monkeypatch.setattr(calibration_compare_module, "get_calibration_compare_job", fake_get_job)
+    monkeypatch.setattr(calibration_compare_module, "_open_directory", lambda path: opened.append(path))
+
+    result = calibration_compare_module.open_calibration_compare_directory(get_settings(), "job-1")
+
+    assert result["ok"] is True
+    assert result["job_id"] == "job-1"
+    assert result["path"] == str(result_dir.resolve())
+    assert opened == [result_dir.resolve()]
 
 
 def test_manual_media_submit_page_shows_cancel_action_for_active_submission(monkeypatch, tmp_path):

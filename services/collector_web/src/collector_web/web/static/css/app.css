@@ -324,6 +324,14 @@ a.action-button {
     text-decoration: none;
 }
 
+button.action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font: inherit;
+    cursor: pointer;
+}
+
 .submit-button:disabled,
 .action-button:disabled {
     cursor: wait;

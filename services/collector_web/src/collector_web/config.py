@@ -24,6 +24,8 @@ class Settings:
     calibration_compare_api_base_url: str
     calibration_compare_api_key: str
     calibration_compare_public_base_url: str
+    calibration_compare_container_output_dir: Path
+    calibration_compare_local_output_dir: Path
     calibration_compare_timeout_seconds: int
     qdrant_base_url: str
     qdrant_collection: str
@@ -95,6 +97,22 @@ def get_settings() -> Settings:
             "COLLECTOR_WEB_CALIBRATION_COMPARE_PUBLIC_BASE_URL",
             "http://127.0.0.1:18080",
         ).strip().rstrip("/"),
+        calibration_compare_container_output_dir=Path(
+            os.getenv(
+                "COLLECTOR_WEB_CALIBRATION_COMPARE_CONTAINER_OUTPUT_DIR",
+                "/app/data/model_compare",
+            ).strip()
+        ),
+        calibration_compare_local_output_dir=Path(
+            os.getenv(
+                "COLLECTOR_WEB_CALIBRATION_COMPARE_LOCAL_OUTPUT_DIR",
+                str(
+                    (repo_root / "deploy" / "data" / "video-transcript-api" / "model_compare")
+                    if repo_root is not None
+                    else Path("data") / "model_compare"
+                ),
+            ).strip()
+        ),
         calibration_compare_timeout_seconds=int(
             os.getenv("COLLECTOR_WEB_CALIBRATION_COMPARE_TIMEOUT_SECONDS", "30")
         ),

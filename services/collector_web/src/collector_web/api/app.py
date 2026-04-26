@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from ..calibration_compare import (
     CalibrationCompareError,
     get_calibration_compare_job,
+    open_calibration_compare_directory,
     publicize_calibration_compare_payload,
     submit_calibration_compare,
 )
@@ -119,6 +120,13 @@ def create_app() -> FastAPI:
         except CalibrationCompareError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return publicize_calibration_compare_payload(settings, result)
+
+    @app.post("/api/calibration-compare/{job_id}/open-directory")
+    async def calibration_compare_open_directory_api(job_id: str) -> dict[str, Any]:
+        try:
+            return open_calibration_compare_directory(settings, job_id)
+        except CalibrationCompareError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     def build_page_context(submission_id: int | None = None) -> dict[str, Any]:
         dashboard = get_dashboard_data(settings)

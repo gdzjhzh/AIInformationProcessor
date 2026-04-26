@@ -60,10 +60,17 @@ function renderCompareJob(job) {
       </a>
     `)
     .join("");
+  const openDirectoryButton = job.job_id && job.output_dir
+    ? `
+      <button class="action-button" type="button" data-calibration-compare-open-directory="${escapeCompareHtml(job.job_id)}">
+        打开结果目录
+      </button>
+    `
+    : "";
   const directoryLink = job.directory_url
     ? `
-      <a class="action-button" href="${escapeCompareHtml(job.directory_url)}" target="_blank" rel="noopener">
-        打开结果目录
+      <a class="text-link-button" href="${escapeCompareHtml(job.directory_url)}" target="_blank" rel="noopener">
+        查看文件列表
       </a>
     `
     : "";
@@ -85,6 +92,7 @@ function renderCompareJob(job) {
       ${errors}
     </div>
     <div class="submit-result-actions">
+      ${openDirectoryButton}
       ${directoryLink}
       ${fileLinks}
     </div>
@@ -111,6 +119,33 @@ async function requestCompareJson(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json();
   return { response, payload };
+}
+
+async function openCompareDirectory(jobId, button) {
+  const previousLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "正在打开...";
+
+  try {
+    const { response, payload } = await requestCompareJson(
+      `/api/calibration-compare/${encodeURIComponent(jobId)}/open-directory`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      throw new Error(payload.detail || `HTTP ${response.status}`);
+    }
+    button.textContent = "已打开目录";
+  } catch (error) {
+    renderCompareMessage(error instanceof Error ? error.message : "打开目录失败", "error");
+  } finally {
+    window.setTimeout(() => {
+      if (!button.isConnected) {
+        return;
+      }
+      button.disabled = false;
+      button.textContent = previousLabel || "打开结果目录";
+    }, 1500);
+  }
 }
 
 async function pollCompareJob(jobId) {
@@ -184,4 +219,20 @@ async function handleCompareSubmit(event) {
 
 if (compareForm) {
   compareForm.addEventListener("submit", handleCompareSubmit);
+}
+
+if (compareResultPanel) {
+  compareResultPanel.addEventListener("click", (event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest("[data-calibration-compare-open-directory]")
+      : null;
+    if (!target) {
+      return;
+    }
+    const jobId = target.getAttribute("data-calibration-compare-open-directory") || "";
+    if (!jobId) {
+      return;
+    }
+    openCompareDirectory(jobId, target);
+  });
 }
