@@ -75,5 +75,26 @@
     </div>
 </section>
 
-<script src="/static/js/calibration_compare.js?v=20260425-open-dir"></script>
+<section class="history-panel">
+    <header class="history-header">
+        <div>
+            <p class="eyebrow">最近对比</p>
+            <h2>校对对比历史</h2>
+            <p class="history-text">
+                记录保存在当前浏览器里。刷新页面后会自动恢复最近任务，并重新拉取后端状态。
+            </p>
+        </div>
+        <div class="history-summary" data-calibration-compare-history-summary>
+            <span>本机最近 0 条</span>
+        </div>
+    </header>
+    <div class="history-list" data-calibration-compare-history>
+        <div class="empty-state">
+            <p>还没有校对对比记录。</p>
+            <p>提交一次小宇宙 URL 后，这里会保留最近任务和结果目录入口。</p>
+        </div>
+    </div>
+</section>
+
+<script src="/static/js/calibration_compare.js?v=20260425-history"></script>
 {% endblock %}

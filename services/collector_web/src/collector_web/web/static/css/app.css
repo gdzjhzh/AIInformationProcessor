@@ -385,6 +385,13 @@ button.action-button {
     margin-top: 14px;
 }
 
+.history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
 .secondary-button,
 .text-link-button {
     min-height: 38px;
@@ -417,6 +424,11 @@ button.action-button {
 
 .text-link-button:hover {
     background: #c7d2fe;
+}
+
+button.text-link-button {
+    font: inherit;
+    cursor: pointer;
 }
 
 .status-header,

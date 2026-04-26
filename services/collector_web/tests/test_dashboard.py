@@ -114,7 +114,9 @@ def test_calibration_compare_page_shows_url_submit_tool(monkeypatch, tmp_path):
     assert "XIAOYUZHOU URL" in response.text
     assert "开始对比" in response.text
     assert "data-calibration-compare-thinking" in response.text
-    assert "open-dir" in response.text
+    assert "data-calibration-compare-history" in response.text
+    assert "校对对比历史" in response.text
+    assert "history" in response.text
     assert "/static/js/calibration_compare.js" in response.text
 
 

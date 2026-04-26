@@ -3,9 +3,16 @@ const compareUrlInput = document.querySelector("[data-calibration-compare-url]")
 const compareThinkingInput = document.querySelector("[data-calibration-compare-thinking]");
 const compareButton = document.querySelector("[data-calibration-compare-button]");
 const compareResultPanel = document.querySelector("[data-calibration-compare-result]");
+const compareHistoryPanel = document.querySelector("[data-calibration-compare-history]");
+const compareHistorySummary = document.querySelector("[data-calibration-compare-history-summary]");
 
 let comparePollTimer = null;
+let compareHistoryPollTimer = null;
 let currentCompareJobId = "";
+
+const compareHistoryStorageKey = "aip.calibrationCompare.history";
+const compareHistoryLimit = 12;
+const terminalCompareStatuses = ["success", "partial", "failed"];
 
 function escapeCompareHtml(value) {
   return String(value)
@@ -34,6 +41,10 @@ function compareTone(status) {
   return "warning";
 }
 
+function isCompareTerminal(status) {
+  return terminalCompareStatuses.includes(status);
+}
+
 function renderCompareModels(models) {
   if (!models || models.length === 0) {
     return "";
@@ -45,6 +56,57 @@ function renderCompareModels(models) {
       return `<span class="status-badge tone-muted">${escapeCompareHtml(model.label || model.key)}: ${escapeCompareHtml(model.model || "")}${escapeCompareHtml(effort + thinking)}</span>`;
     })
     .join("");
+}
+
+function readCompareHistory() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(compareHistoryStorageKey) || "[]");
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item) => item && item.job_id);
+  } catch {
+    return [];
+  }
+}
+
+function writeCompareHistory(items) {
+  try {
+    window.localStorage.setItem(compareHistoryStorageKey, JSON.stringify(items.slice(0, compareHistoryLimit)));
+  } catch {
+    // Keep the page usable if localStorage is disabled.
+  }
+}
+
+function compactCompareJob(job) {
+  return {
+    job_id: job.job_id || "",
+    url: job.url || "",
+    title: job.title || "",
+    status: job.status || "",
+    status_label: job.status_label || "",
+    message: job.message || "",
+    stage: job.stage || "",
+    created_at: job.created_at || "",
+    updated_at: job.updated_at || "",
+    output_dir: job.output_dir || "",
+    directory_url: job.directory_url || "",
+    file_links: job.file_links || [],
+    errors: job.errors || [],
+    models: job.models || [],
+    enable_thinking: Boolean(job.enable_thinking),
+  };
+}
+
+function rememberCompareJob(job) {
+  if (!job || !job.job_id) {
+    return;
+  }
+  const compact = compactCompareJob(job);
+  const existing = readCompareHistory().filter((item) => item.job_id !== compact.job_id);
+  const merged = [compact, ...existing].slice(0, compareHistoryLimit);
+  writeCompareHistory(merged);
+  renderCompareHistory(merged);
 }
 
 function renderCompareJob(job) {
@@ -98,6 +160,7 @@ function renderCompareJob(job) {
     </div>
   `;
   compareResultPanel.hidden = false;
+  rememberCompareJob(job);
 }
 
 function renderCompareMessage(message, tone = "warning") {
@@ -115,10 +178,134 @@ function renderCompareMessage(message, tone = "warning") {
   compareResultPanel.hidden = false;
 }
 
+function renderCompareHistory(items = readCompareHistory()) {
+  if (!compareHistoryPanel) {
+    return;
+  }
+
+  if (compareHistorySummary) {
+    const activeCount = items.filter((item) => !isCompareTerminal(item.status)).length;
+    compareHistorySummary.innerHTML = `
+      <span>本机最近 ${items.length} 条</span>
+      <span>${activeCount} 条处理中</span>
+    `;
+  }
+
+  if (items.length === 0) {
+    compareHistoryPanel.innerHTML = `
+      <div class="empty-state">
+        <p>还没有校对对比记录。</p>
+        <p>提交一次小宇宙 URL 后，这里会保留最近任务和结果目录入口。</p>
+      </div>
+    `;
+    return;
+  }
+
+  compareHistoryPanel.innerHTML = items
+    .map((job) => {
+      const tone = compareTone(job.status);
+      const title = job.title || job.url || job.job_id;
+      const createdAt = job.created_at || job.updated_at || "";
+      const statusLabel = job.status_label || job.status || "处理中";
+      const openDirectoryButton = job.output_dir
+        ? `
+          <button class="action-button" type="button" data-calibration-compare-open-directory="${escapeCompareHtml(job.job_id)}">
+            打开结果目录
+          </button>
+        `
+        : "";
+      const directoryLink = job.directory_url
+        ? `
+          <a class="text-link-button" href="${escapeCompareHtml(job.directory_url)}" target="_blank" rel="noopener">
+            查看文件列表
+          </a>
+        `
+        : "";
+
+      return `
+        <article class="history-item" data-calibration-compare-history-item="${escapeCompareHtml(job.job_id)}">
+          <div class="history-main">
+            <div class="history-title-row">
+              <strong>${escapeCompareHtml(title)}</strong>
+              <span class="status-badge tone-${escapeCompareHtml(tone)}">${escapeCompareHtml(statusLabel)}</span>
+            </div>
+            <p class="history-meta">${escapeCompareHtml(job.url || job.job_id)}</p>
+            <p class="history-meta secondary">
+              阶段：${escapeCompareHtml(job.stage || "pending")}
+              · 思考：${job.enable_thinking ? "已启用" : "未启用"}
+            </p>
+            ${job.message ? `<p class="history-meta secondary">${escapeCompareHtml(job.message)}</p>` : ""}
+            <div class="history-actions">
+              <button class="text-link-button" type="button" data-calibration-compare-load-job="${escapeCompareHtml(job.job_id)}">
+                查看状态
+              </button>
+              ${openDirectoryButton}
+              ${directoryLink}
+            </div>
+          </div>
+          <div class="history-side">
+            <span>${escapeCompareHtml(job.job_id.slice(0, 8))}</span>
+            <strong>${escapeCompareHtml(createdAt)}</strong>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 async function requestCompareJson(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json();
   return { response, payload };
+}
+
+async function loadCompareJob(jobId) {
+  if (!jobId) {
+    return;
+  }
+  const { response, payload } = await requestCompareJson(`/api/calibration-compare/${encodeURIComponent(jobId)}`);
+  if (!response.ok) {
+    throw new Error(payload.detail || `HTTP ${response.status}`);
+  }
+  currentCompareJobId = payload?.job?.job_id || jobId;
+  renderCompareJob(payload.job);
+  if (!isCompareTerminal(payload.job.status)) {
+    if (comparePollTimer) {
+      window.clearInterval(comparePollTimer);
+    }
+    comparePollTimer = window.setInterval(() => pollCompareJob(currentCompareJobId), 5000);
+  }
+}
+
+async function refreshCompareHistoryStatus(jobId) {
+  try {
+    const { response, payload } = await requestCompareJson(`/api/calibration-compare/${encodeURIComponent(jobId)}`);
+    if (!response.ok || !payload.job) {
+      return;
+    }
+    rememberCompareJob(payload.job);
+  } catch {
+    // The backend may have restarted; keep the cached entry for file-list access.
+  }
+}
+
+function refreshCompareHistoryStatuses() {
+  const items = readCompareHistory();
+  Promise.all(items.map((item) => refreshCompareHistoryStatus(item.job_id))).finally(() => {
+    scheduleCompareHistoryPolling();
+  });
+}
+
+function scheduleCompareHistoryPolling() {
+  if (compareHistoryPollTimer) {
+    window.clearInterval(compareHistoryPollTimer);
+  }
+  const hasActive = readCompareHistory().some((item) => !isCompareTerminal(item.status));
+  if (!hasActive) {
+    compareHistoryPollTimer = null;
+    return;
+  }
+  compareHistoryPollTimer = window.setInterval(refreshCompareHistoryStatuses, 5000);
 }
 
 async function openCompareDirectory(jobId, button) {
@@ -159,7 +346,8 @@ async function pollCompareJob(jobId) {
     }
     const job = payload.job;
     renderCompareJob(job);
-    if (["success", "partial", "failed"].includes(job.status)) {
+    scheduleCompareHistoryPolling();
+    if (isCompareTerminal(job.status)) {
       window.clearInterval(comparePollTimer);
       comparePollTimer = null;
       setCompareButton("开始对比", false);
@@ -209,6 +397,7 @@ async function handleCompareSubmit(event) {
     }
 
     renderCompareJob(payload.job);
+    scheduleCompareHistoryPolling();
     comparePollTimer = window.setInterval(() => pollCompareJob(currentCompareJobId), 5000);
     pollCompareJob(currentCompareJobId);
   } catch (error) {
@@ -221,18 +410,32 @@ if (compareForm) {
   compareForm.addEventListener("submit", handleCompareSubmit);
 }
 
-if (compareResultPanel) {
-  compareResultPanel.addEventListener("click", (event) => {
-    const target = event.target instanceof Element
-      ? event.target.closest("[data-calibration-compare-open-directory]")
-      : null;
-    if (!target) {
-      return;
+document.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) {
+    return;
+  }
+
+  const openTarget = target.closest("[data-calibration-compare-open-directory]");
+  if (openTarget) {
+    const jobId = openTarget.getAttribute("data-calibration-compare-open-directory") || "";
+    if (jobId) {
+      openCompareDirectory(jobId, openTarget);
     }
-    const jobId = target.getAttribute("data-calibration-compare-open-directory") || "";
-    if (!jobId) {
-      return;
+    return;
+  }
+
+  const loadTarget = target.closest("[data-calibration-compare-load-job]");
+  if (loadTarget) {
+    const jobId = loadTarget.getAttribute("data-calibration-compare-load-job") || "";
+    if (jobId) {
+      loadCompareJob(jobId).catch((error) => {
+        renderCompareMessage(error instanceof Error ? error.message : "读取历史任务失败", "error");
+      });
     }
-    openCompareDirectory(jobId, target);
-  });
-}
+  }
+});
+
+renderCompareHistory();
+refreshCompareHistoryStatuses();
+scheduleCompareHistoryPolling();
