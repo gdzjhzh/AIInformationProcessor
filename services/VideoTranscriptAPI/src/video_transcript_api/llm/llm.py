@@ -10,6 +10,7 @@ import re
 import requests
 import requests.exceptions
 import time
+from threading import Lock
 from typing import Any, Dict, Optional, Union, overload
 from dataclasses import dataclass
 from loguru import logger
@@ -106,9 +107,15 @@ class LLMStats:
     json_object_parse_failures: int = 0
     json_object_retry_success: int = 0
     json_object_final_failures: int = 0
+    usage_reports: int = 0
+    usage_missing: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
 _stats = LLMStats()
+_stats_lock = Lock()
 
 
 def log_llm_stats() -> None:
@@ -131,6 +138,12 @@ def log_llm_stats() -> None:
         logger.info(f"  json_object retry successes: {_stats.json_object_retry_success}")
         logger.info(f"  json_object final failures: {_stats.json_object_final_failures}")
         logger.info(f"  json_object success rate: {rate:.1f}%")
+
+    logger.info(f"  usage reports: {_stats.usage_reports}")
+    logger.info(f"  usage missing: {_stats.usage_missing}")
+    logger.info(f"  usage.prompt_tokens: {_stats.prompt_tokens}")
+    logger.info(f"  usage.completion_tokens: {_stats.completion_tokens}")
+    logger.info(f"  usage.total_tokens: {_stats.total_tokens}")
 
     logger.info("=" * 60)
 
@@ -162,6 +175,59 @@ def _is_truncation_error(error_msg: str) -> bool:
     """
     truncation_patterns = ['unterminated string', 'unexpected end']
     return any(p in error_msg for p in truncation_patterns)
+
+
+def _coerce_token_count(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _extract_token_usage(result: Dict[str, Any]) -> Dict[str, Optional[int]]:
+    usage = result.get("usage") if isinstance(result, dict) else None
+    if not isinstance(usage, dict):
+        return {}
+
+    return {
+        "prompt_tokens": _coerce_token_count(usage.get("prompt_tokens")),
+        "completion_tokens": _coerce_token_count(usage.get("completion_tokens")),
+        "total_tokens": _coerce_token_count(usage.get("total_tokens")),
+    }
+
+
+def _format_token_count(value: Optional[int]) -> str:
+    return str(value) if value is not None else "unknown"
+
+
+def _record_token_usage(task_type: str, model: str, result: Dict[str, Any]) -> None:
+    usage = _extract_token_usage(result)
+    task_label = task_type.upper()
+
+    if not usage:
+        with _stats_lock:
+            _stats.usage_missing += 1
+        logger.info(f"[{task_label}] usage.total_tokens=unknown | model={model}")
+        return
+
+    with _stats_lock:
+        _stats.usage_reports += 1
+        if usage["prompt_tokens"] is not None:
+            _stats.prompt_tokens += usage["prompt_tokens"]
+        if usage["completion_tokens"] is not None:
+            _stats.completion_tokens += usage["completion_tokens"]
+        if usage["total_tokens"] is not None:
+            _stats.total_tokens += usage["total_tokens"]
+
+    logger.info(
+        f"[{task_label}] usage.prompt_tokens={_format_token_count(usage['prompt_tokens'])} | "
+        f"usage.completion_tokens={_format_token_count(usage['completion_tokens'])} | "
+        f"usage.total_tokens={_format_token_count(usage['total_tokens'])} | "
+        f"model={model}"
+    )
 
 
 def _get_json_mode_for_model(model_name: str, config: Dict[str, Any]) -> str:
@@ -350,6 +416,7 @@ def _call_with_text_output(
             resp = requests.post(base_url, json=data, headers=headers, timeout=_get_llm_timeout())
             resp.raise_for_status()
             result = resp.json()
+            _record_token_usage(task_type, model, result)
 
             content = result["choices"][0]["message"]["content"].strip()
             duration = time.time() - start_time
@@ -442,6 +509,7 @@ def _call_with_json_schema_mode(
             resp = requests.post(base_url, json=data, headers=headers, timeout=_get_llm_timeout())
             resp.raise_for_status()
             result = resp.json()
+            _record_token_usage(task_type, model, result)
 
             content = result["choices"][0]["message"]["content"].strip()
             parsed = json.loads(content)
@@ -540,6 +608,7 @@ def _call_with_json_object_mode(
             resp = requests.post(base_url, json=data, headers=headers, timeout=_get_llm_timeout())
             resp.raise_for_status()
             result = resp.json()
+            _record_token_usage(task_type, model, result)
 
             content = result["choices"][0]["message"]["content"].strip()
             last_response = content

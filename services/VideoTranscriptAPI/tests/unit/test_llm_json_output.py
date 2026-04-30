@@ -12,7 +12,9 @@ from unittest.mock import patch, MagicMock
 
 from video_transcript_api.llm.llm import (
     _apply_provider_request_options,
+    _extract_token_usage,
     _get_json_mode_for_model,
+    _record_token_usage,
     _validate_required_fields,
     _extract_json_from_response,
     _schema_to_prompt_instruction,
@@ -294,18 +296,76 @@ class TestLLMStats:
         assert stats.text_calls == 0
         assert stats.json_schema_calls == 0
         assert stats.json_object_calls == 0
+        assert stats.usage_reports == 0
+        assert stats.usage_missing == 0
+        assert stats.total_tokens == 0
 
     def test_reset_stats(self):
         """Reset should clear all stats."""
         stats = get_llm_stats()
         stats.text_calls = 10
         stats.json_schema_calls = 5
+        stats.usage_reports = 3
+        stats.prompt_tokens = 100
+        stats.completion_tokens = 50
+        stats.total_tokens = 150
 
         reset_llm_stats()
         stats = get_llm_stats()
 
         assert stats.text_calls == 0
         assert stats.json_schema_calls == 0
+        assert stats.usage_reports == 0
+        assert stats.prompt_tokens == 0
+        assert stats.completion_tokens == 0
+        assert stats.total_tokens == 0
+
+    def test_extract_token_usage(self):
+        """Should extract OpenAI-compatible usage token counts."""
+        result = {
+            "usage": {
+                "prompt_tokens": 12,
+                "completion_tokens": 8,
+                "total_tokens": 20,
+            }
+        }
+
+        usage = _extract_token_usage(result)
+
+        assert usage == {
+            "prompt_tokens": 12,
+            "completion_tokens": 8,
+            "total_tokens": 20,
+        }
+
+    def test_record_token_usage_updates_stats(self):
+        """Recording usage should update aggregate token stats."""
+        _record_token_usage(
+            "calibrate_segment",
+            "test-model",
+            {
+                "usage": {
+                    "prompt_tokens": 30,
+                    "completion_tokens": 20,
+                    "total_tokens": 50,
+                }
+            },
+        )
+
+        stats = get_llm_stats()
+        assert stats.usage_reports == 1
+        assert stats.prompt_tokens == 30
+        assert stats.completion_tokens == 20
+        assert stats.total_tokens == 50
+
+    def test_record_missing_usage(self):
+        """Missing provider usage should be counted separately."""
+        _record_token_usage("summary", "test-model", {"choices": []})
+
+        stats = get_llm_stats()
+        assert stats.usage_reports == 0
+        assert stats.usage_missing == 1
+        assert stats.total_tokens == 0
 
 
 class TestStructuredResult:
