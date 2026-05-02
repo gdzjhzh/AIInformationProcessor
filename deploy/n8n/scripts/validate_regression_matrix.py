@@ -456,6 +456,11 @@ def check_feishu_notify_uses_card_v2() -> list[CheckFailure]:
         "tag: 'markdown'",
         "behaviors: [",
         "type: 'open_url'",
+        "normalizeKeyPoints",
+        "$json.note_key_points",
+        "\\u4e00\\u53e5\\u8bdd\\u5224\\u65ad",
+        "\\u5173\\u952e\\u89c2\\u70b9",
+        "\\u4e3a\\u4ec0\\u4e48\\u503c\\u5f97\\u770b",
         "wide_screen_mode: true",
         "message_format: 'interactive_card_v2'",
     ):
