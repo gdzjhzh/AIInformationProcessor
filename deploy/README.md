@@ -192,6 +192,16 @@ docker compose --profile headless up -d browserless rsshub
 - `VIDEO_TRANSCRIPT_BASE_URL` / `VIDEO_TRANSCRIPT_API_KEY`: 用于音视频转文本
 - `FEISHU_WEBHOOK_URL`: 用于 n8n 在 `09_feishu_notify` 中通过飞书群机器人消息卡片即时推送高价值摘要
 
+### 飞书消息卡片测试
+
+在 Windows 上不要用 PowerShell 管道把含中文的 JS 传进 `docker compose exec ... node -`，这会把中文变成 `?`。手动测试飞书群机器人卡片请使用仓库脚本：
+
+```powershell
+python deploy/n8n/scripts/send_feishu_card_test.py
+```
+
+脚本会从当前环境或 ignored 的 `deploy/.env` 读取 `FEISHU_WEBHOOK_URL`，用 UTF-8 JSON 发送测试卡片，并且不会打印 webhook。
+
 ## LLM Provider 切换
 
 如果以后要把 `deepseek` 换成别的 OpenAI-compatible provider，不要再从 workflow 和 transcript 代码反推。直接看：

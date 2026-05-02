@@ -69,6 +69,11 @@
 - 调试或验证前，先确认 repo JSON 和 runtime SQLite 已对齐。
 - 不要默认 `n8n-nodes-base.executeCommand` 在当前 live runtime 可用。本机这套 n8n 在 workflow activation 阶段会把它识别成 unknown node type；即使容器里能看到 node 源码，也必须先做 live 验证，再决定能不能把它接进共享 workflow。
 
+## Feishu Notification Test Reminder
+
+- 测试飞书群机器人消息卡片时，不要在 Windows PowerShell 里把含中文的 JS 通过 stdin 管道传给 `docker compose exec ... node -`；这条路径会把中文变成 `?`，导致飞书收到问号乱码。
+- 手动测试请使用 `python deploy/n8n/scripts/send_feishu_card_test.py`。脚本会从当前环境或 ignored 的 `deploy/.env` 读取 `FEISHU_WEBHOOK_URL`，用 UTF-8 JSON 发送消息卡片，并且不会打印 webhook。
+
 ## Git Publish Default
 
 - 本仓库以后如果完成了实际文件修改，默认在验证通过后执行 `git commit` 并 `git push`。
