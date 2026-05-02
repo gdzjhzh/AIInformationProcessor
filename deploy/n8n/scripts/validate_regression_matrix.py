@@ -444,18 +444,31 @@ def check_manual_media_uses_shared_mainline() -> list[CheckFailure]:
     return failures
 
 
-def check_feishu_notify_uses_message_card() -> list[CheckFailure]:
+def check_feishu_notify_uses_card_v2() -> list[CheckFailure]:
     failures: list[CheckFailure] = []
     workflow_name = "09_feishu_notify.json"
     workflow = load_workflow(workflow_name)
     for snippet in (
         "msg_type: 'interactive'",
         "card: {",
-        "tag: 'lark_md'",
+        "schema: '2.0'",
+        "body: {",
+        "tag: 'markdown'",
+        "behaviors: [",
+        "type: 'open_url'",
         "wide_screen_mode: true",
-        "message_format: 'interactive_card'",
+        "message_format: 'interactive_card_v2'",
     ):
         require_code_contains(workflow_name, workflow, "Build Feishu Message", snippet, failures)
+    code = node_js_code(workflow, "Build Feishu Message")
+    for legacy_snippet in ("tag: 'lark_md'", "message_format: 'interactive_card'"):
+        if legacy_snippet in code:
+            failures.append(
+                CheckFailure(
+                    location=f"{workflow_name}:Build Feishu Message",
+                    message=f"must not use legacy code snippet {legacy_snippet!r}",
+                )
+            )
     return failures
 
 
@@ -497,7 +510,7 @@ CHECKS: dict[str, Callable[[], list[CheckFailure]]] = {
     "qdrant_commit_after_vault_write_only": check_qdrant_commit_after_vault_write_only,
     "rss_transcript_uses_shared_mainline": check_rss_transcript_uses_shared_mainline,
     "manual_media_uses_shared_mainline": check_manual_media_uses_shared_mainline,
-    "feishu_notify_uses_message_card": check_feishu_notify_uses_message_card,
+    "feishu_notify_uses_card_v2": check_feishu_notify_uses_card_v2,
     "local_verify_no_vault_write": check_local_verify_no_vault_write,
 }
 
