@@ -411,7 +411,8 @@ def check_rss_transcript_uses_shared_mainline() -> list[CheckFailure]:
         ("Should Continue To LLM?", "02 Enrich With LLM"),
         ("02 Enrich With LLM", "04a Action Policy"),
         ("04a Action Policy", "05 Common Vault Writer"),
-        ("05 Common Vault Writer", "03b Qdrant Commit"),
+        ("05 Common Vault Writer", "09 Feishu Notify"),
+        ("09 Feishu Notify", "03b Qdrant Commit"),
     ):
         require_edge(workflow_name, workflow, source_node, target_node, failures)
     forbid_edge(workflow_name, workflow, "04 Video Transcript Ingest", "05 Common Vault Writer", failures)
@@ -435,7 +436,8 @@ def check_manual_media_uses_shared_mainline() -> list[CheckFailure]:
         ("02 Enrich With LLM", "04a Action Policy"),
         ("04a Action Policy", "Attach Manual Workflow Label"),
         ("Attach Manual Workflow Label", "05 Common Vault Writer"),
-        ("05 Common Vault Writer", "03b Qdrant Commit"),
+        ("05 Common Vault Writer", "09 Feishu Notify"),
+        ("09 Feishu Notify", "03b Qdrant Commit"),
     ):
         require_edge(workflow_name, workflow, source_node, target_node, failures)
     forbid_edge(workflow_name, workflow, "04 Video Transcript Ingest", "05 Common Vault Writer", failures)
