@@ -106,7 +106,7 @@ docker compose up -d memos n8n qdrant redis rsshub
 
 `05_common_vault_writer.json` 是共享 Vault 写入子流程。`01` 和 `06` 现在都统一调用它；`04_video_transcript_ingest` 继续保持 adapter-only，只返回可交给 `00` 的 transcript ingress payload，不直接写 Vault。
 
-`09_feishu_notify.json` 是写库后的即时通知支路。`01` 和 `06` 都会在 `05_common_vault_writer` 写入 Obsidian 之后调用它；只有当 `should_notify=true`、`vault_write_status=written` 且 `FEISHU_WEBHOOK_URL` 已配置时，才会把轻量摘要推送到飞书。它不会把飞书 webhook URL 写回下游 JSON。
+`09_feishu_notify.json` 是写库后的即时通知支路。`01` 和 `06` 都会在 `05_common_vault_writer` 写入 Obsidian 之后调用它；只有当 `should_notify=true`、`vault_write_status=written` 且 `FEISHU_WEBHOOK_URL` 已配置时，才会用群机器人消息卡片把轻量摘要推送到飞书。它不会把飞书 webhook URL 写回下游 JSON。
 
 `06_manual_media_submit.json` 是本地手动媒体入口，只接 `YouTube / 播客 / 其他音视频 URL`，然后先走 `04` transcript adapter，再显式进入共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`；它不处理文章正文或通用手动笔记。默认本地 webhook 为：
 
@@ -190,7 +190,7 @@ docker compose --profile headless up -d browserless rsshub
 - `EMBEDDING_INPUT_MAX_CHARS`: 控制 `01a_rule_prefilter` 生成的 `event_fingerprint_text` 上限，默认 `6000`；不再表示“直接截断正文前 6000 字符”
 - `QDRANT_DIFF_THRESHOLD` / `QDRANT_SILENT_THRESHOLD`: 控制 `full_push -> diff_push -> silent` 的分界值，默认分别为 `0.85 / 0.97`
 - `VIDEO_TRANSCRIPT_BASE_URL` / `VIDEO_TRANSCRIPT_API_KEY`: 用于音视频转文本
-- `FEISHU_WEBHOOK_URL`: 用于 n8n 在 `09_feishu_notify` 中即时推送高价值摘要到飞书
+- `FEISHU_WEBHOOK_URL`: 用于 n8n 在 `09_feishu_notify` 中通过飞书群机器人消息卡片即时推送高价值摘要
 
 ## LLM Provider 切换
 
@@ -218,7 +218,7 @@ docker compose --profile headless up -d browserless rsshub
 1. 先初始化 Obsidian Vault 和 Memos 管理员账号。
 2. 先做第一条主干：`RSS/YouTube/播客 -> AI 打分 -> Markdown 写入 Obsidian`。
 3. 再补 `飞书/企业微信推送`。
-4. 当前 repo 已收口成一条共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05 -> 09 -> 03b`；`01` 直接喂这条主链，`06` 先经过 `04` transcript adapter 再接入。`03` 负责 search/decide，`05` 负责写入 Obsidian，`09` 负责按 `should_notify` 即时推送飞书，`03b` 最后执行 Qdrant upsert，避免索引先于主库提交。
+4. 当前 repo 已收口成一条共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05 -> 09 -> 03b`；`01` 直接喂这条主链，`06` 先经过 `04` transcript adapter 再接入。`03` 负责 search/decide，`05` 负责写入 Obsidian，`09` 负责按 `should_notify` 用飞书群机器人消息卡片即时推送，`03b` 最后执行 Qdrant upsert，避免索引先于主库提交。
 5. 再接入 `im2memo -> Memos -> memo auto` 这条增强支路。
 6. 最后补 `每日复盘` 和 `订阅管理 Web 端` 等外围能力。
 ## 同步工作流到运行态

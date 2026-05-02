@@ -444,6 +444,21 @@ def check_manual_media_uses_shared_mainline() -> list[CheckFailure]:
     return failures
 
 
+def check_feishu_notify_uses_message_card() -> list[CheckFailure]:
+    failures: list[CheckFailure] = []
+    workflow_name = "09_feishu_notify.json"
+    workflow = load_workflow(workflow_name)
+    for snippet in (
+        "msg_type: 'interactive'",
+        "card: {",
+        "tag: 'lark_md'",
+        "wide_screen_mode: true",
+        "message_format: 'interactive_card'",
+    ):
+        require_code_contains(workflow_name, workflow, "Build Feishu Message", snippet, failures)
+    return failures
+
+
 def check_local_verify_no_vault_write() -> list[CheckFailure]:
     failures: list[CheckFailure] = []
     workflow_name = "90_local_verify_transcript_mainline.json"
@@ -482,6 +497,7 @@ CHECKS: dict[str, Callable[[], list[CheckFailure]]] = {
     "qdrant_commit_after_vault_write_only": check_qdrant_commit_after_vault_write_only,
     "rss_transcript_uses_shared_mainline": check_rss_transcript_uses_shared_mainline,
     "manual_media_uses_shared_mainline": check_manual_media_uses_shared_mainline,
+    "feishu_notify_uses_message_card": check_feishu_notify_uses_message_card,
     "local_verify_no_vault_write": check_local_verify_no_vault_write,
 }
 
