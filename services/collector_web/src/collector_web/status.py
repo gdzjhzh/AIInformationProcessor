@@ -83,6 +83,97 @@ def _build_check(
     }
 
 
+def _to_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _as_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _source_status_label(value: str) -> str:
+    return {
+        "success": "正常",
+        "error": "失败",
+        "pending": "等待中",
+        "not_requested": "未请求",
+    }.get(value, value or "未知")
+
+
+def _explain_poll_source(source: dict[str, Any]) -> tuple[str, str]:
+    rss_error = str(source.get("rss_error", "")).strip()
+    transcript_error = str(source.get("transcript_error", "")).strip()
+    item_count = _to_int(source.get("item_count"))
+    new_item_count = _to_int(source.get("new_item_count"))
+    wrote_count = _to_int(source.get("wrote_count"))
+    gate_status = str(source.get("source_gate_status", "")).strip()
+    is_new_since_last_poll = bool(source.get("is_new_since_last_poll"))
+    dedupe_actions = _as_string_list(source.get("dedupe_actions"))
+    vault_write_statuses = _as_string_list(source.get("vault_write_statuses"))
+
+    if rss_error:
+        return "error", f"RSS 拉取失败: {rss_error}"
+    if transcript_error:
+        return "error", f"转写失败: {transcript_error}"
+    if wrote_count > 0:
+        return "success", f"已写入 {wrote_count} 条，Qdrant 提交 {_to_int(source.get('qdrant_commit_count'))} 条。"
+    if "silent" in dedupe_actions:
+        return "muted", "下游判定为 silent 去重，未写入 Obsidian。"
+    if vault_write_statuses and not any(status == "written" for status in vault_write_statuses):
+        return "muted", f"Vault writer 返回 {', '.join(vault_write_statuses[:3])}，未产生新笔记。"
+    if new_item_count > 0:
+        return (
+            "warning",
+            "本源有新 item 进入处理，但本轮摘要没有记录最终写入原因；需要看 audit 或下一版 poll_runs 的下游决策字段。",
+        )
+    if item_count == 0:
+        return "muted", "RSS 请求成功，但本轮没有返回 item。"
+    if gate_status == "unchanged" or not is_new_since_last_poll:
+        return "muted", "source_last_seen 判断最新内容未变化，所以没有进入下游处理。"
+    return "muted", "本轮没有产生新的 Obsidian 写入。"
+
+
+def _build_poll_source_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for source in payload.get("sources", []):
+        if not isinstance(source, dict):
+            continue
+        tone, explanation = _explain_poll_source(source)
+        rows.append(
+            {
+                "source_name": str(source.get("source_name", "")).strip() or "未命名订阅源",
+                "source_type": str(source.get("source_type", "")).strip() or "unknown",
+                "feed_url": str(source.get("feed_url", "")).strip(),
+                "rss_status": str(source.get("rss_status", "")).strip() or "unknown",
+                "rss_status_label": _source_status_label(str(source.get("rss_status", "")).strip()),
+                "transcript_status": str(source.get("transcript_status", "")).strip() or "unknown",
+                "transcript_status_label": _source_status_label(
+                    str(source.get("transcript_status", "")).strip()
+                ),
+                "source_gate_status": str(source.get("source_gate_status", "")).strip() or "not_checked",
+                "item_count": _to_int(source.get("item_count")),
+                "new_item_count": _to_int(source.get("new_item_count")),
+                "wrote_count": _to_int(source.get("wrote_count")),
+                "qdrant_commit_count": _to_int(source.get("qdrant_commit_count")),
+                "is_new_since_last_poll": bool(source.get("is_new_since_last_poll")),
+                "current_latest_title": str(source.get("current_latest_title", "")).strip(),
+                "sample_titles": _as_string_list(source.get("sample_titles"))[:3],
+                "new_titles": _as_string_list(source.get("new_titles"))[:3],
+                "wrote_paths": _as_string_list(source.get("wrote_paths"))[:3],
+                "dedupe_actions": _as_string_list(source.get("dedupe_actions"))[:3],
+                "vault_write_statuses": _as_string_list(source.get("vault_write_statuses"))[:3],
+                "tone": tone,
+                "explanation": explanation,
+            }
+        )
+    return rows
+
+
 def _build_collector_status(settings: Settings) -> dict[str, Any]:
     try:
         with connect(settings.db_path) as conn:
@@ -158,6 +249,8 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
         return check, {
             "finished_at": "暂无",
             "items_written": 0,
+            "latest_file": "",
+            "source_rows": [],
         }
 
     try:
@@ -176,6 +269,8 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
         return check, {
             "finished_at": "读取失败",
             "items_written": 0,
+            "latest_file": str(latest_file),
+            "source_rows": [],
         }
 
     run_finished_at = str(payload.get("run_finished_at", "")).strip()
@@ -185,6 +280,7 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
     items_seen = int(payload.get("items_seen", 0) or 0)
     items_written = int(payload.get("items_written", 0) or 0)
     age_minutes = _minutes_since(run_finished_at)
+    source_rows = _build_poll_source_rows(payload)
 
     failed_sources: list[str] = []
     wrote_paths: list[str] = []
@@ -230,6 +326,16 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
     return _build_check("rss_poll", "RSS 主链", tone, summary, detail_lines), {
         "finished_at": _format_datetime(run_finished_at) or "未知",
         "items_written": items_written,
+        "latest_file": str(latest_file),
+        "source_rows": source_rows,
+        "run_started_at": _format_datetime(str(payload.get("run_started_at", "")).strip()) or "",
+        "run_finished_at_raw": run_finished_at,
+        "source_count": source_count,
+        "success_source_count": success_source_count,
+        "failed_source_count": failed_source_count,
+        "items_seen": items_seen,
+        "items_selected_for_processing": int(payload.get("items_selected_for_processing", 0) or 0),
+        "poll_runs_version": int(payload.get("poll_runs_version", 0) or 0),
     }
 
 
@@ -440,6 +546,10 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
             "label": "RSS 轮询摘要目录",
             "value": str(settings.poll_runs_dir),
         },
+        {
+            "label": "RSS 手动重跑 webhook",
+            "value": settings.rss_poll_rerun_url,
+        },
     ]
 
     return {
@@ -460,5 +570,20 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
             "health_json": "/health",
             "status_api": "/api/status",
             "manual_submit": "/manual-media-submit",
+            "rss_poll_rerun": "/api/rss-poll/rerun",
+        },
+        "rss_poll": {
+            "latest_file": rss_poll_summary.get("latest_file", ""),
+            "run_started_at": rss_poll_summary.get("run_started_at", ""),
+            "run_finished_at": rss_poll_summary.get("finished_at", ""),
+            "run_finished_at_raw": rss_poll_summary.get("run_finished_at_raw", ""),
+            "source_count": rss_poll_summary.get("source_count", 0),
+            "success_source_count": rss_poll_summary.get("success_source_count", 0),
+            "failed_source_count": rss_poll_summary.get("failed_source_count", 0),
+            "items_seen": rss_poll_summary.get("items_seen", 0),
+            "items_selected_for_processing": rss_poll_summary.get("items_selected_for_processing", 0),
+            "items_written": rss_poll_summary.get("items_written", 0),
+            "poll_runs_version": rss_poll_summary.get("poll_runs_version", 0),
+            "source_rows": rss_poll_summary.get("source_rows", []),
         },
     }

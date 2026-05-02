@@ -658,7 +658,13 @@ button.text-link-button {
 .hero-actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
+}
+
+.inline-action-form {
+    display: inline-flex;
+    margin: 0;
 }
 
 .metric-grid {
@@ -722,7 +728,8 @@ button.text-link-button {
 }
 
 .platform-badge,
-.status-badge {
+.status-badge,
+.explanation-badge {
     display: inline-flex;
     align-items: center;
     min-height: 24px;
@@ -740,6 +747,15 @@ button.text-link-button {
 .status-badge {
     background: var(--ok-soft);
     color: var(--ok);
+}
+
+.explanation-badge {
+    max-width: 100%;
+    border-radius: var(--radius-sm);
+    background: var(--surface-muted);
+    color: var(--muted-strong);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 
 .status-badge.muted,
@@ -767,6 +783,67 @@ button.text-link-button {
 .status-badge.tone-error {
     background: var(--danger-soft);
     color: var(--danger);
+}
+
+.explanation-badge.tone-success {
+    background: var(--ok-soft);
+    color: var(--ok);
+}
+
+.explanation-badge.tone-warning,
+.explanation-badge.tone-action {
+    background: var(--warn-soft);
+    color: var(--warn);
+}
+
+.explanation-badge.tone-error {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.source-diagnostics-list {
+    display: grid;
+    gap: 10px;
+}
+
+.source-diagnostic-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-soft);
+}
+
+.source-diagnostic-item.tone-success {
+    border-color: rgba(21, 128, 61, 0.18);
+}
+
+.source-diagnostic-item.tone-warning,
+.source-diagnostic-item.tone-action {
+    border-color: rgba(180, 83, 9, 0.22);
+}
+
+.source-diagnostic-item.tone-error {
+    border-color: rgba(185, 28, 28, 0.22);
+}
+
+.source-diagnostic-main {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.source-diagnostic-stats {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    color: var(--muted);
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 0.78rem;
+    text-align: right;
+    white-space: nowrap;
 }
 
 .compare-model-list {
@@ -819,7 +896,8 @@ button.text-link-button {
     .history-header,
     .collection-header,
     .history-item,
-    .subscription-item {
+    .subscription-item,
+    .source-diagnostic-item {
         display: grid;
         grid-template-columns: 1fr;
     }
@@ -843,7 +921,8 @@ button.text-link-button {
     .history-summary,
     .collection-stats,
     .subscription-side,
-    .history-side {
+    .history-side,
+    .source-diagnostic-stats {
         justify-content: flex-start;
         text-align: left;
     }

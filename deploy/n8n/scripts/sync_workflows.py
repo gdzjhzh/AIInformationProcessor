@@ -258,6 +258,76 @@ def webhook_node_names(workflow: dict[str, Any]) -> list[str]:
     return names
 
 
+def webhook_node_specs(workflow: dict[str, Any]) -> list[dict[str, str]]:
+    specs: list[dict[str, str]] = []
+    workflow_id = str(workflow["id"])
+    for node in workflow.get("nodes", []):
+        if node.get("type") != "n8n-nodes-base.webhook":
+            continue
+        node_name = str(node.get("name") or "").strip()
+        parameters = node.get("parameters") if isinstance(node.get("parameters"), dict) else {}
+        path = str(parameters.get("path") or "").strip().strip("/")
+        if not node_name or not path:
+            continue
+        method = str(parameters.get("httpMethod") or "GET").strip().upper()
+        specs.append(
+            {
+                "node": node_name,
+                "method": method,
+                "webhookPath": f"{workflow_id}/{node_name}/{path}",
+            }
+        )
+    return specs
+
+
+def sync_webhook_rows(
+    cursor: sqlite3.Cursor,
+    workflow: dict[str, Any],
+) -> list[dict[str, str]]:
+    if not workflow.get("active") or not table_exists(cursor, "webhook_entity"):
+        return []
+
+    workflow_id = str(workflow["id"])
+    synced: list[dict[str, str]] = []
+    for spec in webhook_node_specs(workflow):
+        row = fetch_one(
+            cursor,
+            """
+            SELECT rowid, webhookPath, method
+            FROM webhook_entity
+            WHERE workflowId = ? AND node = ?
+            ORDER BY rowid DESC
+            LIMIT 1
+            """,
+            (workflow_id, spec["node"]),
+        )
+        if row is None:
+            cursor.execute(
+                """
+                INSERT INTO webhook_entity (workflowId, webhookPath, method, node, webhookId, pathLength)
+                VALUES (?, ?, ?, ?, NULL, NULL)
+                """,
+                (workflow_id, spec["webhookPath"], spec["method"], spec["node"]),
+            )
+            synced.append(spec)
+            continue
+
+        current_path = str(row["webhookPath"] or "")
+        current_method = str(row["method"] or "")
+        if current_path != spec["webhookPath"] or current_method != spec["method"]:
+            cursor.execute(
+                """
+                UPDATE webhook_entity
+                SET webhookPath = ?, method = ?
+                WHERE rowid = ?
+                """,
+                (spec["webhookPath"], spec["method"], row["rowid"]),
+            )
+            synced.append(spec)
+
+    return synced
+
+
 def prune_webhook_rows(
     cursor: sqlite3.Cursor,
     workflow: dict[str, Any],
@@ -641,6 +711,7 @@ def run_sync(
         now = utc_now_sql()
         synced: list[str] = []
         pruned_webhook_rows: list[dict[str, Any]] = []
+        synced_webhook_rows: list[dict[str, Any]] = []
         pruned_runtime_workflows: list[dict[str, Any]] = []
         for path, workflow in workflows:
             version_id = upsert_workflow_entity(cursor, workflow, personal_project["id"], now)
@@ -658,6 +729,15 @@ def run_sync(
                         "workflow_id": str(workflow["id"]),
                         "workflow_name": str(workflow.get("name") or workflow["id"]),
                         "removed_rows": removed,
+                    }
+                )
+            webhook_rows = sync_webhook_rows(cursor, workflow)
+            if webhook_rows:
+                synced_webhook_rows.append(
+                    {
+                        "workflow_id": str(workflow["id"]),
+                        "workflow_name": str(workflow.get("name") or workflow["id"]),
+                        "synced_rows": webhook_rows,
                     }
                 )
             synced.append(
@@ -707,6 +787,7 @@ def run_sync(
         "managed_workflow_files": [path.name for path in managed_paths],
         "synced": synced,
         "pruned_webhook_rows": pruned_webhook_rows,
+        "synced_webhook_rows": synced_webhook_rows,
         "unmanaged_runtime_workflows": unmanaged_runtime_workflows if include_ids is None else [],
         "pruned_runtime_workflows": pruned_runtime_workflows,
         "prune_unmanaged": bool(prune_unmanaged and include_ids is None),

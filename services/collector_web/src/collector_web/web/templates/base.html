@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Collector Web{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=20260425-compare">
+    <link rel="stylesheet" href="/static/css/app.css?v=20260502-status">
 </head>
 <body>
     <div class="page-shell">
@@ -44,5 +44,6 @@
             {% block content %}{% endblock %}
         </main>
     </div>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

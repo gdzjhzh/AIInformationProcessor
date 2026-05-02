@@ -15,7 +15,15 @@
             <a class="text-link-button" href="{{ links.manual_submit }}">进入手动提交</a>
             <a class="text-link-button" href="{{ links.status_api }}" target="_blank" rel="noopener">查看状态明细</a>
             <a class="text-link-button" href="{{ links.health_json }}" target="_blank" rel="noopener">查看探活详情</a>
+            <form
+                class="inline-action-form"
+                data-rss-rerun-form
+                data-current-run-finished-at="{{ rss_poll.run_finished_at_raw }}"
+            >
+                <button class="action-button" type="submit" data-rss-rerun-button>手动重跑 RSS</button>
+            </form>
         </div>
+        <div class="submit-result" data-rss-rerun-result hidden></div>
     </div>
     <div class="metric-grid">
         <article class="metric-card">
@@ -67,6 +75,77 @@
         <header class="collection-header">
             <div>
                 <div class="collection-title-row">
+                    <h3>RSS 源级解释</h3>
+                    <span class="status-badge muted">poll_runs v{{ rss_poll.poll_runs_version }}</span>
+                </div>
+                <p class="collection-meta">
+                    这里直接读取最新 poll_runs 摘要，把每个订阅源为什么写入或未写入拆开看。
+                </p>
+            </div>
+            <div class="collection-stats">
+                <span>看到 {{ rss_poll.items_seen }} 条 item</span>
+                <span>选中 {{ rss_poll.items_selected_for_processing }} 条</span>
+                <span>写入 {{ rss_poll.items_written }} 条</span>
+            </div>
+        </header>
+        {% if rss_poll.source_rows %}
+        <div class="source-diagnostics-list">
+            {% for source in rss_poll.source_rows %}
+            <article class="source-diagnostic-item tone-{{ source.tone }}">
+                <div class="source-diagnostic-main">
+                    <div class="subscription-heading">
+                        <strong>{{ source.source_name }}</strong>
+                        <span class="platform-badge">{{ source.source_type }}</span>
+                        <span class="explanation-badge tone-{{ source.tone }}">{{ source.explanation }}</span>
+                    </div>
+                    {% if source.feed_url %}
+                    <p class="subscription-meta">
+                        <a href="{{ source.feed_url }}" target="_blank" rel="noopener">{{ source.feed_url }}</a>
+                    </p>
+                    {% endif %}
+                    <p class="subscription-meta secondary">
+                        RSS: {{ source.rss_status_label }} · Transcript: {{ source.transcript_status_label }} · Gate: {{ source.source_gate_status }}
+                    </p>
+                    {% if source.current_latest_title %}
+                    <p class="subscription-meta secondary">最新标题：{{ source.current_latest_title }}</p>
+                    {% endif %}
+                    {% if source.new_titles %}
+                    <p class="subscription-meta secondary">新标题：{{ source.new_titles | join(" / ") }}</p>
+                    {% elif source.sample_titles %}
+                    <p class="subscription-meta secondary">样例标题：{{ source.sample_titles | join(" / ") }}</p>
+                    {% endif %}
+                    {% if source.wrote_paths %}
+                    <p class="subscription-meta secondary">写入路径：{{ source.wrote_paths | join(" / ") }}</p>
+                    {% endif %}
+                    {% if source.dedupe_actions %}
+                    <p class="subscription-meta secondary">去重动作：{{ source.dedupe_actions | join(" / ") }}</p>
+                    {% endif %}
+                    {% if source.vault_write_statuses %}
+                    <p class="subscription-meta secondary">写入状态：{{ source.vault_write_statuses | join(" / ") }}</p>
+                    {% endif %}
+                </div>
+                <div class="source-diagnostic-stats">
+                    <span>item {{ source.item_count }}</span>
+                    <span>new {{ source.new_item_count }}</span>
+                    <span>wrote {{ source.wrote_count }}</span>
+                    <span>qdrant {{ source.qdrant_commit_count }}</span>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>当前最新摘要里没有可展示的源级明细。</p>
+        </div>
+        {% endif %}
+    </article>
+</section>
+
+<section class="collection-list">
+    <article class="collection-card">
+        <header class="collection-header">
+            <div>
+                <div class="collection-title-row">
                     <h3>当前配置定位</h3>
                     <span class="status-badge muted">配置</span>
                 </div>
@@ -89,4 +168,8 @@
         </div>
     </article>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/status.js?v=20260502-rss-rerun" defer></script>
 {% endblock %}

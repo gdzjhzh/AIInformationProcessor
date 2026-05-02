@@ -250,7 +250,27 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
                 "failed_source_count": 0,
                 "items_seen": 4,
                 "items_written": 2,
-                "sources": [],
+                "items_selected_for_processing": 2,
+                "poll_runs_version": 4,
+                "sources": [
+                    {
+                        "source_name": "ruanyifeng-blog",
+                        "source_type": "rss",
+                        "feed_url": "https://www.ruanyifeng.com/blog/atom.xml",
+                        "rss_status": "success",
+                        "transcript_status": "not_requested",
+                        "source_gate_status": "changed",
+                        "is_new_since_last_poll": True,
+                        "item_count": 4,
+                        "new_item_count": 2,
+                        "wrote_count": 2,
+                        "qdrant_commit_count": 2,
+                        "current_latest_title": "科技爱好者周刊",
+                        "wrote_paths": ["/vault/00_Inbox/demo.md"],
+                        "dedupe_actions": ["full_push"],
+                        "vault_write_statuses": ["written"],
+                    }
+                ],
             },
             ensure_ascii=False,
         ),
@@ -268,6 +288,10 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
     assert "查看探活详情" in response.text
     assert "查看状态明细" in response.text
     assert "最近 RSS 轮询" in response.text
+    assert "手动重跑 RSS" in response.text
+    assert "RSS 源级解释" in response.text
+    assert "ruanyifeng-blog" in response.text
+    assert "/static/js/status.js" in response.text
 
 
 def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
@@ -286,7 +310,25 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
                 "failed_source_count": 0,
                 "items_seen": 4,
                 "items_written": 2,
-                "sources": [],
+                "items_selected_for_processing": 2,
+                "poll_runs_version": 4,
+                "sources": [
+                    {
+                        "source_name": "ruanyifeng-blog",
+                        "source_type": "rss",
+                        "feed_url": "https://www.ruanyifeng.com/blog/atom.xml",
+                        "rss_status": "success",
+                        "transcript_status": "not_requested",
+                        "source_gate_status": "changed",
+                        "is_new_since_last_poll": True,
+                        "item_count": 4,
+                        "new_item_count": 2,
+                        "wrote_count": 0,
+                        "qdrant_commit_count": 0,
+                        "dedupe_actions": ["silent"],
+                        "vault_write_statuses": ["skipped"],
+                    }
+                ],
             },
             ensure_ascii=False,
         ),
@@ -335,9 +377,38 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
     assert payload["metrics"]["rss_poll_items_written"] == 2
     assert payload["links"]["health_json"] == "/health"
     assert payload["links"]["status_api"] == "/api/status"
+    assert payload["links"]["rss_poll_rerun"] == "/api/rss-poll/rerun"
+    assert payload["rss_poll"]["items_selected_for_processing"] == 2
+    assert payload["rss_poll"]["source_rows"][0]["source_name"] == "ruanyifeng-blog"
+    assert payload["rss_poll"]["source_rows"][0]["dedupe_actions"] == ["silent"]
+    assert "silent 去重" in payload["rss_poll"]["source_rows"][0]["explanation"]
     manual_submit_check = next(item for item in payload["checks"] if item["id"] == "manual_submit")
     assert manual_submit_check["status_label"] == "待处理"
     assert manual_submit_check["affects_overall"] is False
+
+
+def test_rss_poll_rerun_api_dispatches_webhook(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+
+    def fake_trigger(settings):
+        assert settings.rss_poll_rerun_url
+        return {
+            "ok": True,
+            "accepted": True,
+            "status_code": 202,
+            "response": {"stage": "01_rss_poll_rerun_dispatched"},
+        }
+
+    monkeypatch.setattr(app_module, "trigger_rss_poll_rerun", fake_trigger)
+
+    with TestClient(create_app()) as client:
+        response = client.post("/api/rss-poll/rerun")
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["accepted"] is True
+    assert payload["response"]["stage"] == "01_rss_poll_rerun_dispatched"
 
 
 def test_collections_api_returns_platform_summary(monkeypatch, tmp_path):

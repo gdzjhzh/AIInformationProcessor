@@ -16,6 +16,8 @@ class Settings:
     templates_dir: Path
     static_dir: Path
     poll_runs_dir: Path
+    rss_poll_rerun_url: str
+    rss_poll_rerun_timeout_seconds: int
     manual_media_submit_url: str
     manual_media_submit_timeout_seconds: int
     manual_media_submit_dispatch_timeout_seconds: int
@@ -65,6 +67,13 @@ def get_settings() -> Settings:
         templates_dir=package_dir / "web" / "templates",
         static_dir=package_dir / "web" / "static",
         poll_runs_dir=poll_runs_dir,
+        rss_poll_rerun_url=os.getenv(
+            "COLLECTOR_WEB_RSS_POLL_RERUN_URL",
+            "http://127.0.0.1:5678/webhook/2f6d0f2b1e9a4c51/rss-poll-rerun-webhook/aip/local/rss-poll-rerun",
+        ).strip(),
+        rss_poll_rerun_timeout_seconds=int(
+            os.getenv("COLLECTOR_WEB_RSS_POLL_RERUN_TIMEOUT_SECONDS", "30")
+        ),
         manual_media_submit_url=os.getenv(
             "COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL",
             f"http://127.0.0.1:5780/webhook/{DEFAULT_MANUAL_MEDIA_SUBMIT_WEBHOOK_PATH}",
