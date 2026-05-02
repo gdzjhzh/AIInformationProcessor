@@ -20,13 +20,13 @@
   "content_hash": "sha256:8b52f5af73055f8297f9268caef1dfe8e629c7e081474808475dd07117c37c81",
   "tags": [
     "inbox",
-    "ai-information-processor",
+    "signal-to-obsidian",
     "xiaoyuzhoufm-com",
     "xiaoyuzhou-manual-submit",
     "podcast",
     "manual-submit"
   ],
-  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "obsidianInboxDir": "00_Inbox/Signal_To_Obsidian",
   "original_item": {
     "source": "manual-media-submit",
     "url": "https://www.xiaoyuzhoufm.com/episode/661111111111111111111111"

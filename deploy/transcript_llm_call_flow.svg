@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1260" viewBox="0 0 1900 1260" role="img" aria-labelledby="title desc">
   <title id="title">Transcript-side LLM Call Flow</title>
-  <desc id="desc">Current AIInformationProcessor transcript pipeline showing n8n polling, VideoTranscriptAPI cache and ASR, LLM calibration and summary calls, and calibrated raw persistence.</desc>
+  <desc id="desc">Current Signal to Obsidian transcript pipeline showing n8n polling, VideoTranscriptAPI cache and ASR, LLM calibration and summary calls, and calibrated raw persistence.</desc>
 
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">

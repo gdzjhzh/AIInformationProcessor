@@ -676,7 +676,7 @@ def _collect_target_files(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Validate registered AIInformationProcessor contracts or captured payloads."
+        description="Validate registered Signal to Obsidian contracts or captured payloads."
     )
     parser.add_argument(
         "paths",

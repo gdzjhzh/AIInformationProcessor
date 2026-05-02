@@ -4,7 +4,7 @@
 
 目录约定：
 
-- `00_Inbox/AI_Information_Processor`: 信息流收件箱
+- `00_Inbox/Signal_To_Obsidian`: 信息流收件箱
 - `10_Daily`: Daily Notes
 - `20_Sources`: 来源归档
 - `30_Reviews`: 每日复盘与总结
@@ -13,7 +13,7 @@
 
 当前主干默认先写入：
 
-- `00_Inbox/AI_Information_Processor`
+- `00_Inbox/Signal_To_Obsidian`
 
 这里是统一对象进入 Vault 的第一落点。后续 AI enrich、去重和回顾流程都应更新同一条对象，而不是重新生成第二份笔记。
 

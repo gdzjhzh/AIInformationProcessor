@@ -3,4 +3,4 @@ services:
     build:
       context: ../services/RSSHub
       dockerfile: Dockerfile
-    image: ${RSSHUB_LOCAL_IMAGE:-ai-information-processor-rsshub:local}
+    image: ${RSSHUB_LOCAL_IMAGE:-signal-to-obsidian-rsshub:local}

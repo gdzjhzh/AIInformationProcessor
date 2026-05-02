@@ -243,7 +243,7 @@ def run_verification(
         "use_speaker_recognition": use_speaker_recognition,
         "poll_interval_ms": transcript_poll_interval_ms,
         "max_polls": transcript_max_polls,
-        "obsidian_inbox_dir": env_values.get("OBSIDIAN_INBOX_DIR", "00_Inbox/AI_Information_Processor"),
+        "obsidian_inbox_dir": env_values.get("OBSIDIAN_INBOX_DIR", "00_Inbox/Signal_To_Obsidian"),
     }
 
     webhook_path = fetch_verify_webhook_path(db_path)

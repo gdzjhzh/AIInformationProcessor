@@ -98,8 +98,9 @@ def run_smoke_check(paths: list[str], *, env_file: Path, qdrant_base_url: str) -
         print("[pre-commit] smoke: skipped (no runtime-sensitive files changed)")
         return 0
 
-    if os.getenv("AIP_SKIP_SMOKE") == "1":
-        print("[pre-commit] smoke: skipped because AIP_SKIP_SMOKE=1")
+    skip_smoke = os.getenv("SIGNAL_TO_OBSIDIAN_SKIP_SMOKE") == "1" or os.getenv("AIP_SKIP_SMOKE") == "1"
+    if skip_smoke:
+        print("[pre-commit] smoke: skipped because SIGNAL_TO_OBSIDIAN_SKIP_SMOKE=1")
         return 0
 
     if not env_file.exists():

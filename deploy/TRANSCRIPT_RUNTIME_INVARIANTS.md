@@ -88,13 +88,13 @@ Docker 内 `FunASR`：
 
 ```powershell
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-docker logs ai-information-processor-funasr-spk-server-1 --tail 200
+docker logs signal-to-obsidian-funasr-spk-server-1 --tail 200
 ```
 
 `VideoTranscriptAPI` 健康检查：
 
 ```powershell
-docker exec ai-information-processor-video-transcript-api-1 python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10).read().decode())"
+docker exec signal-to-obsidian-video-transcript-api-1 python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10).read().decode())"
 ```
 
 ## Related Files

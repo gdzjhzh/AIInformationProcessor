@@ -1,6 +1,6 @@
 # FunASR Integration
 
-`services/funasr_spk_server/` 是 `AIInformationProcessor` 仓库内的 canonical FunASR 源码位置。
+`services/funasr_spk_server/` 是 `Signal to Obsidian` 仓库内的 canonical FunASR 源码位置。
 
 在这个仓库里，FunASR 的运行约定是：
 

@@ -8,7 +8,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "aip/local/manual-media-submit",
+        "path": "signal-to-obsidian/local/manual-media-submit",
         "responseMode": "responseNode",
         "options": {}
       },

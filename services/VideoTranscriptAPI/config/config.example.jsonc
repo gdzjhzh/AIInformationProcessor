@@ -224,7 +224,7 @@
     // 支持说话人识别、时间戳、情感分析
     // ============================================================
     "funasr_spk_server": {
-        "server_url": "ws://funasr-spk-server:8767",  // AIInformationProcessor 主 compose 内的 FunASR 服务名
+        "server_url": "ws://funasr-spk-server:8767",  // Signal to Obsidian 主 compose 内的 FunASR 服务名
         "max_retries": 3,                // 最大重试次数
         "retry_delay": 5,                // 重试间隔（秒）
         "connection_timeout": 30         // 连接超时时间（秒）

@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Collector Web",
-        description="Subscription dashboard for AI Information Processor",
+        description="Subscription dashboard for Signal to Obsidian",
         version="0.1.0",
     )
 

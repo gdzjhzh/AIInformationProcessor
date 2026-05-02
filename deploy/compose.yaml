@@ -1,4 +1,4 @@
-name: ai-information-processor
+name: signal-to-obsidian
 
 services:
   memos:
@@ -100,7 +100,7 @@ services:
     build:
       context: ../services/funasr_spk_server
       dockerfile: Dockerfile
-    image: ${FUNASR_SPK_IMAGE:-ai-information-processor-funasr-spk-server:local}
+    image: ${FUNASR_SPK_IMAGE:-signal-to-obsidian-funasr-spk-server:local}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${FUNASR_SPK_PORT:-8767}:8767"
@@ -149,7 +149,7 @@ services:
     build:
       context: ../services/VideoTranscriptAPI
       dockerfile: docker/Dockerfile
-    image: ${VIDEO_TRANSCRIPT_IMAGE:-ai-information-processor-video-transcript-api:local}
+    image: ${VIDEO_TRANSCRIPT_IMAGE:-signal-to-obsidian-video-transcript-api:local}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${VIDEO_TRANSCRIPT_HOST_PORT:-18080}:8000"
@@ -177,7 +177,7 @@ services:
     build:
       context: ../services/collector_web
       dockerfile: docker/Dockerfile
-    image: ${COLLECTOR_WEB_IMAGE:-ai-information-processor-collector-web:local}
+    image: ${COLLECTOR_WEB_IMAGE:-signal-to-obsidian-collector-web:local}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${COLLECTOR_WEB_PORT:-8300}:8300"
@@ -192,9 +192,9 @@ services:
       COLLECTOR_WEB_PORT: 8300
       COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
       COLLECTOR_WEB_POLL_RUNS_DIR: /data/n8n_poll_runs
-      COLLECTOR_WEB_RSS_POLL_RERUN_URL: ${COLLECTOR_WEB_RSS_POLL_RERUN_URL:-http://n8n:5678/webhook/2f6d0f2b1e9a4c51/rss-poll-rerun-webhook/aip/local/rss-poll-rerun}
+      COLLECTOR_WEB_RSS_POLL_RERUN_URL: ${COLLECTOR_WEB_RSS_POLL_RERUN_URL:-http://n8n:5678/webhook/2f6d0f2b1e9a4c51/rss-poll-rerun-webhook/signal-to-obsidian/local/rss-poll-rerun}
       COLLECTOR_WEB_RSS_POLL_RERUN_TIMEOUT_SECONDS: ${COLLECTOR_WEB_RSS_POLL_RERUN_TIMEOUT_SECONDS:-30}
-      COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL: ${COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL:-http://n8n:5678/webhook/6b8eaf7c41d2439a/manual-media-submit-webhook/aip/local/manual-media-submit}
+      COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL: ${COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL:-http://n8n:5678/webhook/6b8eaf7c41d2439a/manual-media-submit-webhook/signal-to-obsidian/local/manual-media-submit}
       COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_TIMEOUT_SECONDS: ${COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_TIMEOUT_SECONDS:-1800}
       COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_DISPATCH_TIMEOUT_SECONDS: ${COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_DISPATCH_TIMEOUT_SECONDS:-30}
       COLLECTOR_WEB_CALLBACK_BASE_URL: ${COLLECTOR_WEB_CALLBACK_BASE_URL:-http://collector-web:8300}

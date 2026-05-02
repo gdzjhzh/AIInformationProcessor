@@ -2,7 +2,7 @@
 # @skill-version 1
 services:
   video-transcript-api:
-    image: ai-information-processor-video-transcript-api:local
+    image: signal-to-obsidian-video-transcript-api:local
     build:
       context: ..
       dockerfile: docker/Dockerfile

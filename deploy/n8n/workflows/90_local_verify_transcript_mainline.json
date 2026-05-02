@@ -8,7 +8,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "aip/local/verify-transcript-mainline",
+        "path": "signal-to-obsidian/local/verify-transcript-mainline",
         "responseMode": "lastNode",
         "responseData": "firstEntryJson",
         "options": {}

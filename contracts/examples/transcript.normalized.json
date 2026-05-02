@@ -42,12 +42,12 @@
   "content_hash": "sha256:d88f667d64f536f5b28c1976dd98811444f353e85a29a7b41f667d0f33afcc87",
   "tags": [
     "inbox",
-    "ai-information-processor",
+    "signal-to-obsidian",
     "youtube-com",
     "video-transcript-api",
     "transcript"
   ],
-  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "obsidianInboxDir": "00_Inbox/Signal_To_Obsidian",
   "original_item": {
     "request": {
       "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"

@@ -8,7 +8,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "aip/local/rss-poll-rerun",
+        "path": "signal-to-obsidian/local/rss-poll-rerun",
         "responseMode": "responseNode",
         "options": {}
       },

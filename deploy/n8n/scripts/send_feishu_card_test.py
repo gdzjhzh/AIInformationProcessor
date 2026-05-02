@@ -58,7 +58,7 @@ def build_card_payload() -> dict[str, object]:
                         "content": (
                             "**\u98de\u4e66\u7fa4\u673a\u5668\u4eba\u6d88\u606f"
                             "\u5361\u7247 UTF-8 \u6d4b\u8bd5**\n\n"
-                            "**\u6765\u6e90**: AIInformationProcessor\n\n"
+                            "**\u6765\u6e90**: Signal to Obsidian\n\n"
                             "**\u6458\u8981**\n"
                             "\u8fd9\u662f\u4e00\u6761\u901a\u8fc7\u4ed3\u5e93"
                             "\u811a\u672c\u53d1\u9001\u7684\u6d4b\u8bd5\u5361"

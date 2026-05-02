@@ -144,7 +144,7 @@ def run_smoke(
             f"{embedding_base_url.rstrip('/')}/embeddings",
             {
                 "model": embedding_model,
-                "input": "AIInformationProcessor qdrant gate smoke test",
+                "input": "Signal to Obsidian qdrant gate smoke test",
             },
             {
                 "Authorization": f"Bearer {embedding_api_key}",

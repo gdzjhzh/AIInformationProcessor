@@ -1,6 +1,6 @@
 # LLM Provider Playbook
 
-这份文档是 `AIInformationProcessor` 的大模型接入手册，目标是把“以后切换任意 LLM provider 时该改哪里、怎么验证、哪些地方不要混掉”一次写清楚，避免每次都重新读 workflow 和服务代码。
+这份文档是 `Signal to Obsidian` 的大模型接入手册，目标是把“以后切换任意 LLM provider 时该改哪里、怎么验证、哪些地方不要混掉”一次写清楚，避免每次都重新读 workflow 和服务代码。
 
 ## 先记住 3 个面
 

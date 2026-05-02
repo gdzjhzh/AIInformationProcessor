@@ -32,7 +32,7 @@ CapsWriter 的仓库内正式位置放在 `services/capswriter/`。
 如果要把已安装服务正式切换到新的 canonical 路径，请用管理员 PowerShell 运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\code\AIInformationProcessor\services\capswriter\windows-service\install_capswriter_service.ps1 -StartService
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\code\signal-to-obsidian\services\capswriter\windows-service\install_capswriter_service.ps1 -StartService
 ```
 
 ## 目录约定

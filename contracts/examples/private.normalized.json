@@ -20,11 +20,11 @@
   "content_hash": "sha256:0d10a5ec0fa6a34b6f799bc0c87275636bb0566e2a330d24bbd2b6ec50bcf69d",
   "tags": [
     "inbox",
-    "ai-information-processor",
+    "signal-to-obsidian",
     "local",
     "memo"
   ],
-  "obsidianInboxDir": "00_Inbox/AI_Information_Processor",
+  "obsidianInboxDir": "00_Inbox/Signal_To_Obsidian",
   "original_item": {
     "source": "memo"
   }

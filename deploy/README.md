@@ -3,7 +3,7 @@
 当前目录按最新架构图对齐后，采用 `Obsidian 主库` 模式：
 
 - `Obsidian` 是最终知识沉淀
-- `n8n + AI Info Processor` 是处理编排层
+- `n8n + Signal to Obsidian` 是处理编排层
 - `Memos / im2memo / memo auto` 是存储增强支路，不是主库
 - `Qdrant` 为三级降噪提供向量检索
 - `RSSHub / YouTube XML / 播客 RSS / WeChat to RSS` 是输入层
@@ -33,7 +33,7 @@
 ## 当前已落地的模块
 
 - `RSSHub`
-- `AI Info Processor` 的基础编排容器 `n8n`
+- `Signal to Obsidian` 的基础编排容器 `n8n`
 - `Qdrant`
 - `Memos`
 - `Video Transcript API`（已内嵌到 `services/VideoTranscriptAPI`，按需用 profile 启动）
@@ -78,7 +78,7 @@ docker compose up -d memos n8n qdrant redis rsshub
 
 - 默认 Vault 路径：`./vault`
 - 容器内挂载路径：`/vault`
-- 信息流收件箱：`/vault/00_Inbox/AI_Information_Processor`
+- 信息流收件箱：`/vault/00_Inbox/Signal_To_Obsidian`
 - Daily Notes：`/vault/10_Daily`
 
 如果你已有自己的 Obsidian Vault，把 `.env` 里的 `OBSIDIAN_VAULT_PATH` 改成现有 Vault 的绝对路径即可。
@@ -111,7 +111,7 @@ docker compose up -d memos n8n qdrant redis rsshub
 `06_manual_media_submit.json` 是本地手动媒体入口，只接 `YouTube / 播客 / 其他音视频 URL`，然后先走 `04` transcript adapter，再显式进入共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`；它不处理文章正文或通用手动笔记。默认本地 webhook 为：
 
 ```text
-POST http://localhost:5678/webhook/aip/local/manual-media-submit
+POST http://localhost:5678/webhook/signal-to-obsidian/local/manual-media-submit
 ```
 
 如果你是用仓库里的 JSON 直接同步到 live SQLite，再重启 `n8n`，实际可调用的 webhook 路径要以 `deploy/data/n8n/database.sqlite` 里的 `webhook_entity.webhookPath` 为准。
@@ -322,10 +322,10 @@ pre-commit install
 pre-commit run --all-files
 ```
 
-- `AIP contract guard` 会在改动 `contracts/` 或 `deploy/n8n/workflows/` 时运行 `python contracts/validate_contract.py`
-- `AIP contract guard` 还会继续运行 `python deploy/n8n/scripts/validate_workflow_boundaries.py`，检查历史字段边界和共享主链连接关系
-- `AIP qdrant smoke guard` 会在改动 workflow/runtime 相关文件时运行 `python deploy/n8n/scripts/smoke_qdrant_gate.py --no-debug-log`
-- 如需紧急跳过本地 smoke，可临时设置 `AIP_SKIP_SMOKE=1`，但这只应该用于与 runtime 无关的例外场景
+- `Signal to Obsidian contract guard` 会在改动 `contracts/` 或 `deploy/n8n/workflows/` 时运行 `python contracts/validate_contract.py`
+- `Signal to Obsidian contract guard` 还会继续运行 `python deploy/n8n/scripts/validate_workflow_boundaries.py`，检查历史字段边界和共享主链连接关系
+- `Signal to Obsidian qdrant smoke guard` 会在改动 workflow/runtime 相关文件时运行 `python deploy/n8n/scripts/smoke_qdrant_gate.py --no-debug-log`
+- 如需紧急跳过本地 smoke，可临时设置 `SIGNAL_TO_OBSIDIAN_SKIP_SMOKE=1`；旧的 `AIP_SKIP_SMOKE=1` 仍兼容，但后续建议使用新变量名
 ## Transcript Debug First
 
 如果是 transcript / `04_video_transcript_ingest` / `VideoTranscriptAPI` 排障，先读 `deploy/TRANSCRIPT_RUNTIME_INVARIANTS.md`，不要直接开始猜服务边界。

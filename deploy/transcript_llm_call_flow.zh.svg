@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1260" viewBox="0 0 1900 1260" role="img" aria-labelledby="title desc">
   <title id="title">Transcript 链路大模型调用逻辑</title>
-  <desc id="desc">展示当前 AIInformationProcessor 在 transcript 场景下，从 n8n 提交任务、VideoTranscriptAPI 转录与查缓存，到 LLM 校对、LLM 总结，以及校对稿写入 raw 的完整业务流。</desc>
+  <desc id="desc">展示当前 Signal to Obsidian 在 transcript 场景下，从 n8n 提交任务、VideoTranscriptAPI 转录与查缓存，到 LLM 校对、LLM 总结，以及校对稿写入 raw 的完整业务流。</desc>
 
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
