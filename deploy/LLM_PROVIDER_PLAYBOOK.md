@@ -65,7 +65,7 @@
 | `provider` | 人类可读的 provider 标签，用于审计/日志/排查 | `deepseek` / `openai` / `openai-compatible` / `doubao-ark` |
 | `base_url` | API 根路径或完整端点，取决于接入面 | 见上面的边界说明 |
 | `api_key` | 鉴权密钥 | `sk-...` |
-| `model` | 聊天模型名或 endpoint id | `deepseek-chat` / `gpt-4.1-mini` / `ep-xxxx` |
+| `model` | 聊天模型名或 endpoint id | `deepseek-v4-flash` / `gpt-4.1-mini` / `ep-xxxx` |
 | `json_mode` | 结构化输出模式 | `json_object` / `json_schema` |
 
 以后新增 provider 时，先把这 5 个值填出来，再做落地。
@@ -192,15 +192,15 @@ docker compose -f deploy/compose.yaml up -d --no-deps video-transcript-api
 ```env
 LLM_PROVIDER=deepseek
 LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-v4-flash
 ```
 
 Transcript：
 
 ```json
 "base_url": "https://api.deepseek.com/chat/completions",
-"calibrate_model": "deepseek-chat",
-"summary_model": "deepseek-chat"
+"calibrate_model": "deepseek-v4-flash",
+"summary_model": "deepseek-v4-flash"
 ```
 
 ### 2. 豆包 / 火山方舟
@@ -284,4 +284,3 @@ Transcript：
 - Transcript 示例配置：`services/VideoTranscriptAPI/config/config.example.jsonc`
 - Transcript live 配置：`services/VideoTranscriptAPI/config/config.jsonc`
 - Transcript LLM 实现：`services/VideoTranscriptAPI/src/video_transcript_api/llm/llm.py`
-
