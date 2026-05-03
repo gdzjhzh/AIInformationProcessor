@@ -125,6 +125,23 @@ def require_code_contains(
         )
 
 
+def forbid_code_contains(
+    workflow_name: str,
+    workflow: dict[str, Any],
+    node_name: str,
+    snippet: str,
+    failures: list[CheckFailure],
+) -> None:
+    code = node_js_code(workflow, node_name)
+    if snippet in code:
+        failures.append(
+            CheckFailure(
+                location=f"{workflow_name}:{node_name}",
+                message=f"must not use code snippet {snippet!r}",
+            )
+        )
+
+
 def check_contract_validate_all_examples() -> list[CheckFailure]:
     failures: list[CheckFailure] = []
     schema_cache: dict[Path, dict[str, Any]] = {}
@@ -258,6 +275,46 @@ def check_llm_score_scale_invariant() -> list[CheckFailure]:
         "Math.abs(normalizedScore - score) > 0.001",
         failures,
     )
+    return failures
+
+
+def check_web_text_preserves_readable_paragraphs() -> list[CheckFailure]:
+    failures: list[CheckFailure] = []
+    workflow_name = "00_common_normalize_text_object.json"
+    workflow = load_workflow(workflow_name)
+    node_name = "Normalize Text Object"
+    for snippet in (
+        "decodeHtmlEntities",
+        "htmlToReadableText",
+        "<br\\s*",
+        "<li\\b",
+        "<\\/(p|div|section|article|blockquote|pre|table|thead|tbody|tr|ul|ol|h[1-6])>",
+        "rawText || htmlToReadableText(rawHtml)",
+    ):
+        require_code_contains(workflow_name, workflow, node_name, snippet, failures)
+    forbid_code_contains(workflow_name, workflow, node_name, "stripHtml(rawHtml)", failures)
+    return failures
+
+
+def check_low_score_never_writes_knowledge_base() -> list[CheckFailure]:
+    failures: list[CheckFailure] = []
+    workflow_name = "04a_action_policy.json"
+    workflow = load_workflow(workflow_name)
+    node_name = "Apply Action Policy"
+    for snippet in (
+        "const minKnowledgeKeepScore = 70;",
+        "const minReferenceScore = 75;",
+        "const minWriteConfidence = 0.55;",
+        "const hasKnowledgeValue = keepScore >= minKnowledgeKeepScore && confidence >= minWriteConfidence;",
+        "shouldUpsertQdrant = shouldWriteToVault",
+        "skipped-low-score",
+    ):
+        require_code_contains(workflow_name, workflow, node_name, snippet, failures)
+    for legacy_snippet in (
+        "['keep_full', 'keep_reference', 'review'].includes(decisionHint)",
+        "keepScore >= 60 || referenceScore >= 70 || actionScore >= 65",
+    ):
+        forbid_code_contains(workflow_name, workflow, node_name, legacy_snippet, failures)
     return failures
 
 
@@ -511,6 +568,8 @@ CHECKS: dict[str, Callable[[], list[CheckFailure]]] = {
     "workflow_graph_mainline_guard": check_workflow_graph_mainline_guard,
     "normalized_no_legacy_after_00": check_normalized_no_legacy_after_00,
     "llm_score_scale_invariant": check_llm_score_scale_invariant,
+    "web_text_preserves_readable_paragraphs": check_web_text_preserves_readable_paragraphs,
+    "low_score_never_writes_knowledge_base": check_low_score_never_writes_knowledge_base,
     "privacy_external_llm_guard": check_privacy_external_llm_guard,
     "qdrant_commit_after_vault_write_only": check_qdrant_commit_after_vault_write_only,
     "rss_transcript_uses_shared_mainline": check_rss_transcript_uses_shared_mainline,
