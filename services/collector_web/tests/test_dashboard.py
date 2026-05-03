@@ -59,17 +59,13 @@ def _prepare_env(monkeypatch, tmp_path, rss_source_urls_json=RSS_SOURCE_URLS_JSO
     db_path = tmp_path / "collector_web.sqlite"
     poll_runs_dir = tmp_path / "poll_runs"
     mainline_env_path = tmp_path / ".env"
-    mainline_compose_path = tmp_path / "compose.yaml"
     poll_runs_dir.mkdir(parents=True, exist_ok=True)
     mainline_env_path.write_text("LLM_MODEL=deepseek-v4-flash\n", encoding="utf-8")
-    mainline_compose_path.write_text("services:\n  n8n:\n    image: n8n\n", encoding="utf-8")
     monkeypatch.setenv("COLLECTOR_WEB_DB_PATH", str(db_path))
     monkeypatch.setenv("COLLECTOR_WEB_POLL_RUNS_DIR", str(poll_runs_dir))
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_BASE_URL", "http://127.0.0.1:9")
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_ENV_PATH", str(mainline_env_path))
-    monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_FILE", str(mainline_compose_path))
-    monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_WORKDIR", str(tmp_path))
     monkeypatch.setenv("RSS_SOURCE_URLS_JSON", rss_source_urls_json)
     get_settings.cache_clear()
     return db_path
@@ -300,6 +296,10 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
     assert "RSS 源级解释" in response.text
     assert "ruanyifeng-blog" in response.text
     assert "data-mainline-llm-switch-form" in response.text
+    assert 'data-target-model="deepseek-v4-flash"' in response.text
+    assert 'data-target-model="deepseek-v4-pro"' in response.text
+    assert "当前运行" in response.text
+    assert "配置文件" in response.text
     assert "deepseek-v4-pro" in response.text
     assert "deepseek-v4-flash" in response.text
     assert "/static/js/status.js" in response.text
@@ -391,6 +391,7 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
     assert payload["links"]["rss_poll_rerun"] == "/api/rss-poll/rerun"
     assert payload["links"]["mainline_llm_switch"] == "/api/mainline-llm/switch"
     assert payload["mainline_llm"]["configured_model"] == "deepseek-v4-flash"
+    assert payload["mainline_llm"]["live_model"] == ""
     assert payload["mainline_llm"]["target_model"] == "deepseek-v4-pro"
     assert payload["rss_poll"]["items_selected_for_processing"] == 2
     assert payload["rss_poll"]["source_rows"][0]["source_name"] == "ruanyifeng-blog"

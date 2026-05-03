@@ -357,10 +357,19 @@ def _missing_requirements(settings: Settings) -> list[str]:
 def get_mainline_llm_status(settings: Settings) -> dict[str, Any]:
     configured_model = _read_env_value(settings.mainline_llm_env_path, "LLM_MODEL")
     missing = _missing_requirements(settings)
+    live_model = ""
+    live_model_error = ""
+    if not missing:
+        try:
+            live_model = _container_live_model(settings, settings.mainline_llm_container_name)
+        except MainlineLlmSwitchError as exc:
+            live_model_error = str(exc)
     target_model = settings.mainline_llm_target_model
     allowed_models = list(settings.mainline_llm_allowed_models)
     return {
         "configured_model": configured_model,
+        "live_model": live_model,
+        "live_model_error": live_model_error,
         "target_model": target_model,
         "allowed_models": allowed_models,
         "env_path": str(settings.mainline_llm_env_path),

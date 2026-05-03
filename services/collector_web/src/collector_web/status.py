@@ -549,8 +549,8 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
             "value": str(settings.poll_runs_dir),
         },
         {
-            "label": "Mainline LLM model",
-            "value": mainline_llm["configured_model"] or "not found",
+            "label": "Mainline LLM live model",
+            "value": mainline_llm["live_model"] or mainline_llm["configured_model"] or "not found",
         },
         {
             "label": "Mainline LLM env",

@@ -22,20 +22,34 @@
             >
                 <button class="action-button" type="submit" data-rss-rerun-button>手动重跑 RSS</button>
             </form>
-            <form
-                class="inline-action-form"
-                data-mainline-llm-switch-form
-                data-target-model="{{ mainline_llm.target_model }}"
-            >
-                <button
-                    class="action-button"
-                    type="submit"
-                    data-mainline-llm-switch-button
-                    {% if not mainline_llm.switch_available %}disabled{% endif %}
+        </div>
+        {% set current_mainline_model = mainline_llm.live_model or mainline_llm.configured_model %}
+        <div class="model-switch-panel" data-mainline-llm-switch-panel>
+            <div class="model-switch-status">
+                <span class="submit-label">主链模型</span>
+                <strong>当前运行：{{ current_mainline_model or "not found" }}</strong>
+                <span>配置文件：{{ mainline_llm.configured_model or "not found" }}</span>
+            </div>
+            <div class="model-switch-actions" aria-label="切换主链模型">
+                {% for model in mainline_llm.allowed_models %}
+                {% set is_current_model = model == current_mainline_model %}
+                <form
+                    class="inline-action-form"
+                    data-mainline-llm-switch-form
+                    data-target-model="{{ model }}"
                 >
-                    切到 {{ mainline_llm.target_model }}
-                </button>
-            </form>
+                    <button
+                        class="action-button model-switch-button{% if is_current_model %} is-current{% endif %}"
+                        type="submit"
+                        data-mainline-llm-switch-button
+                        data-target-model="{{ model }}"
+                        {% if not mainline_llm.switch_available or is_current_model %}disabled{% endif %}
+                    >
+                        {% if is_current_model %}当前 {{ model }}{% else %}切到 {{ model }}{% endif %}
+                    </button>
+                </form>
+                {% endfor %}
+            </div>
         </div>
         <div class="submit-result" data-rss-rerun-result hidden></div>
         <div class="submit-result" data-mainline-llm-switch-result hidden></div>
@@ -63,8 +77,8 @@
         </article>
         <article class="metric-card">
             <span class="metric-label">Mainline LLM</span>
-            <strong class="metric-value">{{ mainline_llm.configured_model or "not found" }}</strong>
-            <p class="history-text">目标 {{ mainline_llm.target_model }}</p>
+            <strong class="metric-value">{{ mainline_llm.live_model or mainline_llm.configured_model or "not found" }}</strong>
+            <p class="history-text">配置 {{ mainline_llm.configured_model or "not found" }}</p>
         </article>
     </div>
 </section>
@@ -191,5 +205,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/status.js?v=20260502-rss-rerun" defer></script>
+<script src="/static/js/status.js?v=20260503-llm-switcher" defer></script>
 {% endblock %}

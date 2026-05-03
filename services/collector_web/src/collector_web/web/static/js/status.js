@@ -1,8 +1,7 @@
 const rssRerunForm = document.querySelector("[data-rss-rerun-form]");
 const rssRerunButton = document.querySelector("[data-rss-rerun-button]");
 const rssRerunResult = document.querySelector("[data-rss-rerun-result]");
-const mainlineLlmSwitchForm = document.querySelector("[data-mainline-llm-switch-form]");
-const mainlineLlmSwitchButton = document.querySelector("[data-mainline-llm-switch-button]");
+const mainlineLlmSwitchForms = document.querySelectorAll("[data-mainline-llm-switch-form]");
 const mainlineLlmSwitchResult = document.querySelector("[data-mainline-llm-switch-result]");
 
 function escapeStatusHtml(value) {
@@ -52,14 +51,17 @@ async function requestStatusJson(url, options = {}) {
 
 async function handleMainlineLlmSwitchSubmit(event) {
   event.preventDefault();
-  if (!mainlineLlmSwitchButton || !mainlineLlmSwitchForm) {
+  const form = event.currentTarget;
+  const button = form?.querySelector("[data-mainline-llm-switch-button]");
+  if (!button || !form) {
     return;
   }
 
-  const targetModel = mainlineLlmSwitchForm.dataset.targetModel || "deepseek-v4-pro";
-  mainlineLlmSwitchButton.disabled = true;
-  mainlineLlmSwitchButton.textContent = "正在切换...";
-  renderMainlineLlmMessage(`正在切换到 ${targetModel}，并重启 n8n。`);
+  const targetModel = form.dataset.targetModel || button.dataset.targetModel || "deepseek-v4-pro";
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "正在切换...";
+  renderMainlineLlmMessage(`正在切换到 ${targetModel}，并重建 n8n。`);
 
   try {
     const { response, payload } = await requestStatusJson("/api/mainline-llm/switch", {
@@ -77,8 +79,8 @@ async function handleMainlineLlmSwitchSubmit(event) {
     renderMainlineLlmMessage(`已切换到 ${payload.configured_model}，n8n 当前读取到 ${liveModel}。`);
     window.setTimeout(() => window.location.reload(), 1200);
   } catch (error) {
-    mainlineLlmSwitchButton.disabled = false;
-    mainlineLlmSwitchButton.textContent = `切到 ${targetModel}`;
+    button.disabled = false;
+    button.textContent = originalText;
     renderMainlineLlmMessage(error instanceof Error ? error.message : "请求失败", "error");
   }
 }
@@ -141,6 +143,6 @@ if (rssRerunForm) {
   rssRerunForm.addEventListener("submit", handleRssRerunSubmit);
 }
 
-if (mainlineLlmSwitchForm) {
-  mainlineLlmSwitchForm.addEventListener("submit", handleMainlineLlmSwitchSubmit);
-}
+mainlineLlmSwitchForms.forEach((form) => {
+  form.addEventListener("submit", handleMainlineLlmSwitchSubmit);
+});
