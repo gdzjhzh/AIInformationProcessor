@@ -17,7 +17,9 @@
       ]
     },
     {
-      "parameters": {},
+      "parameters": {
+        "inputSource": "passthrough"
+      },
       "id": "a48fe829-d0d2-45a7-8df3-b8d23fa97b3e",
       "name": "When Executed by Another Workflow",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
