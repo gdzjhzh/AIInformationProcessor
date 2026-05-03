@@ -676,7 +676,7 @@ def run_sync(
     workflow_dir: Path,
     db_path: Path,
     backup_dir: Path,
-    backup_retain: int = 5,
+    backup_retain: int = 1,
     include_ids: set[str] | None = None,
     tracked_only: bool = True,
     prune_unmanaged: bool = True,
@@ -853,7 +853,7 @@ def main() -> int:
     parser.add_argument(
         "--backup-retain",
         type=int,
-        default=5,
+        default=1,
         help="Maximum number of SQLite backups to keep in --backup-dir. Use 0 to disable pruning.",
     )
     parser.add_argument(

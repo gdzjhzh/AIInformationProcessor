@@ -120,7 +120,7 @@ def main() -> int:
     parser.add_argument(
         "--backup-retain",
         type=int,
-        default=5,
+        default=1,
         help="Maximum number of SQLite backups to keep in --backup-dir. Use 0 to disable pruning.",
     )
     parser.add_argument(
