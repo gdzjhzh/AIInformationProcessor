@@ -12,6 +12,8 @@
     "tags",
     "summary",
     "reason",
+    "signals",
+    "event_delta",
     "ai_score",
     "score_dimensions",
     "ai_meta",
@@ -49,6 +51,51 @@
     "reason": {
       "type": "string",
       "minLength": 1
+    },
+    "signals": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "signal",
+          "signal_type",
+          "evidence_anchor",
+          "confidence",
+          "why_it_matters"
+        ],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "signal_type": {
+            "type": "string",
+            "enum": [
+              "industry_shift",
+              "strategy_hint",
+              "technical_pattern",
+              "market_signal",
+              "risk_signal",
+              "workflow_signal"
+            ]
+          },
+          "evidence_anchor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "why_it_matters": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     },
     "ai_score": {
       "type": "object",
@@ -201,6 +248,78 @@
       "enum": [
         "enriched"
       ]
+    },
+    "event_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation",
+        "compared_item_id",
+        "compared_title",
+        "compared_summary",
+        "delta_summary",
+        "delta_facts",
+        "delta_viewpoints",
+        "contradictions",
+        "delta_importance",
+        "should_delta_notify"
+      ],
+      "properties": {
+        "relation": {
+          "type": "string",
+          "enum": [
+            "new_event",
+            "same_event_delta",
+            "same_event_repeat",
+            "related_topic",
+            "uncertain"
+          ]
+        },
+        "compared_item_id": {
+          "type": "string"
+        },
+        "compared_title": {
+          "type": "string"
+        },
+        "compared_summary": {
+          "type": "string"
+        },
+        "delta_summary": {
+          "type": "string"
+        },
+        "delta_facts": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "delta_viewpoints": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "contradictions": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "delta_importance": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "should_delta_notify": {
+          "type": "boolean"
+        }
+      }
     }
   }
 }

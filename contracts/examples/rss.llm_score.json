@@ -10,6 +10,15 @@
   ],
   "summary": "Structured scoring keeps the mainline contract compatible while making enrichment outputs auditable.",
   "reason": "The content is directly relevant to the repo's architecture, and the compatibility score is derived from keep_score / score_scale rather than emitted independently by the LLM.",
+  "signals": [
+    {
+      "signal": "Structured scoring is becoming a pipeline contract rather than a presentation detail.",
+      "signal_type": "workflow_signal",
+      "evidence_anchor": "summary/reason",
+      "confidence": 0.7,
+      "why_it_matters": "It keeps downstream write, notify, and retrieval policy auditable."
+    }
+  ],
   "ai_score": {
     "keep_score": 82,
     "notify_score": 64,
@@ -37,5 +46,17 @@
     "scored_at": "2026-04-20T08:35:30Z"
   },
   "enriched_at": "2026-04-20T08:35:30Z",
-  "status": "enriched"
+  "status": "enriched",
+  "event_delta": {
+    "relation": "new_event",
+    "compared_item_id": "",
+    "compared_title": "",
+    "compared_summary": "",
+    "delta_summary": "",
+    "delta_facts": [],
+    "delta_viewpoints": [],
+    "contradictions": [],
+    "delta_importance": 100,
+    "should_delta_notify": false
+  }
 }

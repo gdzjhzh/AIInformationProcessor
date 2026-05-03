@@ -37,6 +37,7 @@ __pycache__/
 /ai_context_pack_generated.7z
 
 # Local verification scratch files
+/deploy/tmp/
 /deploy/tmp-feed/
 /deploy/tmp-real-feed/
 /deploy/n8n/workflows/91_minute_schedule_smoke.json
