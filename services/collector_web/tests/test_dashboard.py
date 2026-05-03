@@ -1,5 +1,4 @@
 import json
-import subprocess
 import sqlite3
 from datetime import datetime, timezone
 
@@ -457,18 +456,17 @@ def test_mainline_llm_switch_api_switches_allowed_model(monkeypatch, tmp_path):
 def test_mainline_llm_switch_updates_env_and_restarts_n8n(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     settings = get_settings()
-    calls = []
 
     def fake_missing_requirements(settings):
         return []
 
-    def fake_run_command(settings, command):
-        calls.append(command)
-        stdout = "deepseek-v4-pro\n" if command[-2:] == ["printenv", "LLM_MODEL"] else ""
-        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+    def fake_recreate_container(settings, model):
+        assert settings.mainline_llm_container_name == "signal-to-obsidian-n8n-1"
+        assert model == "deepseek-v4-pro"
+        return "deepseek-v4-pro"
 
     monkeypatch.setattr(mainline_llm_module, "_missing_requirements", fake_missing_requirements)
-    monkeypatch.setattr(mainline_llm_module, "_run_command", fake_run_command)
+    monkeypatch.setattr(mainline_llm_module, "_recreate_container_with_model", fake_recreate_container)
 
     result = mainline_llm_module.switch_mainline_llm_model(settings, "deepseek-v4-pro")
 
@@ -476,8 +474,6 @@ def test_mainline_llm_switch_updates_env_and_restarts_n8n(monkeypatch, tmp_path)
     assert result["configured_model"] == "deepseek-v4-pro"
     assert result["live_model"] == "deepseek-v4-pro"
     assert settings.mainline_llm_env_path.read_text(encoding="utf-8") == "LLM_MODEL=deepseek-v4-pro\n"
-    assert calls[0][-4:] == ["up", "-d", "--no-deps", "n8n"]
-    assert calls[1][-5:] == ["exec", "-T", "n8n", "printenv", "LLM_MODEL"]
 
 
 def test_collections_api_returns_platform_summary(monkeypatch, tmp_path):

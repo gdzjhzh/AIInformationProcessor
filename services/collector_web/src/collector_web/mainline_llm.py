@@ -1,16 +1,30 @@
 from __future__ import annotations
 
+import http.client
+import json
 import os
-import shutil
-import subprocess
+import socket
+import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from .config import Settings
 
 
 class MainlineLlmSwitchError(RuntimeError):
     pass
+
+
+class UnixSocketHttpConnection(http.client.HTTPConnection):
+    def __init__(self, socket_path: Path):
+        super().__init__("localhost")
+        self.socket_path = socket_path
+
+    def connect(self) -> None:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(str(self.socket_path))
+        self.sock = sock
 
 
 def _read_env_text(path: Path) -> str:
@@ -65,66 +79,278 @@ def _sanitize_output(value: str, limit: int = 1200) -> str:
     return normalized[:limit].rstrip() + "..."
 
 
-def _docker_command(settings: Settings, *args: str) -> list[str]:
-    return [settings.mainline_llm_docker_command, *args]
+def _docker_request(
+    settings: Settings,
+    method: str,
+    path: str,
+    *,
+    body: dict[str, Any] | None = None,
+    expected_statuses: tuple[int, ...] = (200, 201, 204, 304),
+) -> Any:
+    if os.name == "nt":
+        raise MainlineLlmSwitchError("docker socket switch is only supported from Linux containers")
+
+    payload = json.dumps(body).encode("utf-8") if body is not None else None
+    headers = {"Content-Type": "application/json"} if payload is not None else {}
+    connection = UnixSocketHttpConnection(settings.mainline_llm_docker_socket_path)
+    try:
+        connection.request(method, path, body=payload, headers=headers)
+        response = connection.getresponse()
+        response_body = response.read().decode("utf-8", errors="replace")
+    finally:
+        connection.close()
+
+    if response.status not in expected_statuses:
+        detail = _sanitize_output(response_body)
+        raise MainlineLlmSwitchError(f"Docker API {method} {path} failed: HTTP {response.status} {detail}")
+
+    if not response_body.strip():
+        return None
+    try:
+        return json.loads(response_body)
+    except json.JSONDecodeError:
+        return response_body
 
 
-def _compose_command(settings: Settings, *args: str) -> list[str]:
-    return _docker_command(
+def _container_path(identifier: str) -> str:
+    return quote(identifier, safe="")
+
+
+def _query_value(value: str) -> str:
+    return quote(value, safe="")
+
+
+def _replace_env(env: list[str], key: str, value: str) -> list[str]:
+    prefix = f"{key}="
+    replaced = False
+    updated: list[str] = []
+    for item in env:
+        if item.startswith(prefix):
+            updated.append(f"{prefix}{value}")
+            replaced = True
+        else:
+            updated.append(item)
+    if not replaced:
+        updated.append(f"{prefix}{value}")
+    return updated
+
+
+def _build_host_config(inspect_payload: dict[str, Any]) -> dict[str, Any]:
+    host_config = inspect_payload.get("HostConfig") or {}
+    keys = [
+        "AutoRemove",
+        "Binds",
+        "CapAdd",
+        "CapDrop",
+        "Dns",
+        "DnsOptions",
+        "DnsSearch",
+        "ExtraHosts",
+        "GroupAdd",
+        "Init",
+        "IpcMode",
+        "LogConfig",
+        "Memory",
+        "MemorySwap",
+        "NetworkMode",
+        "PortBindings",
+        "Privileged",
+        "ReadonlyRootfs",
+        "RestartPolicy",
+        "SecurityOpt",
+        "ShmSize",
+        "Ulimits",
+        "UsernsMode",
+    ]
+    return {key: host_config[key] for key in keys if key in host_config and host_config[key] not in (None, [], {})}
+
+
+def _build_networking_config(inspect_payload: dict[str, Any]) -> dict[str, Any]:
+    networks = ((inspect_payload.get("NetworkSettings") or {}).get("Networks") or {})
+    endpoints: dict[str, dict[str, Any]] = {}
+    for network_name, network_data in networks.items():
+        endpoint: dict[str, Any] = {}
+        aliases = network_data.get("Aliases")
+        if aliases:
+            endpoint["Aliases"] = aliases
+        endpoints[network_name] = endpoint
+    return {"EndpointsConfig": endpoints} if endpoints else {}
+
+
+def _build_container_create_payload(inspect_payload: dict[str, Any], model: str) -> dict[str, Any]:
+    config = inspect_payload.get("Config") or {}
+    env = _replace_env(list(config.get("Env") or []), "LLM_MODEL", model)
+    payload: dict[str, Any] = {
+        "Image": config.get("Image"),
+        "Env": env,
+        "Labels": config.get("Labels") or {},
+        "HostConfig": _build_host_config(inspect_payload),
+    }
+
+    for key in [
+        "AttachStderr",
+        "AttachStdin",
+        "AttachStdout",
+        "Cmd",
+        "Domainname",
+        "Entrypoint",
+        "ExposedPorts",
+        "Hostname",
+        "OpenStdin",
+        "StdinOnce",
+        "Tty",
+        "User",
+        "WorkingDir",
+    ]:
+        if key in config and config[key] is not None:
+            payload[key] = config[key]
+
+    networking_config = _build_networking_config(inspect_payload)
+    if networking_config:
+        payload["NetworkingConfig"] = networking_config
+    return payload
+
+
+def _container_live_model(settings: Settings, container_name: str) -> str:
+    inspect_payload = _docker_request(
         settings,
-        "compose",
-        "--env-file",
-        str(settings.mainline_llm_env_path),
-        "-f",
-        str(settings.mainline_llm_compose_file),
-        *args,
+        "GET",
+        f"/containers/{_container_path(container_name)}/json",
     )
+    env = (inspect_payload.get("Config") or {}).get("Env") or []
+    return _read_env_from_list(env, "LLM_MODEL")
 
 
-def _run_command(settings: Settings, command: list[str]) -> subprocess.CompletedProcess[str]:
-    try:
-        return subprocess.run(
-            command,
-            cwd=settings.mainline_llm_compose_workdir,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=settings.mainline_llm_restart_timeout_seconds,
+def _wait_container_running(settings: Settings, container_name: str, timeout_seconds: int = 15) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_state: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        inspect_payload = _docker_request(
+            settings,
+            "GET",
+            f"/containers/{_container_path(container_name)}/json",
         )
-    except FileNotFoundError as exc:
-        raise MainlineLlmSwitchError(
-            f"docker command not found: {settings.mainline_llm_docker_command}"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise MainlineLlmSwitchError(
-            f"docker compose timed out after {settings.mainline_llm_restart_timeout_seconds}s"
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        details = _sanitize_output((exc.stderr or "") + "\n" + (exc.stdout or ""))
-        raise MainlineLlmSwitchError(f"docker compose failed: {details}") from exc
+        last_state = inspect_payload.get("State") or {}
+        if last_state.get("Running") and not last_state.get("Restarting"):
+            return
+        time.sleep(0.75)
+
+    status = last_state.get("Status") or "unknown"
+    error = last_state.get("Error") or ""
+    raise MainlineLlmSwitchError(f"container did not stay running: {status} {error}".strip())
 
 
-def _verify_live_model(settings: Settings) -> str:
+def _read_env_from_list(env: list[str], key: str) -> str:
+    prefix = f"{key}="
+    for item in env:
+        if item.startswith(prefix):
+            return item[len(prefix) :]
+    return ""
+
+
+def _remove_container_if_exists(settings: Settings, container_id: str) -> None:
     try:
-        result = _run_command(settings, _compose_command(settings, "exec", "-T", "n8n", "printenv", "LLM_MODEL"))
+        _docker_request(
+            settings,
+            "DELETE",
+            f"/containers/{_container_path(container_id)}?v=true&force=true",
+            expected_statuses=(204, 404),
+        )
     except MainlineLlmSwitchError:
-        return ""
-    return result.stdout.strip()
+        pass
+
+
+def _rollback_container(
+    settings: Settings,
+    *,
+    old_id: str,
+    old_name: str,
+    backup_name: str,
+    new_id: str | None,
+) -> None:
+    if new_id:
+        _remove_container_if_exists(settings, new_id)
+    try:
+        _docker_request(
+            settings,
+            "POST",
+            f"/containers/{_container_path(backup_name)}/rename?name={_query_value(old_name)}",
+            expected_statuses=(204,),
+        )
+        _docker_request(
+            settings,
+            "POST",
+            f"/containers/{_container_path(old_id)}/start",
+            expected_statuses=(204, 304),
+        )
+    except MainlineLlmSwitchError:
+        pass
+
+
+def _recreate_container_with_model(settings: Settings, model: str) -> str:
+    container_name = settings.mainline_llm_container_name
+    old_payload = _docker_request(
+        settings,
+        "GET",
+        f"/containers/{_container_path(container_name)}/json",
+    )
+    old_id = old_payload["Id"]
+    old_name = str(old_payload.get("Name") or f"/{container_name}").lstrip("/")
+    backup_name = f"{old_name}-previous-{int(time.time())}"
+    new_id: str | None = None
+
+    try:
+        _docker_request(
+            settings,
+            "POST",
+            f"/containers/{_container_path(old_id)}/stop?t=30",
+            expected_statuses=(204, 304),
+        )
+        _docker_request(
+            settings,
+            "POST",
+            f"/containers/{_container_path(old_id)}/rename?name={_query_value(backup_name)}",
+            expected_statuses=(204,),
+        )
+        create_payload = _build_container_create_payload(old_payload, model)
+        create_result = _docker_request(
+            settings,
+            "POST",
+            f"/containers/create?name={_query_value(container_name)}",
+            body=create_payload,
+            expected_statuses=(201,),
+        )
+        new_id = create_result["Id"]
+        _docker_request(
+            settings,
+            "POST",
+            f"/containers/{_container_path(new_id)}/start",
+            expected_statuses=(204, 304),
+        )
+        _wait_container_running(settings, container_name)
+    except Exception:
+        _rollback_container(
+            settings,
+            old_id=old_id,
+            old_name=old_name,
+            backup_name=backup_name,
+            new_id=new_id,
+        )
+        raise
+
+    live_model = _container_live_model(settings, container_name)
+    _remove_container_if_exists(settings, backup_name)
+    return live_model
 
 
 def _missing_requirements(settings: Settings) -> list[str]:
     missing: list[str] = []
     if not settings.mainline_llm_env_path.exists():
         missing.append(f"env file: {settings.mainline_llm_env_path}")
-    if not settings.mainline_llm_compose_file.exists():
-        missing.append(f"compose file: {settings.mainline_llm_compose_file}")
-    if not settings.mainline_llm_compose_workdir.exists():
-        missing.append(f"compose workdir: {settings.mainline_llm_compose_workdir}")
-    if shutil.which(settings.mainline_llm_docker_command) is None:
-        missing.append(f"docker command: {settings.mainline_llm_docker_command}")
-    docker_socket = os.getenv("DOCKER_HOST", "").strip()
-    if not docker_socket and not Path("/var/run/docker.sock").exists() and os.name != "nt":
-        missing.append("docker socket: /var/run/docker.sock")
+    if os.name == "nt":
+        missing.append("docker socket switch requires Linux container runtime")
+    elif not settings.mainline_llm_docker_socket_path.exists():
+        missing.append(f"docker socket: {settings.mainline_llm_docker_socket_path}")
     return missing
 
 
@@ -138,8 +364,8 @@ def get_mainline_llm_status(settings: Settings) -> dict[str, Any]:
         "target_model": target_model,
         "allowed_models": allowed_models,
         "env_path": str(settings.mainline_llm_env_path),
-        "compose_file": str(settings.mainline_llm_compose_file),
-        "compose_workdir": str(settings.mainline_llm_compose_workdir),
+        "container_name": settings.mainline_llm_container_name,
+        "docker_socket_path": str(settings.mainline_llm_docker_socket_path),
         "switch_available": not missing and target_model in settings.mainline_llm_allowed_models,
         "missing_requirements": missing,
     }
@@ -160,15 +386,11 @@ def switch_mainline_llm_model(settings: Settings, target_model: str | None = Non
 
     try:
         _write_env_value(settings.mainline_llm_env_path, "LLM_MODEL", model)
-        restart_result = _run_command(
-            settings,
-            _compose_command(settings, "up", "-d", "--no-deps", "n8n"),
-        )
+        live_model = _recreate_container_with_model(settings, model)
     except Exception:
         settings.mainline_llm_env_path.write_text(original_text, encoding="utf-8")
         raise
 
-    live_model = _verify_live_model(settings)
     return {
         "ok": True,
         "previous_model": previous_model,
@@ -176,6 +398,5 @@ def switch_mainline_llm_model(settings: Settings, target_model: str | None = Non
         "live_model": live_model,
         "target_model": model,
         "env_path": str(settings.mainline_llm_env_path),
-        "restart_stdout": _sanitize_output(restart_result.stdout),
-        "restart_stderr": _sanitize_output(restart_result.stderr),
+        "container_name": settings.mainline_llm_container_name,
     }

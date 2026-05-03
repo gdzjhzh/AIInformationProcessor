@@ -35,12 +35,10 @@ class Settings:
     rss_poll_stale_minutes: int
     manual_submission_history_limit: int
     mainline_llm_env_path: Path
-    mainline_llm_compose_file: Path
-    mainline_llm_compose_workdir: Path
     mainline_llm_target_model: str
     mainline_llm_allowed_models: tuple[str, ...]
-    mainline_llm_docker_command: str
-    mainline_llm_restart_timeout_seconds: int
+    mainline_llm_container_name: str
+    mainline_llm_docker_socket_path: Path
 
 
 @lru_cache(maxsize=1)
@@ -171,29 +169,19 @@ def get_settings() -> Settings:
                 str(deploy_dir / ".env"),
             ).strip()
         ),
-        mainline_llm_compose_file=Path(
-            os.getenv(
-                "COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_FILE",
-                str(deploy_dir / "compose.yaml"),
-            ).strip()
-        ),
-        mainline_llm_compose_workdir=Path(
-            os.getenv(
-                "COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_WORKDIR",
-                str(deploy_dir),
-            ).strip()
-        ),
         mainline_llm_target_model=os.getenv(
             "COLLECTOR_WEB_MAINLINE_LLM_TARGET_MODEL",
             "deepseek-v4-pro",
         ).strip(),
         mainline_llm_allowed_models=mainline_allowed_models,
-        mainline_llm_docker_command=os.getenv(
-            "COLLECTOR_WEB_MAINLINE_LLM_DOCKER_COMMAND",
-            "docker",
-        ).strip()
-        or "docker",
-        mainline_llm_restart_timeout_seconds=int(
-            os.getenv("COLLECTOR_WEB_MAINLINE_LLM_RESTART_TIMEOUT_SECONDS", "120")
+        mainline_llm_container_name=os.getenv(
+            "COLLECTOR_WEB_MAINLINE_LLM_CONTAINER_NAME",
+            "signal-to-obsidian-n8n-1",
+        ).strip(),
+        mainline_llm_docker_socket_path=Path(
+            os.getenv(
+                "COLLECTOR_WEB_MAINLINE_LLM_DOCKER_SOCKET_PATH",
+                "/var/run/docker.sock",
+            ).strip()
         ),
     )
