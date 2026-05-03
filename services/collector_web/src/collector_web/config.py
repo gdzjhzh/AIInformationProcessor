@@ -34,14 +34,36 @@ class Settings:
     qdrant_timeout_seconds: int
     rss_poll_stale_minutes: int
     manual_submission_history_limit: int
+    mainline_llm_env_path: Path
+    mainline_llm_compose_file: Path
+    mainline_llm_compose_workdir: Path
+    mainline_llm_target_model: str
+    mainline_llm_allowed_models: tuple[str, ...]
+    mainline_llm_docker_command: str
+    mainline_llm_restart_timeout_seconds: int
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     package_dir = Path(__file__).resolve().parent
-    repo_root = next(
+    repo_root_override = os.getenv("COLLECTOR_WEB_REPO_ROOT", "").strip()
+    repo_root = Path(repo_root_override) if repo_root_override else next(
         (candidate for candidate in [package_dir, *package_dir.parents] if (candidate / "deploy").exists()),
         None,
+    )
+    deploy_dir = Path(
+        os.getenv(
+            "COLLECTOR_WEB_DEPLOY_DIR",
+            str((repo_root / "deploy") if repo_root is not None else Path("/workspace/deploy")),
+        ).strip()
+    )
+    mainline_allowed_models = tuple(
+        model.strip()
+        for model in os.getenv(
+            "COLLECTOR_WEB_MAINLINE_LLM_ALLOWED_MODELS",
+            "deepseek-v4-flash,deepseek-v4-pro",
+        ).split(",")
+        if model.strip()
     )
     db_path_override = os.getenv("COLLECTOR_WEB_DB_PATH")
     if db_path_override:
@@ -142,5 +164,36 @@ def get_settings() -> Settings:
         ),
         manual_submission_history_limit=int(
             os.getenv("COLLECTOR_WEB_MANUAL_SUBMISSION_HISTORY_LIMIT", "12")
+        ),
+        mainline_llm_env_path=Path(
+            os.getenv(
+                "COLLECTOR_WEB_MAINLINE_LLM_ENV_PATH",
+                str(deploy_dir / ".env"),
+            ).strip()
+        ),
+        mainline_llm_compose_file=Path(
+            os.getenv(
+                "COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_FILE",
+                str(deploy_dir / "compose.yaml"),
+            ).strip()
+        ),
+        mainline_llm_compose_workdir=Path(
+            os.getenv(
+                "COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_WORKDIR",
+                str(deploy_dir),
+            ).strip()
+        ),
+        mainline_llm_target_model=os.getenv(
+            "COLLECTOR_WEB_MAINLINE_LLM_TARGET_MODEL",
+            "deepseek-v4-pro",
+        ).strip(),
+        mainline_llm_allowed_models=mainline_allowed_models,
+        mainline_llm_docker_command=os.getenv(
+            "COLLECTOR_WEB_MAINLINE_LLM_DOCKER_COMMAND",
+            "docker",
+        ).strip()
+        or "docker",
+        mainline_llm_restart_timeout_seconds=int(
+            os.getenv("COLLECTOR_WEB_MAINLINE_LLM_RESTART_TIMEOUT_SECONDS", "120")
         ),
     )

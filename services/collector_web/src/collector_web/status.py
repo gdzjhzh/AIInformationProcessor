@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 from .config import Settings
 from .db import connect, utc_now
+from .mainline_llm import get_mainline_llm_status
 from .qdrant import QdrantOperationError, get_collection_snapshot
 from .repository import list_recent_manual_submissions
 
@@ -517,6 +518,7 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
     rss_poll_check, rss_poll_summary = _build_rss_poll_status(settings)
     manual_submit_check, manual_submit_summary = _build_manual_submit_status(settings)
     qdrant_check = _build_qdrant_status(settings)
+    mainline_llm = get_mainline_llm_status(settings)
 
     checks = [
         collector_check,
@@ -547,6 +549,14 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
             "value": str(settings.poll_runs_dir),
         },
         {
+            "label": "Mainline LLM model",
+            "value": mainline_llm["configured_model"] or "not found",
+        },
+        {
+            "label": "Mainline LLM env",
+            "value": mainline_llm["env_path"],
+        },
+        {
             "label": "RSS 手动重跑 webhook",
             "value": settings.rss_poll_rerun_url,
         },
@@ -571,7 +581,9 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
             "status_api": "/api/status",
             "manual_submit": "/manual-media-submit",
             "rss_poll_rerun": "/api/rss-poll/rerun",
+            "mainline_llm_switch": "/api/mainline-llm/switch",
         },
+        "mainline_llm": mainline_llm,
         "rss_poll": {
             "latest_file": rss_poll_summary.get("latest_file", ""),
             "run_started_at": rss_poll_summary.get("run_started_at", ""),

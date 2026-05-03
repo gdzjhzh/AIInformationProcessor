@@ -188,14 +188,21 @@ services:
     volumes:
       - ./data/collector_web:/data
       - ./data/n8n/storage/poll_runs:/data/n8n_poll_runs:ro
+      - ..:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
       - ../services/collector_web/src:/app/src:ro
       - ../services/collector_web/main.py:/app/main.py:ro
     environment:
       TZ: ${TZ:-America/New_York}
       COLLECTOR_WEB_HOST: 0.0.0.0
       COLLECTOR_WEB_PORT: 8300
+      COLLECTOR_WEB_REPO_ROOT: /workspace
       COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
       COLLECTOR_WEB_POLL_RUNS_DIR: /data/n8n_poll_runs
+      COLLECTOR_WEB_MAINLINE_LLM_ENV_PATH: /workspace/deploy/.env
+      COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_FILE: /workspace/deploy/compose.yaml
+      COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_WORKDIR: /workspace/deploy
+      COLLECTOR_WEB_MAINLINE_LLM_TARGET_MODEL: ${COLLECTOR_WEB_MAINLINE_LLM_TARGET_MODEL:-deepseek-v4-pro}
       COLLECTOR_WEB_RSS_POLL_RERUN_URL: ${COLLECTOR_WEB_RSS_POLL_RERUN_URL:-http://n8n:5678/webhook/2f6d0f2b1e9a4c51/rss-poll-rerun-webhook/signal-to-obsidian/local/rss-poll-rerun}
       COLLECTOR_WEB_RSS_POLL_RERUN_TIMEOUT_SECONDS: ${COLLECTOR_WEB_RSS_POLL_RERUN_TIMEOUT_SECONDS:-30}
       COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL: ${COLLECTOR_WEB_MANUAL_MEDIA_SUBMIT_URL:-http://n8n:5678/webhook/6b8eaf7c41d2439a/manual-media-submit-webhook/signal-to-obsidian/local/manual-media-submit}

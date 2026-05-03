@@ -22,8 +22,23 @@
             >
                 <button class="action-button" type="submit" data-rss-rerun-button>手动重跑 RSS</button>
             </form>
+            <form
+                class="inline-action-form"
+                data-mainline-llm-switch-form
+                data-target-model="{{ mainline_llm.target_model }}"
+            >
+                <button
+                    class="action-button"
+                    type="submit"
+                    data-mainline-llm-switch-button
+                    {% if not mainline_llm.switch_available %}disabled{% endif %}
+                >
+                    切到 {{ mainline_llm.target_model }}
+                </button>
+            </form>
         </div>
         <div class="submit-result" data-rss-rerun-result hidden></div>
+        <div class="submit-result" data-mainline-llm-switch-result hidden></div>
     </div>
     <div class="metric-grid">
         <article class="metric-card">
@@ -45,6 +60,11 @@
             <span class="metric-label">处理中任务</span>
             <strong class="metric-value">{{ metrics.manual_submit_active_count }}</strong>
             <p class="history-text">最近 {{ metrics.manual_submit_recent_count }} 条手动提交里仍在处理的数量。</p>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Mainline LLM</span>
+            <strong class="metric-value">{{ mainline_llm.configured_model or "not found" }}</strong>
+            <p class="history-text">目标 {{ mainline_llm.target_model }}</p>
         </article>
     </div>
 </section>

@@ -21,6 +21,7 @@ from ..manual_submit import (
     delete_vector_and_rerun_submission,
     enqueue_manual_submission,
 )
+from ..mainline_llm import MainlineLlmSwitchError, switch_mainline_llm_model
 from ..precheck import precheck_manual_media_submission
 from ..repository import (
     complete_manual_submission,
@@ -51,6 +52,10 @@ class ManualMediaSubmitCallbackRequest(BaseModel):
 class CalibrationCompareRequest(BaseModel):
     url: str = Field(min_length=1)
     enable_thinking: bool = False
+
+
+class MainlineLlmSwitchRequest(BaseModel):
+    model: str | None = None
 
 
 def _build_submit_payload(payload: ManualMediaSubmitRequest) -> dict[str, Any]:
@@ -105,6 +110,13 @@ def create_app() -> FastAPI:
         try:
             return trigger_rss_poll_rerun(settings)
         except RssPollRerunError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/api/mainline-llm/switch", status_code=status.HTTP_202_ACCEPTED)
+    async def mainline_llm_switch_api(payload: MainlineLlmSwitchRequest) -> dict[str, Any]:
+        try:
+            return switch_mainline_llm_model(settings, payload.model)
+        except MainlineLlmSwitchError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @app.post("/api/calibration-compare", status_code=status.HTTP_202_ACCEPTED)

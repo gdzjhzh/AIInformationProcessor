@@ -1,10 +1,12 @@
 import json
+import subprocess
 import sqlite3
 from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
 import collector_web.calibration_compare as calibration_compare_module
+import collector_web.mainline_llm as mainline_llm_module
 import collector_web.db as db_module
 import collector_web.precheck as precheck_module
 import collector_web.status as status_module
@@ -57,11 +59,18 @@ UPDATED_RSS_SOURCE_URLS_JSON = """
 def _prepare_env(monkeypatch, tmp_path, rss_source_urls_json=RSS_SOURCE_URLS_JSON):
     db_path = tmp_path / "collector_web.sqlite"
     poll_runs_dir = tmp_path / "poll_runs"
+    mainline_env_path = tmp_path / ".env"
+    mainline_compose_path = tmp_path / "compose.yaml"
     poll_runs_dir.mkdir(parents=True, exist_ok=True)
+    mainline_env_path.write_text("LLM_MODEL=deepseek-v4-flash\n", encoding="utf-8")
+    mainline_compose_path.write_text("services:\n  n8n:\n    image: n8n\n", encoding="utf-8")
     monkeypatch.setenv("COLLECTOR_WEB_DB_PATH", str(db_path))
     monkeypatch.setenv("COLLECTOR_WEB_POLL_RUNS_DIR", str(poll_runs_dir))
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_BASE_URL", "http://127.0.0.1:9")
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_TIMEOUT_SECONDS", "1")
+    monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_ENV_PATH", str(mainline_env_path))
+    monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_FILE", str(mainline_compose_path))
+    monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_COMPOSE_WORKDIR", str(tmp_path))
     monkeypatch.setenv("RSS_SOURCE_URLS_JSON", rss_source_urls_json)
     get_settings.cache_clear()
     return db_path
@@ -291,6 +300,9 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
     assert "手动重跑 RSS" in response.text
     assert "RSS 源级解释" in response.text
     assert "ruanyifeng-blog" in response.text
+    assert "data-mainline-llm-switch-form" in response.text
+    assert "deepseek-v4-pro" in response.text
+    assert "deepseek-v4-flash" in response.text
     assert "/static/js/status.js" in response.text
 
 
@@ -378,6 +390,9 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
     assert payload["links"]["health_json"] == "/health"
     assert payload["links"]["status_api"] == "/api/status"
     assert payload["links"]["rss_poll_rerun"] == "/api/rss-poll/rerun"
+    assert payload["links"]["mainline_llm_switch"] == "/api/mainline-llm/switch"
+    assert payload["mainline_llm"]["configured_model"] == "deepseek-v4-flash"
+    assert payload["mainline_llm"]["target_model"] == "deepseek-v4-pro"
     assert payload["rss_poll"]["items_selected_for_processing"] == 2
     assert payload["rss_poll"]["source_rows"][0]["source_name"] == "ruanyifeng-blog"
     assert payload["rss_poll"]["source_rows"][0]["dedupe_actions"] == ["silent"]
@@ -409,6 +424,60 @@ def test_rss_poll_rerun_api_dispatches_webhook(monkeypatch, tmp_path):
     assert payload["ok"] is True
     assert payload["accepted"] is True
     assert payload["response"]["stage"] == "01_rss_poll_rerun_dispatched"
+
+
+def test_mainline_llm_switch_api_switches_allowed_model(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+
+    def fake_switch(settings, model):
+        assert model == "deepseek-v4-pro"
+        return {
+            "ok": True,
+            "previous_model": "deepseek-v4-flash",
+            "configured_model": "deepseek-v4-pro",
+            "live_model": "deepseek-v4-pro",
+            "target_model": "deepseek-v4-pro",
+        }
+
+    monkeypatch.setattr(app_module, "switch_mainline_llm_model", fake_switch)
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/mainline-llm/switch",
+            json={"model": "deepseek-v4-pro"},
+        )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["configured_model"] == "deepseek-v4-pro"
+    assert payload["live_model"] == "deepseek-v4-pro"
+
+
+def test_mainline_llm_switch_updates_env_and_restarts_n8n(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    settings = get_settings()
+    calls = []
+
+    def fake_missing_requirements(settings):
+        return []
+
+    def fake_run_command(settings, command):
+        calls.append(command)
+        stdout = "deepseek-v4-pro\n" if command[-2:] == ["printenv", "LLM_MODEL"] else ""
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(mainline_llm_module, "_missing_requirements", fake_missing_requirements)
+    monkeypatch.setattr(mainline_llm_module, "_run_command", fake_run_command)
+
+    result = mainline_llm_module.switch_mainline_llm_model(settings, "deepseek-v4-pro")
+
+    assert result["previous_model"] == "deepseek-v4-flash"
+    assert result["configured_model"] == "deepseek-v4-pro"
+    assert result["live_model"] == "deepseek-v4-pro"
+    assert settings.mainline_llm_env_path.read_text(encoding="utf-8") == "LLM_MODEL=deepseek-v4-pro\n"
+    assert calls[0][-4:] == ["up", "-d", "--no-deps", "n8n"]
+    assert calls[1][-5:] == ["exec", "-T", "n8n", "printenv", "LLM_MODEL"]
 
 
 def test_collections_api_returns_platform_summary(monkeypatch, tmp_path):
