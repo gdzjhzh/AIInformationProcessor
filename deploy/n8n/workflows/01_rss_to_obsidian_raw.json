@@ -100,6 +100,9 @@
       "name": "RSS Read",
       "type": "n8n-nodes-base.rssFeedRead",
       "typeVersion": 1.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
       "onError": "continueRegularOutput",
       "position": [
         1020,
