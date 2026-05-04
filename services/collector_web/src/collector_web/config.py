@@ -37,6 +37,8 @@ class Settings:
     mainline_llm_env_path: Path
     mainline_llm_target_model: str
     mainline_llm_allowed_models: tuple[str, ...]
+    mainline_llm_reasoning_effort: str
+    mainline_llm_thinking_type: str
     mainline_llm_container_name: str
     mainline_llm_docker_socket_path: Path
 
@@ -174,6 +176,16 @@ def get_settings() -> Settings:
             "deepseek-v4-pro",
         ).strip(),
         mainline_llm_allowed_models=mainline_allowed_models,
+        mainline_llm_reasoning_effort=os.getenv(
+            "COLLECTOR_WEB_MAINLINE_LLM_REASONING_EFFORT",
+            "high",
+        ).strip()
+        or "high",
+        mainline_llm_thinking_type=os.getenv(
+            "COLLECTOR_WEB_MAINLINE_LLM_THINKING_TYPE",
+            "enabled",
+        ).strip()
+        or "enabled",
         mainline_llm_container_name=os.getenv(
             "COLLECTOR_WEB_MAINLINE_LLM_CONTAINER_NAME",
             "signal-to-obsidian-n8n-1",

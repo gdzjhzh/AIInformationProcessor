@@ -29,6 +29,8 @@
                 <span class="submit-label">主链模型</span>
                 <strong>当前运行：{{ current_mainline_model or "not found" }}</strong>
                 <span>配置文件：{{ mainline_llm.configured_model or "not found" }}</span>
+                <span>思考模式：{{ mainline_llm.live_thinking_type or mainline_llm.configured_thinking_type or "not found" }}</span>
+                <span>推理等级：{{ mainline_llm.live_reasoning_effort or mainline_llm.configured_reasoning_effort or "not found" }}</span>
             </div>
             <div class="model-switch-actions" aria-label="切换主链模型">
                 {% for model in mainline_llm.allowed_models %}
@@ -78,7 +80,10 @@
         <article class="metric-card">
             <span class="metric-label">Mainline LLM</span>
             <strong class="metric-value">{{ mainline_llm.live_model or mainline_llm.configured_model or "not found" }}</strong>
-            <p class="history-text">配置 {{ mainline_llm.configured_model or "not found" }}</p>
+            <p class="history-text">
+                thinking {{ mainline_llm.live_thinking_type or mainline_llm.configured_thinking_type or "not found" }}
+                / reasoning {{ mainline_llm.live_reasoning_effort or mainline_llm.configured_reasoning_effort or "not found" }}
+            </p>
         </article>
     </div>
 </section>

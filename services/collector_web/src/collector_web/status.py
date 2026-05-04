@@ -553,6 +553,22 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
             "value": mainline_llm["live_model"] or mainline_llm["configured_model"] or "not found",
         },
         {
+            "label": "Mainline LLM thinking",
+            "value": (
+                mainline_llm["live_thinking_type"]
+                or mainline_llm["configured_thinking_type"]
+                or "not found"
+            ),
+        },
+        {
+            "label": "Mainline LLM reasoning",
+            "value": (
+                mainline_llm["live_reasoning_effort"]
+                or mainline_llm["configured_reasoning_effort"]
+                or "not found"
+            ),
+        },
+        {
             "label": "Mainline LLM env",
             "value": mainline_llm["env_path"],
         },

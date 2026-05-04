@@ -177,9 +177,15 @@ def _build_networking_config(inspect_payload: dict[str, Any]) -> dict[str, Any]:
     return {"EndpointsConfig": endpoints} if endpoints else {}
 
 
-def _build_container_create_payload(inspect_payload: dict[str, Any], model: str) -> dict[str, Any]:
+def _build_container_create_payload(
+    inspect_payload: dict[str, Any],
+    settings: Settings,
+    model: str,
+) -> dict[str, Any]:
     config = inspect_payload.get("Config") or {}
     env = _replace_env(list(config.get("Env") or []), "LLM_MODEL", model)
+    env = _replace_env(env, "LLM_REASONING_EFFORT", settings.mainline_llm_reasoning_effort)
+    env = _replace_env(env, "LLM_THINKING_TYPE", settings.mainline_llm_thinking_type)
     payload: dict[str, Any] = {
         "Image": config.get("Image"),
         "Env": env,
@@ -211,14 +217,22 @@ def _build_container_create_payload(inspect_payload: dict[str, Any], model: str)
     return payload
 
 
-def _container_live_model(settings: Settings, container_name: str) -> str:
+def _container_live_env_values(
+    settings: Settings,
+    container_name: str,
+    keys: tuple[str, ...],
+) -> dict[str, str]:
     inspect_payload = _docker_request(
         settings,
         "GET",
         f"/containers/{_container_path(container_name)}/json",
     )
     env = (inspect_payload.get("Config") or {}).get("Env") or []
-    return _read_env_from_list(env, "LLM_MODEL")
+    return {key: _read_env_from_list(env, key) for key in keys}
+
+
+def _container_live_model(settings: Settings, container_name: str) -> str:
+    return _container_live_env_values(settings, container_name, ("LLM_MODEL",))["LLM_MODEL"]
 
 
 def _wait_container_running(settings: Settings, container_name: str, timeout_seconds: int = 15) -> None:
@@ -312,7 +326,7 @@ def _recreate_container_with_model(settings: Settings, model: str) -> str:
             f"/containers/{_container_path(old_id)}/rename?name={_query_value(backup_name)}",
             expected_statuses=(204,),
         )
-        create_payload = _build_container_create_payload(old_payload, model)
+        create_payload = _build_container_create_payload(old_payload, settings, model)
         create_result = _docker_request(
             settings,
             "POST",
@@ -356,12 +370,29 @@ def _missing_requirements(settings: Settings) -> list[str]:
 
 def get_mainline_llm_status(settings: Settings) -> dict[str, Any]:
     configured_model = _read_env_value(settings.mainline_llm_env_path, "LLM_MODEL")
+    configured_reasoning_effort = (
+        _read_env_value(settings.mainline_llm_env_path, "LLM_REASONING_EFFORT")
+        or settings.mainline_llm_reasoning_effort
+    )
+    configured_thinking_type = (
+        _read_env_value(settings.mainline_llm_env_path, "LLM_THINKING_TYPE")
+        or settings.mainline_llm_thinking_type
+    )
     missing = _missing_requirements(settings)
     live_model = ""
+    live_reasoning_effort = ""
+    live_thinking_type = ""
     live_model_error = ""
     if not missing:
         try:
-            live_model = _container_live_model(settings, settings.mainline_llm_container_name)
+            live_env = _container_live_env_values(
+                settings,
+                settings.mainline_llm_container_name,
+                ("LLM_MODEL", "LLM_REASONING_EFFORT", "LLM_THINKING_TYPE"),
+            )
+            live_model = live_env["LLM_MODEL"]
+            live_reasoning_effort = live_env["LLM_REASONING_EFFORT"]
+            live_thinking_type = live_env["LLM_THINKING_TYPE"]
         except MainlineLlmSwitchError as exc:
             live_model_error = str(exc)
     target_model = settings.mainline_llm_target_model
@@ -369,6 +400,10 @@ def get_mainline_llm_status(settings: Settings) -> dict[str, Any]:
     return {
         "configured_model": configured_model,
         "live_model": live_model,
+        "configured_reasoning_effort": configured_reasoning_effort,
+        "live_reasoning_effort": live_reasoning_effort,
+        "configured_thinking_type": configured_thinking_type,
+        "live_thinking_type": live_thinking_type,
         "live_model_error": live_model_error,
         "target_model": target_model,
         "allowed_models": allowed_models,
@@ -395,6 +430,16 @@ def switch_mainline_llm_model(settings: Settings, target_model: str | None = Non
 
     try:
         _write_env_value(settings.mainline_llm_env_path, "LLM_MODEL", model)
+        _write_env_value(
+            settings.mainline_llm_env_path,
+            "LLM_REASONING_EFFORT",
+            settings.mainline_llm_reasoning_effort,
+        )
+        _write_env_value(
+            settings.mainline_llm_env_path,
+            "LLM_THINKING_TYPE",
+            settings.mainline_llm_thinking_type,
+        )
         live_model = _recreate_container_with_model(settings, model)
     except Exception:
         settings.mainline_llm_env_path.write_text(original_text, encoding="utf-8")
@@ -405,6 +450,14 @@ def switch_mainline_llm_model(settings: Settings, target_model: str | None = Non
         "previous_model": previous_model,
         "configured_model": _read_env_value(settings.mainline_llm_env_path, "LLM_MODEL"),
         "live_model": live_model,
+        "configured_reasoning_effort": _read_env_value(
+            settings.mainline_llm_env_path,
+            "LLM_REASONING_EFFORT",
+        ),
+        "configured_thinking_type": _read_env_value(
+            settings.mainline_llm_env_path,
+            "LLM_THINKING_TYPE",
+        ),
         "target_model": model,
         "env_path": str(settings.mainline_llm_env_path),
         "container_name": settings.mainline_llm_container_name,

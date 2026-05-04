@@ -60,7 +60,12 @@ def _prepare_env(monkeypatch, tmp_path, rss_source_urls_json=RSS_SOURCE_URLS_JSO
     poll_runs_dir = tmp_path / "poll_runs"
     mainline_env_path = tmp_path / ".env"
     poll_runs_dir.mkdir(parents=True, exist_ok=True)
-    mainline_env_path.write_text("LLM_MODEL=deepseek-v4-flash\n", encoding="utf-8")
+    mainline_env_path.write_text(
+        "LLM_MODEL=deepseek-v4-flash\n"
+        "LLM_REASONING_EFFORT=high\n"
+        "LLM_THINKING_TYPE=enabled\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("COLLECTOR_WEB_DB_PATH", str(db_path))
     monkeypatch.setenv("COLLECTOR_WEB_POLL_RUNS_DIR", str(poll_runs_dir))
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_BASE_URL", "http://127.0.0.1:9")
@@ -300,8 +305,12 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
     assert 'data-target-model="deepseek-v4-pro"' in response.text
     assert "当前运行" in response.text
     assert "配置文件" in response.text
+    assert "思考模式" in response.text
+    assert "推理等级" in response.text
     assert "deepseek-v4-pro" in response.text
     assert "deepseek-v4-flash" in response.text
+    assert "enabled" in response.text
+    assert "high" in response.text
     assert "/static/js/status.js" in response.text
 
 
@@ -392,6 +401,8 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
     assert payload["links"]["mainline_llm_switch"] == "/api/mainline-llm/switch"
     assert payload["mainline_llm"]["configured_model"] == "deepseek-v4-flash"
     assert payload["mainline_llm"]["live_model"] == ""
+    assert payload["mainline_llm"]["configured_reasoning_effort"] == "high"
+    assert payload["mainline_llm"]["configured_thinking_type"] == "enabled"
     assert payload["mainline_llm"]["target_model"] == "deepseek-v4-pro"
     assert payload["rss_poll"]["items_selected_for_processing"] == 2
     assert payload["rss_poll"]["source_rows"][0]["source_name"] == "ruanyifeng-blog"
@@ -474,7 +485,11 @@ def test_mainline_llm_switch_updates_env_and_restarts_n8n(monkeypatch, tmp_path)
     assert result["previous_model"] == "deepseek-v4-flash"
     assert result["configured_model"] == "deepseek-v4-pro"
     assert result["live_model"] == "deepseek-v4-pro"
-    assert settings.mainline_llm_env_path.read_text(encoding="utf-8") == "LLM_MODEL=deepseek-v4-pro\n"
+    assert settings.mainline_llm_env_path.read_text(encoding="utf-8") == (
+        "LLM_MODEL=deepseek-v4-pro\n"
+        "LLM_REASONING_EFFORT=high\n"
+        "LLM_THINKING_TYPE=enabled\n"
+    )
 
 
 def test_collections_api_returns_platform_summary(monkeypatch, tmp_path):
