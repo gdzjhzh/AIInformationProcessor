@@ -19,6 +19,7 @@ class Settings:
     templates_dir: Path
     static_dir: Path
     poll_runs_dir: Path
+    n8n_database_path: Path
     rss_poll_rerun_url: str
     rss_poll_rerun_timeout_seconds: int
     manual_media_submit_url: str
@@ -85,6 +86,14 @@ def get_settings() -> Settings:
     else:
         poll_runs_dir = Path("/data/n8n_poll_runs")
 
+    n8n_database_path_override = os.getenv("COLLECTOR_WEB_N8N_DATABASE_PATH", "").strip()
+    if n8n_database_path_override:
+        n8n_database_path = Path(n8n_database_path_override)
+    elif repo_root is not None:
+        n8n_database_path = repo_root / "deploy" / "data" / "n8n" / "database.sqlite"
+    else:
+        n8n_database_path = Path("/data/n8n/database.sqlite")
+
     return Settings(
         host=os.getenv("COLLECTOR_WEB_HOST", "0.0.0.0"),
         port=int(os.getenv("COLLECTOR_WEB_PORT", "8300")),
@@ -92,6 +101,7 @@ def get_settings() -> Settings:
         templates_dir=package_dir / "web" / "templates",
         static_dir=package_dir / "web" / "static",
         poll_runs_dir=poll_runs_dir,
+        n8n_database_path=n8n_database_path,
         rss_poll_rerun_url=os.getenv(
             "COLLECTOR_WEB_RSS_POLL_RERUN_URL",
             f"http://127.0.0.1:5678/webhook/{DEFAULT_RSS_POLL_RERUN_WEBHOOK_PATH}",

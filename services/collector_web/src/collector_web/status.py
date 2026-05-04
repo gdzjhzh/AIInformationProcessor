@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,8 @@ STATUS_PRIORITY = {
     "warning": 4,
     "error": 5,
 }
+
+RSS_WORKFLOW_ID = "D3a7Kp9Lm4Qx2Rst"
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -229,6 +232,204 @@ def _find_latest_poll_run_file(poll_runs_dir: Path) -> Path | None:
     return max(candidates, key=lambda item: item.stat().st_mtime, default=None)
 
 
+def _execution_status_label(value: str) -> str:
+    return {
+        "success": "成功",
+        "running": "运行中",
+        "error": "失败",
+        "crashed": "崩溃",
+        "waiting": "等待中",
+        "new": "待启动",
+    }.get(value, value or "未知")
+
+
+def _compact_text(value: Any, *, limit: int = 220) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 3].rstrip()}..."
+
+
+def _decode_n8n_serialized_payload(raw: str) -> Any:
+    values = json.loads(raw)
+    if not isinstance(values, list):
+        return values
+
+    resolving: set[int] = set()
+    cache: dict[int, Any] = {}
+
+    def revive_ref(index: int) -> Any:
+        if index in cache:
+            return cache[index]
+        if index in resolving:
+            return None
+        resolving.add(index)
+        value = values[index]
+        if isinstance(value, dict):
+            decoded: dict[str, Any] = {}
+            cache[index] = decoded
+            decoded.update({key: revive(item) for key, item in value.items()})
+        elif isinstance(value, list):
+            decoded_list: list[Any] = []
+            cache[index] = decoded_list
+            decoded_list.extend(revive(item) for item in value)
+            decoded = decoded_list
+        else:
+            decoded = value
+            cache[index] = decoded
+        resolving.remove(index)
+        return decoded
+
+    def revive(value: Any) -> Any:
+        if isinstance(value, str) and value.isdigit():
+            index = int(value)
+            if 0 <= index < len(values):
+                return revive_ref(index)
+        if isinstance(value, dict):
+            return {key: revive(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [revive(item) for item in value]
+        return value
+
+    return revive_ref(0)
+
+
+def _extract_execution_error(conn: sqlite3.Connection, execution_id: int) -> tuple[str, str]:
+    row = conn.execute(
+        "SELECT data FROM execution_data WHERE executionId = ? LIMIT 1",
+        (execution_id,),
+    ).fetchone()
+    if row is None:
+        return "", ""
+
+    try:
+        payload = _decode_n8n_serialized_payload(str(row["data"]))
+    except Exception:
+        return "", ""
+
+    result_data = payload.get("resultData", {}) if isinstance(payload, dict) else {}
+    last_node = _compact_text(result_data.get("lastNodeExecuted"), limit=80)
+    error = result_data.get("error")
+    if isinstance(error, dict):
+        description = _compact_text(error.get("description"))
+        message = _compact_text(error.get("message"))
+        name = _compact_text(error.get("name"), limit=80)
+        error_text = description or message or name
+        if description and message and message not in description:
+            error_text = f"{description}；{message}"
+        return last_node, error_text
+
+    if error:
+        return last_node, _compact_text(error)
+
+    run_data = result_data.get("runData", {})
+    if isinstance(run_data, dict):
+        for node_name, runs in run_data.items():
+            if not isinstance(runs, list):
+                continue
+            for run in runs:
+                if not isinstance(run, dict) or not run.get("error"):
+                    continue
+                node_error = run["error"]
+                if isinstance(node_error, dict):
+                    return (
+                        _compact_text(node_name, limit=80),
+                        _compact_text(
+                            node_error.get("description")
+                            or node_error.get("message")
+                            or node_error.get("name")
+                        ),
+                    )
+                return _compact_text(node_name, limit=80), _compact_text(node_error)
+
+    return last_node, ""
+
+
+def _build_execution_line(label: str, execution: dict[str, Any]) -> str:
+    started_at = _format_datetime(str(execution.get("startedAt") or execution.get("createdAt") or ""))
+    stopped_at = _format_datetime(str(execution.get("stoppedAt") or ""))
+    status = str(execution.get("status", "")).strip()
+    line = (
+        f"{label}: {started_at or '未知时间'} 已触发，"
+        f"状态: {_execution_status_label(status)}（execution {execution.get('id')}）"
+    )
+    if stopped_at:
+        line += f"，结束于 {stopped_at}"
+    return line
+
+
+def _build_rss_execution_status(settings: Settings) -> dict[str, Any]:
+    db_path = settings.n8n_database_path
+    if not db_path.exists():
+        return {
+            "detail_lines": [
+                f"调度执行记录: 未接入 n8n 数据库，只能显示 poll_runs 摘要（期望路径: {db_path}）",
+            ],
+            "recent_executions": [],
+        }
+
+    db_uri = f"file:{db_path.as_posix()}?mode=ro"
+    try:
+        with sqlite3.connect(db_uri, uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = [
+                dict(row)
+                for row in conn.execute(
+                    """
+                    SELECT id, workflowId, finished, mode, startedAt, stoppedAt, status, createdAt
+                    FROM execution_entity
+                    WHERE workflowId = ?
+                    ORDER BY id DESC
+                    LIMIT 4
+                    """,
+                    (RSS_WORKFLOW_ID,),
+                ).fetchall()
+            ]
+            for execution in rows:
+                if str(execution.get("status", "")).strip() in {"success", "running"}:
+                    continue
+                node_name, error_text = _extract_execution_error(conn, int(execution["id"]))
+                execution["error_node"] = node_name
+                execution["error_text"] = error_text
+    except Exception as exc:
+        return {
+            "detail_lines": [
+                f"调度执行记录: n8n 数据库可见，但读取失败（{exc}）",
+            ],
+            "recent_executions": [],
+        }
+
+    if not rows:
+        return {
+            "detail_lines": ["调度执行记录: n8n 数据库可读，但没有找到 RSS 主链执行记录。"],
+            "recent_executions": [],
+        }
+
+    detail_lines = [_build_execution_line("最近调度执行", rows[0])]
+    if len(rows) > 1:
+        detail_lines.append(_build_execution_line("上一轮调度执行", rows[1]))
+
+    latest_problem = next(
+        (
+            execution
+            for execution in rows[:3]
+            if str(execution.get("status", "")).strip() not in {"success", "running"}
+        ),
+        None,
+    )
+    if latest_problem:
+        error_node = str(latest_problem.get("error_node") or "").strip()
+        error_text = str(latest_problem.get("error_text") or "").strip()
+        if error_node or error_text:
+            detail = "；".join(item for item in [error_node, error_text] if item)
+            detail_lines.append(f"最近失败位置: {detail}")
+
+    return {
+        "detail_lines": detail_lines,
+        "recent_executions": rows,
+    }
+
+
 def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str, Any]]:
     latest_file = _find_latest_poll_run_file(settings.poll_runs_dir)
     if latest_file is None:
@@ -285,6 +486,7 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
     items_written = int(payload.get("items_written", 0) or 0)
     age_minutes = _minutes_since(run_finished_at)
     source_rows = _build_poll_source_rows(payload)
+    execution_status = _build_rss_execution_status(settings)
 
     failed_sources: list[str] = []
     transcript_failed_sources: list[str] = []
@@ -310,25 +512,26 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
 
     if failed_source_count > 0:
         tone = "warning"
-        summary = f"最近一轮 RSS 轮询有 {failed_source_count} 个订阅源失败。"
+        summary = f"最新 poll_runs 摘要有 {failed_source_count} 个订阅源失败；调度执行状态见明细。"
     elif transcript_failed_source_count > 0:
         tone = "warning"
-        summary = f"最近一轮 RSS 轮询有 {transcript_failed_source_count} 个转写源失败。"
+        summary = f"最新 poll_runs 摘要有 {transcript_failed_source_count} 个转写源失败；调度执行状态见明细。"
     elif age_minutes is not None and age_minutes > settings.rss_poll_stale_minutes:
         tone = "warning"
-        summary = "最近一轮 RSS 轮询时间偏旧，建议确认 n8n 定时链路是否还在跑。"
+        summary = "最新 poll_runs 摘要时间偏旧，请结合调度执行记录判断 n8n 是否仍在跑。"
     else:
         tone = "success"
-        summary = "最近一轮 RSS 轮询摘要可读，主链看起来仍在工作。"
+        summary = "最新 poll_runs 摘要可读，主链看起来仍在工作。"
 
     detail_lines = [
-        f"最近一轮结束于: {_format_datetime(run_finished_at) or '未知'}",
+        f"最新 poll_runs 摘要结束于: {_format_datetime(run_finished_at) or '未知'}",
         f"检查 {source_count} 个源，成功 {success_source_count} 个，失败 {failed_source_count} 个",
         f"本轮看到 {items_seen} 条 item，最终写入 {items_written} 条",
         f"摘要文件: {latest_file}",
     ]
     if age_minutes is not None:
-        detail_lines.insert(1, f"距现在约 {age_minutes} 分钟")
+        detail_lines.insert(1, f"摘要距现在约 {age_minutes} 分钟")
+    detail_lines[2:2] = execution_status["detail_lines"]
     if failed_sources:
         detail_lines.append(f"失败源: {', '.join(failed_sources[:3])}")
     if transcript_failed_sources:
@@ -341,6 +544,7 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
         "items_written": items_written,
         "latest_file": str(latest_file),
         "source_rows": source_rows,
+        "recent_executions": execution_status["recent_executions"],
         "run_started_at": _format_datetime(str(payload.get("run_started_at", "")).strip()) or "",
         "run_finished_at_raw": run_finished_at,
         "source_count": source_count,
@@ -625,5 +829,6 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
             "items_written": rss_poll_summary.get("items_written", 0),
             "poll_runs_version": rss_poll_summary.get("poll_runs_version", 0),
             "source_rows": rss_poll_summary.get("source_rows", []),
+            "recent_executions": rss_poll_summary.get("recent_executions", []),
         },
     }

@@ -192,6 +192,7 @@ services:
     volumes:
       - ./data/collector_web:/data
       - ./data/n8n/storage/poll_runs:/data/n8n_poll_runs:ro
+      - ./data/n8n:/data/n8n:ro
       - ./.env:/workspace/deploy/.env
       - /var/run/docker.sock:/var/run/docker.sock
       - ../services/collector_web/src:/app/src:ro
@@ -202,6 +203,7 @@ services:
       COLLECTOR_WEB_PORT: 8300
       COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
       COLLECTOR_WEB_POLL_RUNS_DIR: /data/n8n_poll_runs
+      COLLECTOR_WEB_N8N_DATABASE_PATH: /data/n8n/database.sqlite
       COLLECTOR_WEB_MAINLINE_LLM_ENV_PATH: /workspace/deploy/.env
       COLLECTOR_WEB_MAINLINE_LLM_CONTAINER_NAME: ${COLLECTOR_WEB_MAINLINE_LLM_CONTAINER_NAME:-signal-to-obsidian-n8n-1}
       COLLECTOR_WEB_MAINLINE_LLM_DOCKER_SOCKET_PATH: /var/run/docker.sock

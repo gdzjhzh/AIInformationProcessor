@@ -58,6 +58,7 @@ UPDATED_RSS_SOURCE_URLS_JSON = """
 def _prepare_env(monkeypatch, tmp_path, rss_source_urls_json=RSS_SOURCE_URLS_JSON):
     db_path = tmp_path / "collector_web.sqlite"
     poll_runs_dir = tmp_path / "poll_runs"
+    n8n_database_path = tmp_path / "n8n" / "database.sqlite"
     mainline_env_path = tmp_path / ".env"
     poll_runs_dir.mkdir(parents=True, exist_ok=True)
     mainline_env_path.write_text(
@@ -68,6 +69,7 @@ def _prepare_env(monkeypatch, tmp_path, rss_source_urls_json=RSS_SOURCE_URLS_JSO
     )
     monkeypatch.setenv("COLLECTOR_WEB_DB_PATH", str(db_path))
     monkeypatch.setenv("COLLECTOR_WEB_POLL_RUNS_DIR", str(poll_runs_dir))
+    monkeypatch.setenv("COLLECTOR_WEB_N8N_DATABASE_PATH", str(n8n_database_path))
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_BASE_URL", "http://127.0.0.1:9")
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_ENV_PATH", str(mainline_env_path))
@@ -296,7 +298,7 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
     assert "运行状态总览" in response.text
     assert "查看探活详情" in response.text
     assert "查看状态明细" in response.text
-    assert "最近 RSS 轮询" in response.text
+    assert "最新 RSS 摘要" in response.text
     assert "手动重跑 RSS" in response.text
     assert "RSS 源级解释" in response.text
     assert "ruanyifeng-blog" in response.text
@@ -411,6 +413,125 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
     manual_submit_check = next(item for item in payload["checks"] if item["id"] == "manual_submit")
     assert manual_submit_check["status_label"] == "待处理"
     assert manual_submit_check["affects_overall"] is False
+
+
+def test_status_api_shows_n8n_execution_status_separately(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    settings = get_settings()
+
+    poll_run_dir = settings.poll_runs_dir / "2026" / "05"
+    poll_run_dir.mkdir(parents=True, exist_ok=True)
+    poll_run_path = poll_run_dir / "execution-10982_01_rss_to_obsidian_raw.json"
+    poll_run_path.write_text(
+        json.dumps(
+            {
+                "run_finished_at": "2026-05-04T11:23:55+00:00",
+                "source_count": 11,
+                "success_source_count": 10,
+                "failed_source_count": 1,
+                "items_seen": 34,
+                "items_written": 2,
+                "items_selected_for_processing": 34,
+                "poll_runs_version": 4,
+                "sources": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    settings.n8n_database_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(settings.n8n_database_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE execution_entity (
+                id INTEGER PRIMARY KEY,
+                workflowId varchar(36) NOT NULL,
+                finished boolean NOT NULL,
+                mode varchar NOT NULL,
+                retryOf varchar,
+                retrySuccessId varchar,
+                startedAt datetime,
+                stoppedAt datetime,
+                waitTill datetime,
+                status varchar NOT NULL,
+                deletedAt datetime,
+                createdAt datetime NOT NULL,
+                storedAt varchar(2) NOT NULL
+            );
+            CREATE TABLE execution_data (
+                executionId INTEGER PRIMARY KEY,
+                workflowData TEXT NOT NULL,
+                data TEXT NOT NULL,
+                workflowVersionId varchar(36)
+            );
+            """
+        )
+        conn.executemany(
+            """
+            INSERT INTO execution_entity (
+                id, workflowId, finished, mode, startedAt, stoppedAt, status, createdAt, storedAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'db')
+            """,
+            [
+                (
+                    11410,
+                    "D3a7Kp9Lm4Qx2Rst",
+                    0,
+                    "trigger",
+                    "2026-05-04 13:00:19.088",
+                    None,
+                    "running",
+                    "2026-05-04 13:00:19.018",
+                ),
+                (
+                    11241,
+                    "D3a7Kp9Lm4Qx2Rst",
+                    0,
+                    "trigger",
+                    "2026-05-04 12:00:19.015",
+                    "2026-05-04 12:08:48.818",
+                    "error",
+                    "2026-05-04 12:00:19.002",
+                ),
+            ],
+        )
+        conn.execute(
+            """
+            INSERT INTO execution_data (executionId, workflowData, data, workflowVersionId)
+            VALUES (?, '{}', ?, NULL)
+            """,
+            (
+                11241,
+                json.dumps(
+                    {
+                        "resultData": {
+                            "lastNodeExecuted": "02 Enrich With LLM",
+                            "error": {
+                                "description": "LLM response did not include choices[0].message.content",
+                                "message": "Error executing workflow with item at index 3",
+                            },
+                        }
+                    }
+                ),
+            ),
+        )
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    rss_check = next(item for item in payload["checks"] if item["id"] == "rss_poll")
+    detail_text = "\n".join(rss_check["detail_lines"])
+    assert "最新 poll_runs 摘要结束于" in detail_text
+    assert "最近调度执行:" in detail_text
+    assert "状态: 运行中" in detail_text
+    assert "execution 11410" in detail_text
+    assert "上一轮调度执行:" in detail_text
+    assert "状态: 失败" in detail_text
+    assert "最近失败位置: 02 Enrich With LLM；LLM response did not include choices[0].message.content" in detail_text
+    assert payload["rss_poll"]["recent_executions"][0]["status"] == "running"
 
 
 def test_rss_poll_rerun_api_dispatches_webhook(monkeypatch, tmp_path):

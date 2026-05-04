@@ -5,12 +5,19 @@ import argparse
 import json
 import math
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
 
 from debug_log import append_debug_log, default_debug_log_path
+
+
+class RequestJsonError(RuntimeError):
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -29,6 +36,7 @@ def request_json(
     url: str,
     payload: dict | None = None,
     extra_headers: dict[str, str] | None = None,
+    timeout_seconds: float = 30,
 ) -> dict:
     data = None
     headers = {"Content-Type": "application/json"}
@@ -38,11 +46,38 @@ def request_json(
         data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, method=method, data=data, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"{method} {url} -> HTTP {exc.code}: {body}") from exc
+        raise RequestJsonError(f"{method} {url} -> HTTP {exc.code}: {body}", status_code=exc.code) from exc
+    except TimeoutError as exc:
+        raise RequestJsonError(f"{method} {url} -> timed out after {timeout_seconds:g}s") from exc
+    except urllib.error.URLError as exc:
+        raise RequestJsonError(f"{method} {url} -> {exc.reason}") from exc
+
+
+def request_json_with_retry(
+    method: str,
+    url: str,
+    payload: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
+    timeout_seconds: float = 30,
+    attempts: int = 3,
+) -> dict:
+    last_error: RequestJsonError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return request_json(method, url, payload, extra_headers, timeout_seconds)
+        except RequestJsonError as exc:
+            if exc.status_code is not None:
+                raise
+            last_error = exc
+            if attempt < attempts:
+                time.sleep(1)
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError(f"{method} {url} failed without an error")
 
 
 def make_unit_vector(size: int, cosine: float) -> list[float]:
@@ -161,49 +196,16 @@ def run_smoke(
             )
 
     collection_url = f"{qdrant_base_url.rstrip('/')}/collections/{qdrant_collection}"
-    collection = request_json("GET", collection_url)
+    collection = request_json_with_retry("GET", collection_url)
     actual_size = int(collection["result"]["config"]["params"]["vectors"]["size"])
     if actual_size != qdrant_vector_size:
         raise RuntimeError(
             f"Collection size mismatch: env QDRANT_VECTOR_SIZE={qdrant_vector_size}, actual={actual_size}"
         )
 
-    smoke_collection = f"{qdrant_collection}__smoke"
-    smoke_url = f"{qdrant_base_url.rstrip('/')}/collections/{smoke_collection}"
-    try:
-        request_json("DELETE", smoke_url)
-    except RuntimeError:
-        pass
-    request_json(
-        "PUT",
-        smoke_url,
-        {
-            "vectors": {
-                "size": qdrant_vector_size,
-                "distance": "Cosine",
-            }
-        },
-    )
-
+    smoke_run_id = f"smoke-{uuid.uuid4()}"
+    smoke_point_ids = [qdrant_uuid(f"{smoke_run_id}:base")]
     base_vector = make_unit_vector(qdrant_vector_size, 1.0)
-    request_json(
-        "PUT",
-        f"{smoke_url}/points",
-        {
-            "points": [
-                {
-                    "id": qdrant_uuid("smoke-base"),
-                    "vector": base_vector,
-                    "payload": {
-                        "item_id": "smoke-base-item",
-                        "content_hash": "sha256:base",
-                        "title": "Smoke base item",
-                        "canonical_url": "https://example.com/base",
-                    },
-                }
-            ]
-        },
-    )
 
     scenarios = [
         {
@@ -250,41 +252,82 @@ def run_smoke(
 
     failures: list[str] = []
     scenario_results: list[dict[str, object]] = []
-    for scenario in scenarios:
-        search = request_json(
-            "POST",
-            f"{smoke_url}/points/search",
+    cleanup_error: Exception | None = None
+    try:
+        request_json_with_retry(
+            "PUT",
+            f"{collection_url}/points",
             {
-                "vector": scenario["vector"],
-                "limit": 1,
-                "with_payload": True,
+                "points": [
+                    {
+                        "id": smoke_point_ids[0],
+                        "vector": base_vector,
+                        "payload": {
+                            "item_id": "smoke-base-item",
+                            "content_hash": "sha256:base",
+                            "title": "Smoke base item",
+                            "canonical_url": "https://example.com/base",
+                            "smoke_run_id": smoke_run_id,
+                        },
+                    }
+                ]
             },
         )
-        matches = search.get("result", [])
-        match = matches[0] if matches else None
-        outcome = decide_action(
-            item_id=str(scenario["item_id"]),
-            content_hash=str(scenario["content_hash"]),
-            source_type=str(scenario["source_type"]),
-            match=match,
-            diff_threshold=diff_threshold,
-            silent_threshold=silent_threshold,
-        )
-        actual = str(outcome["dedupe_action"])
-        scenario_results.append(
-            {
-                "name": scenario["name"],
-                "expected_action": scenario["expected"],
-                "actual_action": actual,
-                "matched_score": round(float(outcome["matched_score"]), 4),
-                "should_write_to_vault": bool(outcome["should_write_to_vault"]),
-                "should_upsert_qdrant": bool(outcome["should_upsert_qdrant"]),
-            }
-        )
-        if actual != scenario["expected"]:
-            failures.append(f"{scenario['name']}: expected {scenario['expected']}, got {actual}")
 
-    request_json("DELETE", smoke_url)
+        for scenario in scenarios:
+            search = request_json_with_retry(
+                "POST",
+                f"{collection_url}/points/search",
+                {
+                    "vector": scenario["vector"],
+                    "filter": {
+                        "must": [
+                            {
+                                "key": "smoke_run_id",
+                                "match": {"value": smoke_run_id},
+                            }
+                        ]
+                    },
+                    "limit": 1,
+                    "with_payload": True,
+                },
+            )
+            matches = search.get("result", [])
+            match = matches[0] if matches else None
+            outcome = decide_action(
+                item_id=str(scenario["item_id"]),
+                content_hash=str(scenario["content_hash"]),
+                source_type=str(scenario["source_type"]),
+                match=match,
+                diff_threshold=diff_threshold,
+                silent_threshold=silent_threshold,
+            )
+            actual = str(outcome["dedupe_action"])
+            scenario_results.append(
+                {
+                    "name": scenario["name"],
+                    "expected_action": scenario["expected"],
+                    "actual_action": actual,
+                    "matched_score": round(float(outcome["matched_score"]), 4),
+                    "should_write_to_vault": bool(outcome["should_write_to_vault"]),
+                    "should_upsert_qdrant": bool(outcome["should_upsert_qdrant"]),
+                }
+            )
+            if actual != scenario["expected"]:
+                failures.append(f"{scenario['name']}: expected {scenario['expected']}, got {actual}")
+    finally:
+        try:
+            request_json_with_retry(
+                "POST",
+                f"{collection_url}/points/delete",
+                {"points": smoke_point_ids},
+                timeout_seconds=10,
+            )
+        except Exception as exc:
+            cleanup_error = exc
+
+    if cleanup_error:
+        raise RuntimeError(f"Smoke cleanup failed: {cleanup_error}") from cleanup_error
 
     if failures:
         raise RuntimeError("Smoke test failures: " + "; ".join(failures))
