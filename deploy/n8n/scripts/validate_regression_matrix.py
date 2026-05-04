@@ -164,6 +164,44 @@ def forbid_code_contains(
         )
 
 
+def require_boolean_condition(
+    workflow_name: str,
+    workflow: dict[str, Any],
+    node_name: str,
+    expected_value1: str,
+    expected_value2: bool,
+    failures: list[CheckFailure],
+) -> None:
+    node = find_node(workflow, node_name)
+    if node is None:
+        failures.append(CheckFailure(workflow_name, f"missing node {node_name!r}"))
+        return
+
+    conditions = node.get("parameters", {}).get("conditions", {})
+    boolean_conditions = conditions.get("boolean") if isinstance(conditions, dict) else None
+    if not isinstance(boolean_conditions, list):
+        failures.append(
+            CheckFailure(
+                location=f"{workflow_name}:{node_name}",
+                message="must use a boolean IF condition",
+            )
+        )
+        return
+
+    for condition in boolean_conditions:
+        if not isinstance(condition, dict):
+            continue
+        if condition.get("value1") == expected_value1 and condition.get("value2") is expected_value2:
+            return
+
+    failures.append(
+        CheckFailure(
+            location=f"{workflow_name}:{node_name}",
+            message=f"missing boolean condition {expected_value1!r} == {expected_value2!r}",
+        )
+    )
+
+
 def check_contract_validate_all_examples() -> list[CheckFailure]:
     failures: list[CheckFailure] = []
     schema_cache: dict[Path, dict[str, Any]] = {}
@@ -506,6 +544,36 @@ def check_rss_transcript_uses_shared_mainline() -> list[CheckFailure]:
         "00 Common Normalize Text Object",
         "01a Rule Prefilter",
         {"Normalize 00 Result", "Did 00 Normalize Succeed?"},
+        failures,
+    )
+    require_boolean_condition(
+        workflow_name,
+        workflow,
+        "Did Transcript Ingest Succeed?",
+        "={{$json.ok === true}}",
+        True,
+        failures,
+    )
+    require_boolean_condition(
+        workflow_name,
+        workflow,
+        "Did 00 Normalize Succeed?",
+        "={{$json.ok === true}}",
+        True,
+        failures,
+    )
+    require_code_contains(
+        workflow_name,
+        workflow,
+        "Build Poll Run Summary",
+        "const resolveSourceKey = (metadata = {}) =>",
+        failures,
+    )
+    require_code_contains(
+        workflow_name,
+        workflow,
+        "Build Poll Run Summary",
+        "const resolveSummarySourceKey = (source = {}) =>",
         failures,
     )
     forbid_edge(workflow_name, workflow, "04 Video Transcript Ingest", "05 Common Vault Writer", failures)
