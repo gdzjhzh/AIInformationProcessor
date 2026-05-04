@@ -365,7 +365,10 @@ def check_low_score_never_writes_knowledge_base() -> list[CheckFailure]:
         "const minKnowledgeKeepScore = 70;",
         "const minReferenceScore = 75;",
         "const minWriteConfidence = 0.55;",
-        "const hasKnowledgeValue = keepScore >= minKnowledgeKeepScore && confidence >= minWriteConfidence;",
+        "const isShortFastNewsItem = sourceType === 'rss' && isFastNewsSource && contentTextChars > 0 && contentTextChars < 300;",
+        "const hasShortFastNewsValue = !isShortFastNewsItem || keepScore >= 82 || referenceScore >= 88 || actionScore >= 80 || notifyScore >= 75;",
+        "const hasKnowledgeValue = keepScore >= minKnowledgeKeepScore && confidence >= minWriteConfidence && hasShortFastNewsValue;",
+        "short-fast-news-low-signal",
         "shouldUpsertQdrant = shouldWriteToVault",
         "skipped-low-score",
     ):
