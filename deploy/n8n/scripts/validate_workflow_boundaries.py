@@ -44,6 +44,8 @@ ALLOWED_LEGACY_FIELD_ACCESS: dict[str, dict[str, set[str]]] = {
     },
     "01_rss_to_obsidian_raw.json": {
         "Build Normalize Input": {"obsidian_inbox_dir", "raw_text", "raw_html"},
+        "Should Fetch HN Source Page?": {"raw_text", "raw_html"},
+        "Attach HN Source Page": {"raw_text", "raw_html"},
     },
     "04_video_transcript_ingest.json": {
         "Example Transcript Request": {"obsidian_inbox_dir"},

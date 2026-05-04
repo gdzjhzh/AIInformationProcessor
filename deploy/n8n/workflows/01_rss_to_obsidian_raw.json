@@ -584,6 +584,79 @@
         2580,
         300
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ (() => {\n  const sourceName = String($json.source_name || $json.sourceName || '').toLowerCase();\n  const feedUrl = String($json.feed_url || $json.feedUrl || '').toLowerCase();\n  const canonicalUrl = String($json.canonical_url || '').trim();\n  const compactText = String($json.raw_text || $json.raw_html || $json.description || '')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n  const isHackerNews = sourceName.includes('hacker news') || feedUrl.includes('hackernews');\n  const isExternalHttpUrl = /^https?:\\/\\//i.test(canonicalUrl) && !/https?:\\/\\/news\\.ycombinator\\.com/i.test(canonicalUrl);\n  return isHackerNews && isExternalHttpUrl && compactText.length < 40;\n})() }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "0c5c90a4-fbf1-4d45-b783-1ce6ff7c3c2d",
+      "name": "Should Fetch HN Source Page?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.canonical_url}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; signal-to-obsidian/1.0; +https://news.ycombinator.com/)"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "68a655a9-e114-4a07-9a58-b21eec8c48a4",
+      "name": "Fetch HN Source Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "position": [
+        2320,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const original = $('Build Normalize Input').item.json || {};\nconst response = $json && typeof $json === 'object' ? $json : {};\n\nconst normalizeSingleLine = (value = '') => String(value ?? '')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst estimateReadableChars = (html = '') => String(html ?? '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ')\n  .replace(/&amp;/gi, '&')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .length;\n\nconst extractResponseText = (payload) => {\n  if (typeof payload === 'string') {\n    return payload;\n  }\n  if (!payload || typeof payload !== 'object') {\n    return '';\n  }\n  for (const key of ['body', 'data', 'html', 'response', 'text']) {\n    if (typeof payload[key] === 'string' && payload[key].trim()) {\n      return payload[key];\n    }\n  }\n  return '';\n};\n\nconst errorMessage = normalizeSingleLine(\n  response.error?.message\n  || response.message\n  || response.error\n  || ''\n);\nconst fetchedHtml = extractResponseText($json);\nconst readableChars = estimateReadableChars(fetchedHtml);\nconst baseTags = Array.isArray(original.extra_tags) ? original.extra_tags : [];\n\nif (!fetchedHtml || readableChars < 200 || errorMessage) {\n  return {\n    json: {\n      ...original,\n      hn_source_page_fetched: false,\n      hn_source_page_fetch_error: errorMessage || (!fetchedHtml ? 'empty response' : 'source page text shorter than 200 chars'),\n      hn_source_page_url: String(original.canonical_url || '').trim()\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...original,\n    raw_html: fetchedHtml,\n    raw_text: '',\n    extra_tags: [...new Set([...baseTags, 'hacker-news', 'hn-source-page'])],\n    hn_source_page_fetched: true,\n    hn_source_page_url: String(original.canonical_url || '').trim(),\n    hn_source_page_chars: readableChars\n  }\n};"
+      },
+      "id": "de8de0c3-6f7c-4b47-af9c-e647c7218b7",
+      "name": "Attach HN Source Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2580,
+        420
+      ]
     }
   ],
   "connections": {
@@ -697,7 +770,7 @@
       "main": [
         [
           {
-            "node": "Route Transcript Candidates",
+            "node": "Should Fetch HN Source Page?",
             "type": "main",
             "index": 0
           }
@@ -944,6 +1017,46 @@
             "node": "Merge Poll Results",
             "type": "main",
             "index": 1
+          }
+        ]
+      ]
+    },
+    "Should Fetch HN Source Page?": {
+      "main": [
+        [
+          {
+            "node": "Fetch HN Source Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route Transcript Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HN Source Page": {
+      "main": [
+        [
+          {
+            "node": "Attach HN Source Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach HN Source Page": {
+      "main": [
+        [
+          {
+            "node": "Route Transcript Candidates",
+            "type": "main",
+            "index": 0
           }
         ]
       ]

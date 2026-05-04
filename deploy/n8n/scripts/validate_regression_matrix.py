@@ -364,7 +364,6 @@ def check_low_score_never_writes_knowledge_base() -> list[CheckFailure]:
     for snippet in (
         "const minKnowledgeKeepScore = 70;",
         "const minReferenceScore = 75;",
-        "const minNotifyScore = 75;",
         "const minWriteConfidence = 0.55;",
         "const isSspaiSource = sourceType === 'rss' && (",
         "sourceName.includes('\\u5c11\\u6570\\u6d3e')",
@@ -375,10 +374,10 @@ def check_low_score_never_writes_knowledge_base() -> list[CheckFailure]:
         "topicText.includes('\\u7535\\u5f71')",
         "const effectiveMinKnowledgeKeepScore = isSspaiMovieRecommendation ? 50 : isSspaiSource ? 55 : minKnowledgeKeepScore;",
         "const effectiveMinReferenceScore = isSspaiSource ? 50 : minReferenceScore;",
-        "const effectiveMinNotifyScore = isSspaiSource ? 60 : minNotifyScore;",
         "const isShortFastNewsItem = sourceType === 'rss' && isFastNewsSource && contentTextChars > 0 && contentTextChars < 300;",
         "const hasShortFastNewsValue = !isShortFastNewsItem || keepScore >= 82 || referenceScore >= 88 || actionScore >= 80 || notifyScore >= 75;",
         "const hasKnowledgeValue = keepScore >= effectiveMinKnowledgeKeepScore && confidence >= minWriteConfidence && hasShortFastNewsValue;",
+        "const shouldNotify = shouldWriteToVault;",
         "short-fast-news-low-signal",
         "shouldUpsertQdrant = shouldWriteToVault",
         "skipped-low-score",
@@ -387,6 +386,9 @@ def check_low_score_never_writes_knowledge_base() -> list[CheckFailure]:
     for legacy_snippet in (
         "['keep_full', 'keep_reference', 'review'].includes(decisionHint)",
         "keepScore >= 60 || referenceScore >= 70 || actionScore >= 65",
+        "const minNotifyScore = 75;",
+        "notifyScore >= effectiveMinNotifyScore",
+        "eventDelta.should_delta_notify",
     ):
         forbid_code_contains(workflow_name, workflow, node_name, legacy_snippet, failures)
     return failures
@@ -533,6 +535,11 @@ def check_rss_transcript_uses_shared_mainline() -> list[CheckFailure]:
     workflow_name = "01_rss_to_obsidian_raw.json"
     workflow = load_workflow(workflow_name)
     for source_node, target_node in (
+        ("Build Normalize Input", "Should Fetch HN Source Page?"),
+        ("Should Fetch HN Source Page?", "Fetch HN Source Page"),
+        ("Should Fetch HN Source Page?", "Route Transcript Candidates"),
+        ("Fetch HN Source Page", "Attach HN Source Page"),
+        ("Attach HN Source Page", "Route Transcript Candidates"),
         ("Route Transcript Candidates", "04 Video Transcript Ingest"),
         ("01a Rule Prefilter", "Should Continue To Qdrant?"),
         ("Should Continue To Qdrant?", "03 Qdrant Gate"),
