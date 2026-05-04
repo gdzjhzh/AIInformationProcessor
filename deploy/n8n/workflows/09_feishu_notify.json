@@ -106,13 +106,16 @@
       "position": [
         1300,
         200
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const original = $('Build Feishu Message').item.json || {};\nconst { feishu_notify: originalNotify = {}, ...rest } = original;\nconst response = $json && typeof $json === 'object' ? $json : {};\nconst error = typeof response.error === 'string'\n  ? response.error.trim()\n  : response.error && typeof response.error.message === 'string'\n    ? response.error.message.trim()\n    : '';\nconst responseCode = response.StatusCode ?? response.code;\nconst numericResponseCode = Number(responseCode);\nconst hasNonZeroResponseCode = responseCode !== undefined && Number.isFinite(numericResponseCode) && numericResponseCode !== 0;\nconst failed = Boolean(error) || hasNonZeroResponseCode;\n\nreturn {\n  json: {\n    ...rest,\n    feishu_notify: {\n      should_dispatch: Boolean(originalNotify.should_dispatch),\n      skipped_reason: '',\n      status: failed ? 'failed' : 'sent',\n      webhook_configured: Boolean(originalNotify.webhook_configured),\n      notification_mode: String(originalNotify.notification_mode || 'silent'),\n      message_format: String(originalNotify.message_format || 'interactive_card_v2'),\n      requested_at: originalNotify.requested_at || '',\n      sent_at: new Date().toISOString(),\n      message_preview: String(originalNotify.message_preview || ''),\n      error: failed ? (error || 'feishu webhook returned non-zero code ' + responseCode) : '',\n      response: failed ? null : response\n    }\n  }\n};"
+        "jsCode": "const original = $('Build Feishu Message').item.json || {};\nconst { feishu_notify: originalNotify = {}, ...rest } = original;\nconst response = $json && typeof $json === 'object' ? $json : {};\nconst error = typeof response.error === 'string'\n  ? response.error.trim()\n  : response.error && typeof response.error.message === 'string'\n    ? response.error.message.trim()\n    : '';\nconst responseCode = response.StatusCode ?? response.code;\nconst numericResponseCode = Number(responseCode);\nconst hasNonZeroResponseCode = responseCode !== undefined && Number.isFinite(numericResponseCode) && numericResponseCode !== 0;\nconst failed = Boolean(error) || hasNonZeroResponseCode;\n\nconst isRetryableFeishuFailure = (message = '', code = '') => {\n  const normalized = String(message || '').toLowerCase();\n  const transientTokens = [\n    'eai_again',\n    'enotfound',\n    'etimedout',\n    'econnreset',\n    'econnrefused',\n    'socket hang up',\n    'network error',\n    'timeout'\n  ];\n  if (transientTokens.some((token) => normalized.includes(token))) {\n    return true;\n  }\n  const numericCode = Number(code);\n  return Number.isFinite(numericCode) && numericCode >= 500;\n};\n\nconst maxRetries = Number(originalNotify.max_retries || 10) || 10;\nconst retryCount = Number(originalNotify.retry_count || 0) || 0;\nconst retryable = failed && isRetryableFeishuFailure(error, responseCode);\n\nreturn {\n  json: {\n    ...rest,\n    feishu_notify: {\n      should_dispatch: Boolean(originalNotify.should_dispatch),\n      skipped_reason: '',\n      status: failed ? 'failed' : 'sent',\n      retryable,\n      retry_count: retryCount,\n      max_retries: maxRetries,\n      webhook_configured: Boolean(originalNotify.webhook_configured),\n      notification_mode: String(originalNotify.notification_mode || 'silent'),\n      message_format: String(originalNotify.message_format || 'interactive_card_v2'),\n      requested_at: originalNotify.requested_at || '',\n      sent_at: new Date().toISOString(),\n      message_preview: String(originalNotify.message_preview || ''),\n      request_body: originalNotify.request_body || null,\n      error: failed ? (error || 'feishu webhook returned non-zero code ' + responseCode) : '',\n      response: failed ? null : response\n    }\n  }\n};"
       },
       "id": "3e59277e-8d3b-4a9d-ae6c-f1d91ef17e4a",
       "name": "Finalize Feishu Dispatch",
@@ -127,7 +130,7 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const { feishu_notify: originalNotify = {}, ...rest } = $json || {};\nreturn {\n  json: {\n    ...rest,\n    feishu_notify: {\n      should_dispatch: false,\n      skipped_reason: String(originalNotify.skipped_reason || 'not_requested'),\n      status: 'skipped',\n      webhook_configured: Boolean(originalNotify.webhook_configured),\n      notification_mode: String(originalNotify.notification_mode || 'silent'),\n      message_format: String(originalNotify.message_format || 'interactive_card_v2'),\n      requested_at: originalNotify.requested_at || '',\n      sent_at: '',\n      message_preview: String(originalNotify.message_preview || ''),\n      error: '',\n      response: null\n    }\n  }\n};"
+        "jsCode": "const { feishu_notify: originalNotify = {}, ...rest } = $json || {};\nreturn {\n  json: {\n    ...rest,\n    feishu_notify: {\n      should_dispatch: false,\n      skipped_reason: String(originalNotify.skipped_reason || 'not_requested'),\n      status: 'skipped',\n      retryable: false,\n      retry_count: Number(originalNotify.retry_count || 0) || 0,\n      max_retries: Number(originalNotify.max_retries || 10) || 10,\n      webhook_configured: Boolean(originalNotify.webhook_configured),\n      notification_mode: String(originalNotify.notification_mode || 'silent'),\n      message_format: String(originalNotify.message_format || 'interactive_card_v2'),\n      requested_at: originalNotify.requested_at || '',\n      sent_at: '',\n      message_preview: String(originalNotify.message_preview || ''),\n      request_body: originalNotify.request_body || null,\n      error: '',\n      response: null\n    }\n  }\n};"
       },
       "id": "488132c2-12df-4f0f-acdb-5c2a115eac3d",
       "name": "Finalize Feishu Skipped",
@@ -155,14 +158,29 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const notify = $json.feishu_notify && typeof $json.feishu_notify === 'object'\n  ? $json.feishu_notify\n  : {};\nreturn {\n  json: {\n    ...$json,\n    feishu_notify: {\n      should_dispatch: Boolean(notify.should_dispatch),\n      skipped_reason: String(notify.skipped_reason || ''),\n      status: String(notify.status || 'skipped'),\n      webhook_configured: Boolean(notify.webhook_configured),\n      notification_mode: String(notify.notification_mode || 'silent'),\n      message_format: String(notify.message_format || 'interactive_card_v2'),\n      requested_at: String(notify.requested_at || ''),\n      sent_at: String(notify.sent_at || ''),\n      message_preview: String(notify.message_preview || ''),\n      error: String(notify.error || ''),\n      response: notify.response ?? null\n    }\n  }\n};"
+        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst safeString = (value) => {\n  if (value === undefined || value === null) {\n    return '';\n  }\n  return String(value).trim();\n};\n\nconst sanitizePathSegment = (value = '', fallback = 'unknown') => {\n  const normalized = safeString(value)\n    .normalize('NFKC')\n    .replace(/[<>:\"/\\\\|?*\\u0000-\\u001f]/g, ' ')\n    .replace(/[\\uFF0C\\u3002\\uFF01\\uFF1F\\u3001\\uFF1B\\uFF1A'\"`~!@#$%^&+=\\[\\]{}\\u3010\\u3011\\u300A\\u300B\\u3008\\u3009\\u300C\\u300D\\u300E\\u300F]/g, ' ')\n    .replace(/[()\\uFF08\\uFF09]/g, ' ')\n    .replace(/[\\u00B7\\u2022]/g, ' ')\n    .replace(/\\./g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n  if (!normalized) {\n    return fallback;\n  }\n  return normalized.replace(/\\s+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || fallback;\n};\n\nconst notify = $json.feishu_notify && typeof $json.feishu_notify === 'object'\n  ? $json.feishu_notify\n  : {};\nconst now = new Date();\nconst requestedAtText = safeString(notify.requested_at) || now.toISOString();\nconst requestedAt = new Date(requestedAtText);\nconst safeRequestedAt = Number.isNaN(requestedAt.getTime()) ? now : requestedAt;\nconst yyyy = String(safeRequestedAt.getUTCFullYear());\nconst mm = String(safeRequestedAt.getUTCMonth() + 1).padStart(2, '0');\nconst timestampToken = safeRequestedAt.toISOString().replace(/[:.]/g, '-');\nconst itemId = safeString($json.item_id || $json.id || '');\nconst title = safeString($json.title || 'Untitled');\nconst shortId = sanitizePathSegment(itemId.slice(0, 12) || title.slice(0, 40), 'unknown');\nconst recordName = `${timestampToken}__${shortId}.json`;\nconst storageRoot = path.resolve('/home/node/.n8n-files/feishu_notify_runs');\nconst targetDir = path.join(storageRoot, yyyy, mm);\nconst targetPath = path.join(targetDir, recordName);\nconst relativePath = path.posix.join('feishu_notify_runs', yyyy, mm, recordName);\nconst status = safeString(notify.status || 'skipped') || 'skipped';\nconst retryCount = Number(notify.retry_count || 0) || 0;\nconst maxRetries = Number(notify.max_retries || 10) || 10;\nconst retryable = Boolean(notify.retryable) && status === 'failed' && retryCount < maxRetries;\nconst nextRetryAt = retryable\n  ? new Date(now.getTime() + 5 * 60 * 1000).toISOString()\n  : '';\n\nfs.mkdirSync(targetDir, { recursive: true });\n\nconst record = {\n  version: 1,\n  record_type: 'feishu_notify_run',\n  record_id: `${timestampToken}__${shortId}`,\n  item_id: itemId,\n  title,\n  source_name: safeString($json.source_display_name || $json.source_name || $json.author || ''),\n  source_type: safeString($json.source_type || $json.media_type || ''),\n  canonical_url: safeString($json.canonical_url || ''),\n  vault_path: safeString($json.vault_path || $json.relativeFilePath || ''),\n  should_notify: Boolean($json.should_notify),\n  should_dispatch: Boolean(notify.should_dispatch),\n  skipped_reason: safeString(notify.skipped_reason || ''),\n  status,\n  retryable,\n  retry_count: retryCount,\n  max_retries: maxRetries,\n  next_retry_at: nextRetryAt,\n  webhook_configured: Boolean(notify.webhook_configured),\n  notification_mode: safeString(notify.notification_mode || 'silent') || 'silent',\n  message_format: safeString(notify.message_format || 'interactive_card_v2') || 'interactive_card_v2',\n  requested_at: requestedAtText,\n  sent_at: safeString(notify.sent_at || ''),\n  persisted_at: now.toISOString(),\n  message_preview: safeString(notify.message_preview || ''),\n  request_body: notify.request_body || null,\n  error: safeString(notify.error || ''),\n  response: notify.response ?? null,\n  retry_history: []\n};\n\nfs.writeFileSync(targetPath, JSON.stringify(record, null, 2), 'utf8');\n\nreturn {\n  json: {\n    ...$json,\n    feishu_notify: {\n      ...notify,\n      retryable,\n      retry_count: retryCount,\n      max_retries: maxRetries,\n      outbox_path: relativePath,\n      outbox_host_path: `deploy/data/n8n/storage/${relativePath}`\n    }\n  }\n};"
+      },
+      "id": "8f6d3a2e-74cb-4cc1-9ce7-c0cb7807c9e7",
+      "name": "Persist Feishu Notify Run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const notify = $json.feishu_notify && typeof $json.feishu_notify === 'object'\n  ? $json.feishu_notify\n  : {};\nreturn {\n  json: {\n    ...$json,\n    feishu_notify: {\n      should_dispatch: Boolean(notify.should_dispatch),\n      skipped_reason: String(notify.skipped_reason || ''),\n      status: String(notify.status || 'skipped'),\n      retryable: Boolean(notify.retryable),\n      retry_count: Number(notify.retry_count || 0) || 0,\n      max_retries: Number(notify.max_retries || 10) || 10,\n      outbox_path: String(notify.outbox_path || ''),\n      outbox_host_path: String(notify.outbox_host_path || ''),\n      webhook_configured: Boolean(notify.webhook_configured),\n      notification_mode: String(notify.notification_mode || 'silent'),\n      message_format: String(notify.message_format || 'interactive_card_v2'),\n      requested_at: String(notify.requested_at || ''),\n      sent_at: String(notify.sent_at || ''),\n      message_preview: String(notify.message_preview || ''),\n      error: String(notify.error || ''),\n      response: notify.response ?? null\n    }\n  }\n};"
       },
       "id": "c223449a-536b-480b-b266-fe23b7cb3f0a",
       "name": "Return Feishu Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2080,
+        2340,
         300
       ]
     }
@@ -267,6 +285,17 @@
       "main": [
         [
           {
+            "node": "Persist Feishu Notify Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Feishu Notify Run": {
+      "main": [
+        [
+          {
             "node": "Return Feishu Result",
             "type": "main",
             "index": 0
@@ -283,6 +312,6 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "f2bc5f7d-a5b3-4829-ae42-7586fa8cf001",
+  "versionId": "a44d0cd7-b52e-4c49-b4ca-4f0a792f3a1f",
   "tags": []
 }

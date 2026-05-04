@@ -1,0 +1,184 @@
+{
+  "createdAt": "2026-05-04T00:00:00.000Z",
+  "updatedAt": "2026-05-04T00:00:00.000Z",
+  "id": "10f7a8b2c3d44e5f",
+  "name": "10 Feishu Notify Retry",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a5a0c53b-0cf0-4f24-9275-7c1a8d0da201",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "0c8a96c5-53fc-430b-9c9f-40610131eaa4",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        260,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst safeString = (value) => {\n  if (value === undefined || value === null) {\n    return '';\n  }\n  return String(value).trim();\n};\n\nconst readJson = (filePath) => {\n  try {\n    return JSON.parse(fs.readFileSync(filePath, 'utf8'));\n  } catch {\n    return null;\n  }\n};\n\nconst walkJsonFiles = (dirPath) => {\n  if (!fs.existsSync(dirPath)) {\n    return [];\n  }\n  const pending = [dirPath];\n  const files = [];\n  while (pending.length) {\n    const current = pending.pop();\n    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {\n      const entryPath = path.join(current, entry.name);\n      if (entry.isDirectory()) {\n        pending.push(entryPath);\n      } else if (entry.isFile() && entry.name.endsWith('.json')) {\n        files.push(entryPath);\n      }\n    }\n  }\n  return files;\n};\n\nconst now = new Date();\nconst root = path.resolve('/home/node/.n8n-files/feishu_notify_runs');\nconst batchLimit = Math.max(1, Math.min(50, Number($env.FEISHU_NOTIFY_RETRY_BATCH_LIMIT || 10) || 10));\nif (!safeString($env.FEISHU_WEBHOOK_URL)) {\n  return [];\n}\n\nconst files = walkJsonFiles(root)\n  .map((filePath) => ({ filePath, mtimeMs: fs.statSync(filePath).mtimeMs }))\n  .sort((left, right) => left.mtimeMs - right.mtimeMs)\n  .map((entry) => entry.filePath);\n\nconst candidates = [];\nfor (const filePath of files) {\n  if (candidates.length >= batchLimit) {\n    break;\n  }\n  const record = readJson(filePath);\n  if (!record || typeof record !== 'object') {\n    continue;\n  }\n  if (safeString(record.status) !== 'failed') {\n    continue;\n  }\n  if (record.retryable === false) {\n    continue;\n  }\n  if (!record.request_body || typeof record.request_body !== 'object') {\n    continue;\n  }\n  const retryCount = Number(record.retry_count || 0) || 0;\n  const maxRetries = Number(record.max_retries || 10) || 10;\n  if (retryCount >= maxRetries) {\n    continue;\n  }\n  const nextRetryAt = safeString(record.next_retry_at || '');\n  if (nextRetryAt) {\n    const parsedNextRetryAt = new Date(nextRetryAt);\n    if (!Number.isNaN(parsedNextRetryAt.getTime()) && parsedNextRetryAt > now) {\n      continue;\n    }\n  }\n  const relativePath = path.relative(root, filePath).split(path.sep).join('/');\n  candidates.push({\n    json: {\n      retry_record: record,\n      retry_record_path: filePath,\n      retry_record_relative_path: `feishu_notify_runs/${relativePath}`,\n      retry_attempted_at: now.toISOString(),\n      retry_count_before: retryCount\n    }\n  });\n}\n\nreturn candidates;"
+      },
+      "id": "be9fb944-6ed8-48f3-b769-8a94a75e2e09",
+      "name": "Scan Failed Feishu Runs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.FEISHU_WEBHOOK_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.retry_record.request_body) }}",
+        "options": {}
+      },
+      "id": "1c5d4e8d-5726-4c80-a6d8-8b94f035b3a8",
+      "name": "Send Feishu Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const fs = require('fs');\n\nconst safeString = (value) => {\n  if (value === undefined || value === null) {\n    return '';\n  }\n  return String(value).trim();\n};\n\nconst isRetryableFeishuFailure = (message = '', code = '') => {\n  const normalized = String(message || '').toLowerCase();\n  const transientTokens = [\n    'eai_again',\n    'enotfound',\n    'etimedout',\n    'econnreset',\n    'econnrefused',\n    'socket hang up',\n    'network error',\n    'timeout'\n  ];\n  if (transientTokens.some((token) => normalized.includes(token))) {\n    return true;\n  }\n  const numericCode = Number(code);\n  return Number.isFinite(numericCode) && numericCode >= 500;\n};\n\nconst source = $('Scan Failed Feishu Runs').item.json || {};\nconst record = source.retry_record && typeof source.retry_record === 'object'\n  ? source.retry_record\n  : {};\nconst recordPath = safeString(source.retry_record_path || '');\nif (!recordPath) {\n  throw new Error('10_feishu_notify_retry requires retry_record_path');\n}\n\nconst response = $json && typeof $json === 'object' ? $json : {};\nconst error = typeof response.error === 'string'\n  ? response.error.trim()\n  : response.error && typeof response.error.message === 'string'\n    ? response.error.message.trim()\n    : '';\nconst responseCode = response.StatusCode ?? response.code;\nconst numericResponseCode = Number(responseCode);\nconst hasNonZeroResponseCode = responseCode !== undefined && Number.isFinite(numericResponseCode) && numericResponseCode !== 0;\nconst failed = Boolean(error) || hasNonZeroResponseCode;\nconst now = new Date();\nconst attemptedAt = safeString(source.retry_attempted_at || '') || now.toISOString();\nconst previousRetryCount = Number(record.retry_count || 0) || 0;\nconst retryCount = previousRetryCount + 1;\nconst maxRetries = Number(record.max_retries || 10) || 10;\nconst failureMessage = failed ? (error || 'feishu webhook returned non-zero code ' + responseCode) : '';\nconst canRetryAgain = failed && retryCount < maxRetries && isRetryableFeishuFailure(failureMessage, responseCode);\nconst delayMinutes = canRetryAgain\n  ? Math.min(60, Math.max(5, 5 * Math.pow(2, Math.min(retryCount - 1, 4))))\n  : 0;\nconst nextRetryAt = canRetryAgain\n  ? new Date(now.getTime() + delayMinutes * 60 * 1000).toISOString()\n  : '';\nconst history = Array.isArray(record.retry_history) ? record.retry_history : [];\nconst updatedRecord = {\n  ...record,\n  status: failed ? 'failed' : 'sent',\n  retryable: canRetryAgain,\n  retry_count: retryCount,\n  max_retries: maxRetries,\n  last_retry_at: attemptedAt,\n  next_retry_at: nextRetryAt,\n  sent_at: failed ? safeString(record.sent_at || '') : now.toISOString(),\n  updated_at: now.toISOString(),\n  retry_exhausted_at: failed && !canRetryAgain ? now.toISOString() : safeString(record.retry_exhausted_at || ''),\n  error: failureMessage,\n  response: failed ? null : response,\n  retry_history: [\n    ...history,\n    {\n      attempted_at: attemptedAt,\n      finished_at: now.toISOString(),\n      status: failed ? 'failed' : 'sent',\n      error: failureMessage,\n      response: failed ? null : response\n    }\n  ].slice(-20)\n};\n\nfs.writeFileSync(recordPath, JSON.stringify(updatedRecord, null, 2), 'utf8');\n\nreturn {\n  json: {\n    ok: !failed,\n    status: updatedRecord.status,\n    retryable: updatedRecord.retryable,\n    retry_count: retryCount,\n    max_retries: maxRetries,\n    next_retry_at: nextRetryAt,\n    retry_record_path: safeString(source.retry_record_relative_path || recordPath),\n    item_id: safeString(record.item_id || ''),\n    title: safeString(record.title || ''),\n    vault_path: safeString(record.vault_path || ''),\n    error: failureMessage,\n    response: failed ? null : response\n  }\n};"
+      },
+      "id": "1b01f0da-82fb-4bf7-90ee-8e31cfa6e9b9",
+      "name": "Finalize Retry Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    retry_workflow: '10 Feishu Notify Retry',\n    finished_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "9f7fd3f8-1aa8-4db4-a7e4-fde1391c1c22",
+      "name": "Return Retry Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Scan Failed Feishu Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Scan Failed Feishu Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Failed Feishu Runs": {
+      "main": [
+        [
+          {
+            "node": "Send Feishu Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Feishu Webhook": {
+      "main": [
+        [
+          {
+            "node": "Finalize Retry Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Retry Result": {
+      "main": [
+        [
+          {
+            "node": "Return Retry Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "8b538c18-7c86-49b1-86c4-275838ab0dcb",
+  "tags": []
+}
