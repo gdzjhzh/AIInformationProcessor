@@ -417,7 +417,9 @@ def test_rss_poll_rerun_api_dispatches_webhook(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
 
     def fake_trigger(settings):
-        assert settings.rss_poll_rerun_url
+        assert settings.rss_poll_rerun_url.endswith(
+            "/webhook/2f6d0f2b1e9a4c51/rss-poll-rerun-webhook/signal-to-obsidian/local/rss-poll-rerun"
+        )
         return {
             "ok": True,
             "accepted": True,

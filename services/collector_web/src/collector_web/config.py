@@ -6,6 +6,9 @@ from pathlib import Path
 DEFAULT_MANUAL_MEDIA_SUBMIT_WEBHOOK_PATH = (
     "6b8eaf7c41d2439a/manual-media-submit-webhook/signal-to-obsidian/local/manual-media-submit"
 )
+DEFAULT_RSS_POLL_RERUN_WEBHOOK_PATH = (
+    "2f6d0f2b1e9a4c51/rss-poll-rerun-webhook/signal-to-obsidian/local/rss-poll-rerun"
+)
 
 
 @dataclass(frozen=True)
@@ -91,7 +94,7 @@ def get_settings() -> Settings:
         poll_runs_dir=poll_runs_dir,
         rss_poll_rerun_url=os.getenv(
             "COLLECTOR_WEB_RSS_POLL_RERUN_URL",
-            "http://127.0.0.1:5678/webhook/2f6d0f2b1e9a4c51/rss-poll-rerun-webhook/signal-to-obsidian/local/rss-poll-rerun",
+            f"http://127.0.0.1:5678/webhook/{DEFAULT_RSS_POLL_RERUN_WEBHOOK_PATH}",
         ).strip(),
         rss_poll_rerun_timeout_seconds=int(
             os.getenv("COLLECTOR_WEB_RSS_POLL_RERUN_TIMEOUT_SECONDS", "30")

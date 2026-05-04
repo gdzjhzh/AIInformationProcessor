@@ -278,12 +278,16 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
     source_count = int(payload.get("source_count", 0) or 0)
     success_source_count = int(payload.get("success_source_count", 0) or 0)
     failed_source_count = int(payload.get("failed_source_count", 0) or 0)
+    transcript_failed_source_count = int(
+        payload.get("transcript_failed_source_count", 0) or 0
+    )
     items_seen = int(payload.get("items_seen", 0) or 0)
     items_written = int(payload.get("items_written", 0) or 0)
     age_minutes = _minutes_since(run_finished_at)
     source_rows = _build_poll_source_rows(payload)
 
     failed_sources: list[str] = []
+    transcript_failed_sources: list[str] = []
     wrote_paths: list[str] = []
     for source in payload.get("sources", []):
         if not isinstance(source, dict):
@@ -291,8 +295,11 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
         source_name = str(source.get("source_name", "")).strip()
         feed_url = str(source.get("feed_url", "")).strip()
         rss_error = str(source.get("rss_error", "")).strip()
+        transcript_error = str(source.get("transcript_error", "")).strip()
         if rss_error:
             failed_sources.append(source_name or feed_url or "未命名订阅源")
+        if transcript_error:
+            transcript_failed_sources.append(source_name or feed_url or "未命名订阅源")
 
         source_paths = source.get("wrote_paths", [])
         if isinstance(source_paths, list):
@@ -304,6 +311,9 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
     if failed_source_count > 0:
         tone = "warning"
         summary = f"最近一轮 RSS 轮询有 {failed_source_count} 个订阅源失败。"
+    elif transcript_failed_source_count > 0:
+        tone = "warning"
+        summary = f"最近一轮 RSS 轮询有 {transcript_failed_source_count} 个转写源失败。"
     elif age_minutes is not None and age_minutes > settings.rss_poll_stale_minutes:
         tone = "warning"
         summary = "最近一轮 RSS 轮询时间偏旧，建议确认 n8n 定时链路是否还在跑。"
@@ -321,6 +331,8 @@ def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str
         detail_lines.insert(1, f"距现在约 {age_minutes} 分钟")
     if failed_sources:
         detail_lines.append(f"失败源: {', '.join(failed_sources[:3])}")
+    if transcript_failed_sources:
+        detail_lines.append(f"转写失败源: {', '.join(transcript_failed_sources[:3])}")
     if wrote_paths:
         detail_lines.append(f"最近写入: {', '.join(wrote_paths[:2])}")
 

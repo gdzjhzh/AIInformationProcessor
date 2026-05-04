@@ -92,6 +92,28 @@ def require_edge(
         )
 
 
+def require_allowed_path(
+    workflow_name: str,
+    workflow: dict[str, Any],
+    source_node: str,
+    target_node: str,
+    allowed_intermediates: set[str],
+    failures: list[CheckFailure],
+) -> None:
+    if not WORKFLOW_BOUNDARIES.has_allowed_path_to_target(
+        workflow,
+        source_node,
+        target_node,
+        allowed_intermediates=allowed_intermediates,
+    ):
+        failures.append(
+            CheckFailure(
+                location=f"{workflow_name}:{source_node}",
+                message=f"must connect to {target_node!r}",
+            )
+        )
+
+
 def forbid_edge(
     workflow_name: str,
     workflow: dict[str, Any],
@@ -460,8 +482,6 @@ def check_rss_transcript_uses_shared_mainline() -> list[CheckFailure]:
     workflow = load_workflow(workflow_name)
     for source_node, target_node in (
         ("Route Transcript Candidates", "04 Video Transcript Ingest"),
-        ("04 Video Transcript Ingest", "00 Common Normalize Text Object"),
-        ("00 Common Normalize Text Object", "01a Rule Prefilter"),
         ("01a Rule Prefilter", "Should Continue To Qdrant?"),
         ("Should Continue To Qdrant?", "03 Qdrant Gate"),
         ("03 Qdrant Gate", "Should Continue To LLM?"),
@@ -472,6 +492,22 @@ def check_rss_transcript_uses_shared_mainline() -> list[CheckFailure]:
         ("09 Feishu Notify", "03b Qdrant Commit"),
     ):
         require_edge(workflow_name, workflow, source_node, target_node, failures)
+    require_allowed_path(
+        workflow_name,
+        workflow,
+        "04 Video Transcript Ingest",
+        "00 Common Normalize Text Object",
+        {"Normalize Transcript Ingest Result", "Did Transcript Ingest Succeed?"},
+        failures,
+    )
+    require_allowed_path(
+        workflow_name,
+        workflow,
+        "00 Common Normalize Text Object",
+        "01a Rule Prefilter",
+        {"Normalize 00 Result", "Did 00 Normalize Succeed?"},
+        failures,
+    )
     forbid_edge(workflow_name, workflow, "04 Video Transcript Ingest", "05 Common Vault Writer", failures)
     return failures
 

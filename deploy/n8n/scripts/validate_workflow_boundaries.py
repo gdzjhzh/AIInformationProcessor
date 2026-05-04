@@ -73,6 +73,15 @@ REQUIRED_CONNECTIONS: dict[str, dict[str, set[str]]] = {
     },
 }
 
+ALLOWED_REQUIRED_CONNECTION_INTERMEDIATES: dict[str, dict[str, set[str]]] = {
+    "01_rss_to_obsidian_raw.json": {
+        "04 Video Transcript Ingest": {
+            "Normalize Transcript Ingest Result",
+            "Did Transcript Ingest Succeed?",
+        },
+    },
+}
+
 FORBIDDEN_CONNECTIONS: dict[str, dict[str, set[str]]] = {
     "01_rss_to_obsidian_raw.json": {
         "04 Video Transcript Ingest": {"05 Common Vault Writer"},
@@ -146,6 +155,28 @@ def collect_connected_nodes(workflow: dict[str, Any], source_node: str) -> set[s
     return result
 
 
+def has_allowed_path_to_target(
+    workflow: dict[str, Any],
+    source_node: str,
+    target_node: str,
+    *,
+    allowed_intermediates: set[str],
+) -> bool:
+    pending = list(collect_connected_nodes(workflow, source_node))
+    visited: set[str] = set()
+
+    while pending:
+        current = pending.pop(0)
+        if current == target_node:
+            return True
+        if current in visited or current not in allowed_intermediates:
+            continue
+        visited.add(current)
+        pending.extend(sorted(collect_connected_nodes(workflow, current) - visited))
+
+    return False
+
+
 def validate_legacy_fields(workflow_path: Path, workflow: dict[str, Any]) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     allowed_by_node = ALLOWED_LEGACY_FIELD_ACCESS.get(workflow_path.name, {})
@@ -179,9 +210,18 @@ def validate_connection_invariants(workflow_path: Path, workflow: dict[str, Any]
     issues: list[ValidationIssue] = []
 
     for source_node, expected_targets in REQUIRED_CONNECTIONS.get(workflow_path.name, {}).items():
-        connected = collect_connected_nodes(workflow, source_node)
-        missing = sorted(expected_targets - connected)
-        for target in missing:
+        allowed_intermediates = ALLOWED_REQUIRED_CONNECTION_INTERMEDIATES.get(workflow_path.name, {}).get(
+            source_node,
+            set(),
+        )
+        for target in sorted(expected_targets):
+            if has_allowed_path_to_target(
+                workflow,
+                source_node,
+                target,
+                allowed_intermediates=allowed_intermediates,
+            ):
+                continue
             issues.append(
                 ValidationIssue(
                     location=f"{workflow_path.name}:{source_node}",
