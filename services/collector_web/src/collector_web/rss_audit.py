@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from .config import Settings
 
@@ -175,6 +176,109 @@ def _primary_score(item: dict[str, Any]) -> int | None:
     return round(normalized_score)
 
 
+_AUDIT_STATUS_RANK = {
+    "failed": 60,
+    "written": 50,
+    "scored": 40,
+    "skipped": 30,
+    "not_scored": 20,
+    "seen": 10,
+    "": 0,
+}
+
+
+def _normalize_url_key(value: str) -> str:
+    text = _as_string(value)
+    if not text:
+        return ""
+    try:
+        parsed = urlsplit(text)
+    except ValueError:
+        return text.rstrip("/").lower()
+    if not parsed.scheme or not parsed.netloc:
+        return text.rstrip("/").lower()
+    path = parsed.path.rstrip("/") or "/"
+    return urlunsplit(
+        (parsed.scheme.lower(), parsed.netloc.lower(), path, parsed.query, "")
+    )
+
+
+def _item_identity_key(item: dict[str, Any]) -> str:
+    original_id = _as_string(item.get("original_id") or item.get("guid"))
+    audit_key = _as_string(item.get("audit_key"))
+    original_id_url = original_id if original_id.startswith(("http://", "https://")) else ""
+    audit_key_url = audit_key if audit_key.startswith(("http://", "https://")) else ""
+    url = _normalize_url_key(
+        _as_string(item.get("url"))
+        or _as_string(item.get("canonical_url"))
+        or _as_string(item.get("link"))
+        or _as_string(item.get("original_url"))
+        or original_id_url
+        or audit_key_url
+    )
+    if url:
+        return f"url:{url}"
+
+    item_id = _as_string(item.get("item_id") or item.get("itemId") or item.get("id"))
+    if item_id:
+        return f"id:{item_id}"
+
+    if original_id:
+        return f"original:{original_id}"
+
+    title = _as_string(item.get("title")).lower()
+    published_at = _as_string(
+        item.get("published_at") or item.get("publishedAt") or item.get("pubDate")
+    )
+    if title and published_at:
+        return f"title:{title}|published:{published_at}"
+    return ""
+
+
+def _item_rank(item: dict[str, Any]) -> tuple[int, int, int, int]:
+    audit_status = _as_string(item.get("audit_status"))
+    return (
+        _AUDIT_STATUS_RANK.get(audit_status, 0),
+        1 if _primary_score(item) is not None else 0,
+        1 if _as_string(item.get("vault_path")) else 0,
+        1 if _as_string(item.get("audit_detail")) else 0,
+    )
+
+
+def _is_blank(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _merge_duplicate_raw_items(
+    left: dict[str, Any], right: dict[str, Any]
+) -> dict[str, Any]:
+    primary, fallback = (
+        (right, left) if _item_rank(right) >= _item_rank(left) else (left, right)
+    )
+    merged = {**fallback, **primary}
+    for key, value in fallback.items():
+        if _is_blank(merged.get(key)) and not _is_blank(value):
+            merged[key] = value
+    return merged
+
+
+def _dedupe_raw_items(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped_items: list[dict[str, Any]] = []
+    index_by_key: dict[str, int] = {}
+    for item in raw_items:
+        key = _item_identity_key(item)
+        if key and key in index_by_key:
+            index = index_by_key[key]
+            deduped_items[index] = _merge_duplicate_raw_items(
+                deduped_items[index], item
+            )
+            continue
+        if key:
+            index_by_key[key] = len(deduped_items)
+        deduped_items.append(item)
+    return deduped_items
+
+
 def _normalize_item(source: dict[str, Any], item: dict[str, Any], index: int) -> dict[str, Any]:
     ai_score = _as_object(item.get("ai_score"))
     score_dimensions = _as_object(item.get("score_dimensions"))
@@ -252,7 +356,11 @@ def _normalize_item(source: dict[str, Any], item: dict[str, Any], index: int) ->
 
 def _normalize_source(source: dict[str, Any]) -> dict[str, Any]:
     raw_items = [item for item in source.get("items", []) if isinstance(item, dict)]
-    items = [_normalize_item(source, item, index + 1) for index, item in enumerate(raw_items)]
+    deduped_raw_items = _dedupe_raw_items(raw_items)
+    items = [
+        _normalize_item(source, item, index + 1)
+        for index, item in enumerate(deduped_raw_items)
+    ]
     rss_status = _as_string(source.get("rss_status")) or "unknown"
     transcript_status = _as_string(source.get("transcript_status")) or "unknown"
 
