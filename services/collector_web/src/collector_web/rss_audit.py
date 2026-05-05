@@ -1,5 +1,8 @@
 import json
+import re
 from datetime import datetime, timezone
+from html import unescape
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -62,6 +65,66 @@ def _as_string_list(value: Any) -> list[str]:
 
 def _as_object(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+class _SummaryTextExtractor(HTMLParser):
+    _BLOCK_TAGS = {
+        "blockquote",
+        "br",
+        "div",
+        "li",
+        "ol",
+        "p",
+        "pre",
+        "section",
+        "tr",
+        "ul",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() in self._BLOCK_TAGS:
+            self._append_separator()
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in self._BLOCK_TAGS:
+            self._append_separator()
+
+    def handle_data(self, data: str) -> None:
+        if data:
+            self._parts.append(data)
+
+    def text(self) -> str:
+        return " ".join("".join(self._parts).split())
+
+    def _append_separator(self) -> None:
+        if self._parts and not self._parts[-1].endswith(" "):
+            self._parts.append(" ")
+
+
+def _summary_preview(value: Any, max_length: int = 320) -> str:
+    raw_summary = _as_string(value)
+    if not raw_summary:
+        return ""
+
+    if "<" in raw_summary and ">" in raw_summary:
+        parser = _SummaryTextExtractor()
+        try:
+            parser.feed(raw_summary)
+            parser.close()
+            text = parser.text()
+        except Exception:
+            text = re.sub(r"<[^>]+>", " ", raw_summary)
+    else:
+        text = raw_summary
+
+    text = " ".join(unescape(text).split())
+    if len(text) <= max_length:
+        return text
+    return f"{text[:max_length].rstrip()}..."
 
 
 def _find_latest_poll_run_file(poll_runs_dir: Path) -> Path | None:
@@ -298,6 +361,7 @@ def _normalize_item(source: dict[str, Any], item: dict[str, Any], index: int) ->
         or _as_string(source.get("source_gate_status"))
         or "not_checked"
     )
+    summary = _as_string(item.get("summary"))
 
     return {
         "index": index,
@@ -342,7 +406,8 @@ def _normalize_item(source: dict[str, Any], item: dict[str, Any], index: int) ->
         "score_dimensions": score_dimensions,
         "category": _as_string(item.get("category")),
         "tags": _as_string_list(item.get("tags")),
-        "summary": _as_string(item.get("summary")),
+        "summary": summary,
+        "summary_preview": _summary_preview(summary),
         "llm_reason": _as_string(item.get("llm_reason")),
         "event_relation": _as_string(item.get("event_relation")),
         "delta_importance": _to_int(item.get("delta_importance")),

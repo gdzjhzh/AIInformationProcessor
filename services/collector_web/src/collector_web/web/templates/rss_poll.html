@@ -157,8 +157,8 @@
                         {{ item.published_at_label or item.published_at or "未知时间" }}
                         {% if item.author %} / {{ item.author }}{% endif %}
                     </p>
-                    {% if item.summary %}
-                    <p class="subscription-meta">{{ item.summary }}</p>
+                    {% if item.summary_preview %}
+                    <p class="subscription-meta rss-item-summary">{{ item.summary_preview }}</p>
                     {% endif %}
                     {% if item.original_url %}
                     <p class="subscription-meta secondary break-all">{{ item.original_url }}</p>

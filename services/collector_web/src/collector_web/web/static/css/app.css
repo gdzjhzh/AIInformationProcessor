@@ -972,6 +972,14 @@ button.text-link-button {
     color: var(--accent-strong);
 }
 
+.rss-item-summary {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    word-break: normal;
+}
+
 .rss-reason,
 .rss-detail,
 .rss-path,

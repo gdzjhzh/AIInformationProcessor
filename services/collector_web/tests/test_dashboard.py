@@ -469,6 +469,7 @@ def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
                                 "vault_write_status": "written",
                                 "vault_path": "00_Inbox/demo.md",
                                 "qdrant_operation": "written",
+                                "summary": '<blockquote cite="https://example.com/source"><p>Hello <em>agent</em> world.</p></blockquote>',
                                 "score": 0.84,
                                 "score_scale": 100,
                                 "keep_score": 84,
@@ -518,6 +519,8 @@ def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
     assert item["llm_status_label"] == "LLM 已跑"
     assert item["skip_layer_label"] == "写入层"
     assert item["primary_score"] == 84
+    assert item["summary"] == '<blockquote cite="https://example.com/source"><p>Hello <em>agent</em> world.</p></blockquote>'
+    assert item["summary_preview"] == "Hello agent world."
     assert item["score_dimensions"]["novelty"] == 17
     assert item["vault_path"] == "00_Inbox/demo.md"
 
@@ -565,6 +568,7 @@ def test_rss_poll_page_shows_audit_table(monkeypatch, tmp_path):
                                 "audit_status": "written",
                                 "audit_reason": "vault_written",
                                 "vault_path": "00_Inbox/agent-skills.md",
+                                "summary": '<blockquote cite="https://example.com/raw"><p>Visible <em>summary</em> without tags.</p></blockquote>',
                                 "keep_score": 88,
                                 "score_dimensions": {"novelty": 18},
                             },
@@ -599,6 +603,8 @@ def test_rss_poll_page_shows_audit_table(monkeypatch, tmp_path):
     assert "data-rss-item-row" in response.text
     assert "Agent Skills" in response.text
     assert 'href="https://example.com/agent-skills"' in response.text
+    assert "Visible summary without tags." in response.text
+    assert "&lt;blockquote" not in response.text
     assert "00_Inbox/agent-skills.md" in response.text
     assert "Holiday Video Promo" in response.text
     assert "LLM 已跑" in response.text
