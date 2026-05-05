@@ -105,11 +105,23 @@ export function HeroStage({
               </div>
             </div>
             <div className="grid gap-3 py-4 md:grid-cols-3">
-              <PreviewTile icon={Boxes} label="Sources" value={subscriptionCount} />
-              <PreviewTile icon={ShieldCheck} label="Active" value={activeCount} />
-              <PreviewTile icon={GitBranch} label="Backend" value={apiMode} />
+              <PreviewTile
+                icon={Boxes}
+                label="Total tokens"
+                value={formatTokenNumber(tokenUsage.totalTokens)}
+              />
+              <PreviewTile
+                icon={ShieldCheck}
+                label="Input tokens"
+                value={formatTokenNumber(tokenUsage.inputTokens)}
+              />
+              <PreviewTile
+                icon={GitBranch}
+                label="Output tokens"
+                value={formatTokenNumber(tokenUsage.outputTokens)}
+              />
             </div>
-            <TokenUsagePanel tokenUsage={tokenUsage} />
+            <TokenUsageChart tokenUsage={tokenUsage} />
           </div>
         </motion.div>
       </div>
@@ -150,7 +162,7 @@ function PreviewTile({
   );
 }
 
-function TokenUsagePanel({ tokenUsage }: { tokenUsage: TokenUsage }) {
+function TokenUsageChart({ tokenUsage }: { tokenUsage: TokenUsage }) {
   const total = Math.max(tokenUsage.totalTokens, 0);
   const inputPercent = total > 0 ? Math.round((tokenUsage.inputTokens / total) * 100) : 0;
   const outputPercent = total > 0 ? Math.round((tokenUsage.outputTokens / total) * 100) : 0;
@@ -161,47 +173,40 @@ function TokenUsagePanel({ tokenUsage }: { tokenUsage: TokenUsage }) {
   return (
     <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
       <div className="rounded-lg border border-emerald-300/15 bg-emerald-300/[0.055] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
-              Token Usage
-            </p>
-            <strong className="mt-2 block font-mono text-3xl font-semibold tracking-normal text-white">
-              {formatTokenNumber(tokenUsage.totalTokens)}
-            </strong>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
+            Usage split
+          </p>
           <span className="rounded border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-xs font-semibold text-emerald-100">
             {tokenUsage.hasData ? "live" : "pending"}
           </span>
         </div>
-        <p className="mt-3 text-sm leading-6 text-slate-400">
-          总 token 使用量。数据来自最新 RSS 主链 poll_runs 摘要。
-        </p>
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-          <span
-            className="block h-full rounded-full bg-gradient-to-r from-emerald-300 to-cyan-300"
-            style={{ width: `${Math.min(inputPercent + outputPercent, 100)}%` }}
-          />
+        <div className="mt-4 space-y-3">
+          <ChartTrack label="Input" value={tokenUsage.inputTokens} percent={inputPercent} />
+          <ChartTrack label="Output" value={tokenUsage.outputTokens} percent={outputPercent} />
+          <ChartTrack label="Total" value={tokenUsage.totalTokens} percent={total > 0 ? 100 : 0} />
         </div>
       </div>
 
-      <div className="grid gap-3">
-        <TokenSplitRow label="输入 token" value={tokenUsage.inputTokens} percent={inputPercent} />
-        <TokenSplitRow label="输出 token" value={tokenUsage.outputTokens} percent={outputPercent} />
-        <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
-          <div className="flex items-center justify-between gap-3 text-xs text-slate-400">
-            <span>{statusText}</span>
-            {tokenUsage.usageMissing > 0 ? (
-              <span>{formatTokenNumber(tokenUsage.usageMissing)} 次缺失 usage</span>
-            ) : null}
-          </div>
+      <div className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+        <div className="flex h-24 items-end gap-2">
+          <ChartBar percent={inputPercent} className="bg-sky-400/60" fallbackHeight={34} />
+          <ChartBar percent={outputPercent} className="bg-emerald-300/75" fallbackHeight={54} />
+          <ChartBar percent={total > 0 ? 100 : 0} className="bg-amber-300/65" fallbackHeight={28} />
+          <ChartBar percent={Math.min(inputPercent + outputPercent, 100)} className="bg-slate-400/55" fallbackHeight={44} />
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-400">
+          <span>{statusText}</span>
+          {tokenUsage.usageMissing > 0 ? (
+            <span>{formatTokenNumber(tokenUsage.usageMissing)} 次缺失 usage</span>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-function TokenSplitRow({
+function ChartTrack({
   label,
   value,
   percent,
@@ -211,21 +216,33 @@ function TokenSplitRow({
   percent: number;
 }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-slate-300">{label}</span>
-        <strong className="font-mono text-xl font-semibold tracking-normal text-white">
-          {formatTokenNumber(value)}
-        </strong>
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+        <span className="font-semibold text-slate-300">{label}</span>
+        <span className="font-mono text-slate-400">{formatTokenNumber(value)}</span>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-        <span
-          className="block h-full rounded-full bg-cyan-300/80"
-          style={{ width: `${Math.min(Math.max(percent, 0), 100)}%` }}
-        />
+      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <span className="block h-full rounded-full bg-cyan-300/80" style={{ width: `${clampPercent(percent)}%` }} />
       </div>
     </div>
   );
+}
+
+function ChartBar({
+  percent,
+  className,
+  fallbackHeight,
+}: {
+  percent: number;
+  className: string;
+  fallbackHeight: number;
+}) {
+  const height = percent > 0 ? Math.max(18, clampPercent(percent)) : fallbackHeight;
+  return <span className={`flex-1 rounded ${className}`} style={{ height: `${height}%` }} />;
+}
+
+function clampPercent(value: number) {
+  return Math.min(Math.max(value, 0), 100);
 }
 
 function formatTokenNumber(value: number) {
