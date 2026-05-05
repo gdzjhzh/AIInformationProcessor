@@ -5,6 +5,7 @@ import type { ElementType } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Boxes, GitBranch, ShieldCheck } from "lucide-react";
 
+import { GooeyText } from "@/components/gooey-text";
 import { SparklesCore } from "@/components/sparkles-core";
 
 export function HeroStage({
@@ -52,7 +53,15 @@ export function HeroStage({
             </span>
           </div>
           <h2 className="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-normal text-white">
-            用现代组件方式重画 Collector Web 控制台
+            <span className="block">用现代组件方式重画</span>
+            <span className="sr-only"> Collector Web 控制台</span>
+            <GooeyText
+              texts={["Collector Web 控制台", "Collector Web 审计台", "Collector Web 驾驶舱"]}
+              morphTime={0.55}
+              cooldownTime={2.1}
+              className="mt-1 h-[3.4rem] sm:h-[4rem]"
+              textClassName="text-left text-4xl font-semibold leading-tight text-cyan-100 drop-shadow-[0_0_18px_rgba(56,189,248,0.22)]"
+            />
           </h2>
           <p className="mt-4 max-w-2xl text-base leading-7 text-stone-300">
             当前版本只读取已有 FastAPI API，不执行提交、重跑、切换模型等操作。
