@@ -415,6 +415,107 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
     assert manual_submit_check["affects_overall"] is False
 
 
+def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    settings = get_settings()
+
+    poll_run_dir = settings.poll_runs_dir / "2026" / "05"
+    poll_run_dir.mkdir(parents=True, exist_ok=True)
+    poll_run_path = poll_run_dir / "execution-11863_01_rss_to_obsidian_raw.json"
+    poll_run_path.write_text(
+        json.dumps(
+            {
+                "execution_id": "11863",
+                "workflow": "01 RSS to Obsidian Raw Inbox",
+                "workflow_id": "D3a7Kp9Lm4Qx2Rst",
+                "run_started_at": "2026-05-05T01:25:14+00:00",
+                "run_finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "source_count": 1,
+                "success_source_count": 1,
+                "failed_source_count": 0,
+                "new_source_count": 1,
+                "transcript_failed_source_count": 0,
+                "items_seen": 1,
+                "items_selected_for_processing": 1,
+                "items_written": 1,
+                "poll_runs_version": 5,
+                "sources": [
+                    {
+                        "source_name": "Hacker News",
+                        "source_type": "rss",
+                        "feed_url": "http://rsshub:1200/hackernews?limit=5",
+                        "rss_status": "success",
+                        "transcript_status": "not_requested",
+                        "source_gate_status": "changed",
+                        "item_count": 1,
+                        "new_item_count": 1,
+                        "wrote_count": 1,
+                        "qdrant_commit_count": 1,
+                        "dedupe_actions": ["full_push"],
+                        "vault_write_statuses": ["written"],
+                        "wrote_paths": ["00_Inbox/demo.md"],
+                        "items": [
+                            {
+                                "title": "How OpenAI delivers low-latency voice AI at scale",
+                                "url": "https://openai.com/index/delivering-low-latency-voice-ai-at-scale/",
+                                "published_at": "2026-05-05T01:00:00+00:00",
+                                "item_id": "item-1",
+                                "audit_status": "written",
+                                "audit_reason": "vault_written",
+                                "dedupe_action": "full_push",
+                                "vault_write_status": "written",
+                                "vault_path": "00_Inbox/demo.md",
+                                "qdrant_operation": "written",
+                                "score": 0.84,
+                                "score_scale": 100,
+                                "keep_score": 84,
+                                "notify_score": 70,
+                                "reference_score": 82,
+                                "action_score": 15,
+                                "confidence": 0.91,
+                                "decision_hint": "keep_full",
+                                "score_dimensions": {
+                                    "personal_relevance": 22,
+                                    "information_density": 18,
+                                    "novelty": 17,
+                                    "actionability": 9,
+                                    "long_term_value": 14,
+                                    "source_quality": 5,
+                                    "penalty": -1,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/rss-poll/latest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["schema_has_item_details"] is True
+    assert payload["poll"]["execution_id"] == "11863"
+    assert payload["poll"]["poll_runs_version"] == 5
+    assert payload["item_count"] == 1
+    assert payload["written_item_count"] == 1
+    assert payload["scored_item_count"] == 1
+    assert payload["sources"][0]["source_name"] == "Hacker News"
+    item = payload["items"][0]
+    assert item["title"] == "How OpenAI delivers low-latency voice AI at scale"
+    assert item["original_url"].startswith("https://openai.com/")
+    assert item["audit_status_label"] == "已写入"
+    assert item["audit_reason_label"] == "已写入 Obsidian"
+    assert item["primary_score"] == 84
+    assert item["score_dimensions"]["novelty"] == 17
+    assert item["vault_path"] == "00_Inbox/demo.md"
+
+
 def test_status_api_shows_n8n_execution_status_separately(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     settings = get_settings()

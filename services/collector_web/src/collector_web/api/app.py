@@ -29,6 +29,7 @@ from ..repository import (
     get_manual_submission,
     list_recent_manual_submissions,
 )
+from ..rss_audit import get_latest_rss_poll_audit
 from ..rss_poll import RssPollRerunError, trigger_rss_poll_rerun
 from ..status import get_service_status
 
@@ -104,6 +105,10 @@ def create_app() -> FastAPI:
     @app.get("/api/status")
     async def status_api() -> dict[str, object]:
         return get_service_status(settings)
+
+    @app.get("/api/rss-poll/latest")
+    async def rss_poll_latest_api() -> dict[str, Any]:
+        return get_latest_rss_poll_audit(settings)
 
     @app.post("/api/rss-poll/rerun", status_code=status.HTTP_202_ACCEPTED)
     async def rss_poll_rerun_api() -> dict[str, Any]:
