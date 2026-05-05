@@ -516,6 +516,72 @@ def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
     assert item["vault_path"] == "00_Inbox/demo.md"
 
 
+def test_rss_poll_page_shows_audit_table(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    settings = get_settings()
+
+    poll_run_dir = settings.poll_runs_dir / "2026" / "05"
+    poll_run_dir.mkdir(parents=True, exist_ok=True)
+    poll_run_path = poll_run_dir / "execution-11863_01_rss_to_obsidian_raw.json"
+    poll_run_path.write_text(
+        json.dumps(
+            {
+                "execution_id": "11863",
+                "workflow": "01 RSS to Obsidian Raw Inbox",
+                "workflow_id": "D3a7Kp9Lm4Qx2Rst",
+                "run_started_at": "2026-05-05T01:25:14+00:00",
+                "run_finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "source_count": 1,
+                "success_source_count": 1,
+                "failed_source_count": 0,
+                "items_seen": 1,
+                "items_selected_for_processing": 1,
+                "items_written": 1,
+                "poll_runs_version": 5,
+                "sources": [
+                    {
+                        "source_name": "Hacker News",
+                        "source_type": "rss",
+                        "feed_url": "http://rsshub:1200/hackernews?limit=5",
+                        "rss_status": "success",
+                        "transcript_status": "not_requested",
+                        "item_count": 1,
+                        "new_item_count": 1,
+                        "wrote_count": 1,
+                        "items": [
+                            {
+                                "title": "Agent Skills",
+                                "url": "https://example.com/agent-skills",
+                                "audit_status": "written",
+                                "audit_reason": "vault_written",
+                                "vault_path": "00_Inbox/agent-skills.md",
+                                "keep_score": 88,
+                                "score_dimensions": {"novelty": 18},
+                            }
+                        ],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with TestClient(create_app()) as client:
+        response = client.get("/rss-poll")
+
+    assert response.status_code == 200
+    assert "RSS 审计" in response.text
+    assert 'href="/rss-poll"' in response.text
+    assert "data-rss-search" in response.text
+    assert "data-rss-item-row" in response.text
+    assert "Agent Skills" in response.text
+    assert 'href="https://example.com/agent-skills"' in response.text
+    assert "00_Inbox/agent-skills.md" in response.text
+    assert "88" in response.text
+    assert "/static/js/rss_poll.js" in response.text
+
+
 def test_status_api_shows_n8n_execution_status_separately(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     settings = get_settings()

@@ -289,6 +289,17 @@ def create_app() -> FastAPI:
             {"request": request},
         )
 
+    @app.get("/rss-poll", response_class=HTMLResponse)
+    async def rss_poll_page(request: Request) -> HTMLResponse:
+        audit = get_latest_rss_poll_audit(settings)
+        return templates.TemplateResponse(
+            "rss_poll.html",
+            {
+                "request": request,
+                "audit": audit,
+            },
+        )
+
     @app.get("/status", response_class=HTMLResponse)
     async def status_page(request: Request) -> HTMLResponse:
         context = {

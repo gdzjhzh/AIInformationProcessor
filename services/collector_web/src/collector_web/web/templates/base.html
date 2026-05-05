@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Collector Web{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=20260502-status">
+    <link rel="stylesheet" href="/static/css/app.css?v=20260505-rss-audit">
 </head>
 <body>
     <div class="page-shell">
@@ -31,6 +31,12 @@
                     class="{% if request.url.path == '/calibration-compare' %}is-active{% endif %}"
                 >
                     校对对比
+                </a>
+                <a
+                    href="/rss-poll"
+                    class="{% if request.url.path == '/rss-poll' %}is-active{% endif %}"
+                >
+                    RSS 审计
                 </a>
                 <a
                     href="/status"

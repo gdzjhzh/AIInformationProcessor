@@ -894,6 +894,145 @@ button.text-link-button {
     gap: 8px;
 }
 
+.rss-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.3fr) repeat(3, minmax(150px, 0.7fr));
+    gap: 12px;
+    align-items: end;
+}
+
+.rss-filter-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.rss-source-section {
+    scroll-margin-top: 96px;
+}
+
+.rss-item-table {
+    display: grid;
+    gap: 8px;
+}
+
+.rss-item-row {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(150px, 0.42fr) 112px minmax(180px, 0.58fr);
+    gap: 14px;
+    align-items: start;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-soft);
+}
+
+.rss-item-head {
+    min-height: 36px;
+    padding-block: 8px;
+    background: var(--surface-muted);
+    color: var(--muted-strong);
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.rss-item-main,
+.rss-item-status,
+.rss-score-box,
+.rss-write-box {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.rss-item-title {
+    color: var(--ink);
+    font-size: 0.98rem;
+    font-weight: 800;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.rss-item-title:hover {
+    color: var(--accent-strong);
+}
+
+.rss-reason,
+.rss-detail,
+.rss-path,
+.muted-value {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.rss-reason {
+    color: var(--ink);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.rss-detail,
+.rss-path {
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.rss-score-box {
+    justify-items: start;
+}
+
+.rss-score-box strong {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 1.48rem;
+    line-height: 1;
+}
+
+.rss-score-box > span,
+.muted-value {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.rss-score-detail {
+    width: 100%;
+    color: var(--muted-strong);
+    font-size: 0.82rem;
+}
+
+.rss-score-detail summary {
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.rss-score-detail dl {
+    display: grid;
+    gap: 4px;
+    margin: 8px 0 0;
+}
+
+.rss-score-detail dl div {
+    display: grid;
+    grid-template-columns: minmax(52px, 1fr) auto;
+    gap: 8px;
+}
+
+.rss-score-detail dt,
+.rss-score-detail dd {
+    margin: 0;
+}
+
+.rss-score-detail dd {
+    color: var(--ink);
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+}
+
 .empty-state {
     padding: 16px;
     border: 1px dashed var(--line-strong);
@@ -939,9 +1078,15 @@ button.text-link-button {
     .collection-header,
     .history-item,
     .subscription-item,
-    .source-diagnostic-item {
+    .source-diagnostic-item,
+    .rss-filter-grid,
+    .rss-item-row {
         display: grid;
         grid-template-columns: 1fr;
+    }
+
+    .rss-item-head {
+        display: none;
     }
 
     .submit-card,

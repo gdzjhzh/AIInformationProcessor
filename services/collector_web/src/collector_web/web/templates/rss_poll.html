@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}RSS 审计 - Collector Web{% endblock %}
+
+{% block content %}
+{% set poll = audit.poll or {} %}
+<section class="hero status-hero">
+    <div class="hero-copy">
+        <p class="eyebrow">RSS 审计</p>
+        <h2>本轮 RSS 明细</h2>
+        <p class="hero-text">
+            {{ poll.workflow or "01 RSS to Obsidian Raw Inbox" }} / execution {{ poll.execution_id or "unknown" }}
+        </p>
+        <div class="hero-actions">
+            <a class="text-link-button" href="/api/rss-poll/latest" target="_blank" rel="noopener">查看 API</a>
+            <a class="text-link-button" href="/status">服务状态</a>
+        </div>
+    </div>
+    <div class="metric-grid">
+        <article class="metric-card">
+            <span class="metric-label">结束时间</span>
+            <strong class="metric-value">{{ poll.run_finished_at_label or "暂无" }}</strong>
+            <p class="history-text">距现在约 {{ poll.age_minutes if poll.age_minutes is not none else "?" }} 分钟</p>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">订阅源</span>
+            <strong class="metric-value">{{ poll.success_source_count or 0 }} / {{ poll.source_count or 0 }}</strong>
+            <p class="history-text">失败 {{ poll.failed_source_count or 0 }} 个</p>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">本轮 item</span>
+            <strong class="metric-value">{{ poll.items_seen or 0 }}</strong>
+            <p class="history-text">进入处理 {{ poll.items_selected_for_processing or 0 }} 条</p>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">审计明细</span>
+            <strong class="metric-value">{{ audit.item_count or 0 }}</strong>
+            <p class="history-text">写入 {{ audit.written_item_count or 0 }} 条，评分 {{ audit.scored_item_count or 0 }} 条</p>
+        </article>
+    </div>
+</section>
+
+<section class="collection-list">
+    <article class="collection-card">
+        <header class="collection-header">
+            <div>
+                <div class="collection-title-row">
+                    <h3>筛选</h3>
+                    <span class="status-badge muted">poll_runs v{{ poll.poll_runs_version or 0 }}</span>
+                </div>
+                <p class="collection-meta">{{ audit.latest_file or "暂无 poll_runs 文件" }}</p>
+            </div>
+            <div class="collection-stats">
+                <span>明细 {{ audit.item_count or 0 }} 条</span>
+                <span>失败 item {{ audit.failed_item_count or 0 }} 条</span>
+            </div>
+        </header>
+        <div class="rss-filter-grid">
+            <label class="rss-filter-field">
+                <span class="submit-label">搜索</span>
+                <input class="submit-input" type="search" placeholder="标题、来源、链接" data-rss-search>
+            </label>
+            <label class="rss-filter-field">
+                <span class="submit-label">来源</span>
+                <select class="submit-input" data-rss-source-filter>
+                    <option value="all">全部来源</option>
+                    {% for source in audit.sources %}
+                    <option value="{{ source.source_name }}">{{ source.source_name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="rss-filter-field">
+                <span class="submit-label">状态</span>
+                <select class="submit-input" data-rss-status-filter>
+                    <option value="all">全部状态</option>
+                    <option value="written">已写入</option>
+                    <option value="scored">已评分</option>
+                    <option value="skipped">未写入</option>
+                    <option value="not_scored">未评分</option>
+                    <option value="failed">失败</option>
+                </select>
+            </label>
+            <label class="rss-filter-field">
+                <span class="submit-label">评分</span>
+                <select class="submit-input" data-rss-score-filter>
+                    <option value="all">全部</option>
+                    <option value="scored">有评分</option>
+                    <option value="unscored">无评分</option>
+                </select>
+            </label>
+        </div>
+    </article>
+</section>
+
+{% if not audit.ok %}
+<section class="collection-list">
+    <article class="collection-card">
+        <div class="empty-state">
+            <p>{{ audit.error }}</p>
+        </div>
+    </article>
+</section>
+{% else %}
+<section class="collection-list" data-rss-audit-list>
+    {% for source in audit.sources %}
+    {% set source_items = source["items"] %}
+    <article
+        class="collection-card rss-source-section"
+        data-rss-source-section
+        data-source-name="{{ source.source_name }}"
+    >
+        <header class="collection-header">
+            <div>
+                <div class="collection-title-row">
+                    <h3>{{ source.source_name }}</h3>
+                    <span class="platform-badge">{{ source.source_type }}</span>
+                    <span class="status-badge tone-{% if source.rss_status == 'error' %}error{% else %}success{% endif %}">
+                        RSS {{ source.rss_status_label }}
+                    </span>
+                    <span class="status-badge muted">Transcript {{ source.transcript_status_label }}</span>
+                </div>
+                <p class="collection-meta">
+                    <a href="{{ source.feed_url }}" target="_blank" rel="noopener">{{ source.feed_url }}</a>
+                </p>
+                {% if source.rss_error or source.transcript_error %}
+                <p class="status-line is-error">{{ source.rss_error or source.transcript_error }}</p>
+                {% endif %}
+            </div>
+            <div class="collection-stats">
+                <span>看到 {{ source.item_count }} 条</span>
+                <span>新内容 {{ source.new_item_count }} 条</span>
+                <span>写入 {{ source.wrote_count }} 条</span>
+                <span>审计 {{ source.audit_item_count }} 条</span>
+            </div>
+        </header>
+
+        {% if source_items %}
+        <div class="rss-item-table">
+            <div class="rss-item-row rss-item-head">
+                <span>标题</span>
+                <span>状态</span>
+                <span>评分</span>
+                <span>写入</span>
+            </div>
+            {% for item in source_items %}
+            <article
+                class="rss-item-row"
+                data-rss-item-row
+                data-source="{{ source.source_name }}"
+                data-status="{{ item.audit_status }}"
+                data-score-state="{% if item.has_score %}scored{% else %}unscored{% endif %}"
+                data-search="{{ (item.title ~ ' ' ~ source.source_name ~ ' ' ~ item.original_url ~ ' ' ~ item.vault_path) | lower }}"
+            >
+                <div class="rss-item-main">
+                    {% if item.original_url %}
+                    <a class="rss-item-title" href="{{ item.original_url }}" target="_blank" rel="noopener">{{ item.title }}</a>
+                    {% else %}
+                    <strong class="rss-item-title">{{ item.title }}</strong>
+                    {% endif %}
+                    <p class="subscription-meta secondary">
+                        {{ item.published_at_label or item.published_at or "未知时间" }}
+                        {% if item.author %} / {{ item.author }}{% endif %}
+                    </p>
+                    {% if item.summary %}
+                    <p class="subscription-meta">{{ item.summary }}</p>
+                    {% endif %}
+                    {% if item.original_url %}
+                    <p class="subscription-meta secondary break-all">{{ item.original_url }}</p>
+                    {% endif %}
+                </div>
+                <div class="rss-item-status">
+                    <span class="status-badge tone-{% if item.audit_status == 'failed' %}error{% elif item.audit_status == 'written' %}success{% elif item.audit_status == 'skipped' %}warning{% else %}muted{% endif %}">
+                        {{ item.audit_status_label }}
+                    </span>
+                    <span class="rss-reason">{{ item.audit_reason_label }}</span>
+                    {% if item.audit_detail %}
+                    <span class="rss-detail">{{ item.audit_detail }}</span>
+                    {% endif %}
+                </div>
+                <div class="rss-score-box">
+                    {% if item.primary_score is not none %}
+                    <strong>{{ item.primary_score }}</strong>
+                    <span>keep</span>
+                    {% else %}
+                    <strong class="muted-value">-</strong>
+                    <span>未评分</span>
+                    {% endif %}
+                    <details class="rss-score-detail">
+                        <summary>维度</summary>
+                        <dl>
+                            <div><dt>相关</dt><dd>{{ item.score_dimensions.get("personal_relevance", "-") }}</dd></div>
+                            <div><dt>密度</dt><dd>{{ item.score_dimensions.get("information_density", "-") }}</dd></div>
+                            <div><dt>新颖</dt><dd>{{ item.score_dimensions.get("novelty", "-") }}</dd></div>
+                            <div><dt>行动</dt><dd>{{ item.score_dimensions.get("actionability", "-") }}</dd></div>
+                            <div><dt>长期</dt><dd>{{ item.score_dimensions.get("long_term_value", "-") }}</dd></div>
+                            <div><dt>来源</dt><dd>{{ item.score_dimensions.get("source_quality", "-") }}</dd></div>
+                            <div><dt>扣分</dt><dd>{{ item.score_dimensions.get("penalty", "-") }}</dd></div>
+                        </dl>
+                    </details>
+                </div>
+                <div class="rss-write-box">
+                    {% if item.vault_path %}
+                    <span class="rss-path">{{ item.vault_path }}</span>
+                    {% else %}
+                    <span class="muted-value">未写入</span>
+                    {% endif %}
+                    {% if item.dedupe_action %}
+                    <span class="rss-detail">dedupe: {{ item.dedupe_action }}</span>
+                    {% endif %}
+                    {% if item.qdrant_operation %}
+                    <span class="rss-detail">qdrant: {{ item.qdrant_operation }}</span>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            {% if source.rss_status == "error" %}
+            <p>本源 RSS 拉取失败，本轮没有 item 明细。</p>
+            {% elif not audit.schema_has_item_details %}
+            <p>这份 poll_runs 是旧 schema，尚未包含逐 item 明细。</p>
+            {% else %}
+            <p>本源本轮没有逐 item 明细。</p>
+            {% endif %}
+            {% if source.sample_titles %}
+            <p>{{ source.sample_titles | join(" / ") }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </article>
+    {% endfor %}
+    <article class="collection-card" data-rss-empty-filter hidden>
+        <div class="empty-state">
+            <p>没有符合当前筛选条件的 item。</p>
+        </div>
+    </article>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/rss_poll.js?v=20260505-audit" defer></script>
+{% endblock %}
