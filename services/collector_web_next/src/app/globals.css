@@ -18,6 +18,11 @@ body {
   font-family: var(--font-geist-sans), "Segoe UI", "Noto Sans SC", sans-serif;
 }
 
+html {
+  min-height: 100%;
+  position: relative;
+}
+
 ::selection {
   background: #34d399;
   color: #04120d;
