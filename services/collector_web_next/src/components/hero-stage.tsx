@@ -46,7 +46,7 @@ export function HeroStage({
   const translateY = useTransform(scrollYProgress, [0, 1], [0, -42]);
 
   return (
-    <section ref={containerRef} className="relative grid gap-5 lg:grid-cols-[0.86fr_1.14fr]">
+    <section ref={containerRef} className="relative grid gap-5">
       <motion.div
         style={{ y: translateY }}
         className="relative overflow-hidden rounded-lg border border-emerald-300/20 bg-slate-950/68 p-6 text-white shadow-2xl shadow-emerald-950/20 backdrop-blur-sm"
