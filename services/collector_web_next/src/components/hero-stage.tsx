@@ -183,50 +183,23 @@ function TokenUsageChart({
       ? history
       : [{ date: "latest", label: "Today", totalTokens: tokenUsage.totalTokens }];
   const maxTotal = Math.max(...points.map((point) => point.totalTokens), 0);
-  const statusText = tokenUsage.hasData
-    ? `本轮 ${formatTokenNumber(tokenUsage.calls)} 次 LLM 调用`
-    : "等待新版轮询记录 token";
 
   return (
-    <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
-      <div className="rounded-lg border border-emerald-300/15 bg-emerald-300/[0.055] p-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
-            Daily total tokens
-          </p>
-          <span className="rounded border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-xs font-semibold text-emerald-100">
-            {tokenUsage.hasData ? "live" : "pending"}
-          </span>
-        </div>
-        <div className="mt-4">
-          <TokenLineChart points={points} maxTotal={maxTotal} />
-        </div>
+    <div className="rounded-lg border border-emerald-300/15 bg-emerald-300/[0.055] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
+          Daily total tokens
+        </p>
+        <span className="rounded border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-xs font-semibold text-emerald-100">
+          {tokenUsage.hasData ? "live" : "pending"}
+        </span>
       </div>
-
-      <div className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
-        <div className="flex h-full min-h-32 flex-col justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Y Axis
-            </p>
-            <strong className="mt-2 block font-mono text-2xl font-semibold tracking-normal text-white">
-              {formatTokenNumber(maxTotal)}
-            </strong>
-            <p className="mt-2 text-sm leading-6 text-slate-400">纵坐标为每天总 token。</p>
-          </div>
-          <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              X Axis
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">横坐标为 poll_runs 日期。</p>
-          </div>
-        </div>
-        <div className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-400">
-          <span>{statusText}</span>
-          {tokenUsage.usageMissing > 0 ? (
-            <span>{formatTokenNumber(tokenUsage.usageMissing)} 次缺失 usage</span>
-          ) : null}
-        </div>
+      <div className="mt-4">
+        <TokenLineChart points={points} maxTotal={maxTotal} />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400">
+        <span>Days</span>
+        <span className="font-mono">Total token</span>
       </div>
     </div>
   );
@@ -239,17 +212,21 @@ function TokenLineChart({
   points: TokenHistoryPoint[];
   maxTotal: number;
 }) {
-  const chartWidth = 360;
-  const chartHeight = 142;
-  const paddingX = 20;
-  const paddingTop = 16;
-  const paddingBottom = 28;
-  const plotWidth = chartWidth - paddingX * 2;
+  const chartWidth = 420;
+  const chartHeight = 172;
+  const paddingLeft = 52;
+  const paddingRight = 18;
+  const paddingTop = 18;
+  const paddingBottom = 34;
+  const plotWidth = chartWidth - paddingLeft - paddingRight;
   const plotHeight = chartHeight - paddingTop - paddingBottom;
   const denominator = Math.max(maxTotal, 1);
+  const yTicks = maxTotal > 0 ? [maxTotal, Math.round(maxTotal / 2), 0] : [0];
   const coordinates = points.map((point, index) => {
     const x =
-      points.length <= 1 ? chartWidth / 2 : paddingX + (plotWidth * index) / (points.length - 1);
+      points.length <= 1
+        ? paddingLeft + plotWidth / 2
+        : paddingLeft + (plotWidth * index) / (points.length - 1);
     const y = paddingTop + plotHeight - (Math.max(point.totalTokens, 0) / denominator) * plotHeight;
     return { ...point, x, y };
   });
@@ -262,69 +239,96 @@ function TokenLineChart({
       : "";
 
   return (
-    <div>
-      <svg
-        className="h-36 w-full overflow-visible"
-        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-        role="img"
-        aria-label="Daily total token line chart"
-      >
-        <line
-          x1={paddingX}
-          x2={chartWidth - paddingX}
-          y1={paddingTop + plotHeight}
-          y2={paddingTop + plotHeight}
-          stroke="rgba(148,163,184,0.25)"
-          strokeWidth="1"
-        />
-        <line
-          x1={paddingX}
-          x2={chartWidth - paddingX}
-          y1={paddingTop}
-          y2={paddingTop}
-          stroke="rgba(148,163,184,0.14)"
-          strokeWidth="1"
-        />
-        {areaPath ? <path d={areaPath} fill="rgba(45,212,191,0.12)" /> : null}
-        {linePath ? (
-          <path
-            d={linePath}
-            fill="none"
-            stroke="rgb(94,234,212)"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="3"
-          />
-        ) : null}
-        {coordinates.map((point) => (
-          <g key={`${point.date}-${point.x}`}>
-            <circle cx={point.x} cy={point.y} r="4" fill="rgb(94,234,212)" />
-            <circle cx={point.x} cy={point.y} r="7" fill="rgba(94,234,212,0.16)" />
-          </g>
-        ))}
-        {coordinates.map((point, index) => {
-          const shouldShow = index === 0 || index === coordinates.length - 1 || coordinates.length <= 6;
-          return shouldShow ? (
+    <svg
+      className="h-44 w-full overflow-visible"
+      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+      role="img"
+      aria-label="Daily total token line chart"
+    >
+      <line
+        x1={paddingLeft}
+        x2={paddingLeft}
+        y1={paddingTop}
+        y2={paddingTop + plotHeight}
+        stroke="rgba(148,163,184,0.34)"
+        strokeWidth="1"
+      />
+      <line
+        x1={paddingLeft}
+        x2={chartWidth - paddingRight}
+        y1={paddingTop + plotHeight}
+        y2={paddingTop + plotHeight}
+        stroke="rgba(148,163,184,0.34)"
+        strokeWidth="1"
+      />
+      {yTicks.map((tick) => {
+        const y = paddingTop + plotHeight - (tick / denominator) * plotHeight;
+        return (
+          <g key={`y-${tick}`}>
+            <line
+              x1={paddingLeft}
+              x2={chartWidth - paddingRight}
+              y1={y}
+              y2={y}
+              stroke="rgba(148,163,184,0.13)"
+              strokeWidth="1"
+            />
             <text
-              key={`${point.date}-label`}
-              x={point.x}
-              y={chartHeight - 6}
+              x={paddingLeft - 10}
+              y={y + 4}
               fill="rgb(148,163,184)"
               fontSize="10"
-              textAnchor="middle"
+              textAnchor="end"
             >
-              {point.label}
+              {formatCompactNumber(tick)}
             </text>
-          ) : null;
-        })}
-      </svg>
-      <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400">
-        <span>{points[0]?.label ?? "Today"}</span>
-        <span className="font-mono">{formatTokenNumber(points[points.length - 1]?.totalTokens ?? 0)}</span>
-        <span>{points[points.length - 1]?.label ?? "Today"}</span>
-      </div>
-    </div>
+          </g>
+        );
+      })}
+      {areaPath ? <path d={areaPath} fill="rgba(45,212,191,0.12)" /> : null}
+      {linePath ? (
+        <path
+          d={linePath}
+          fill="none"
+          stroke="rgb(94,234,212)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+        />
+      ) : null}
+      {coordinates.map((point) => (
+        <g key={`${point.date}-${point.x}`}>
+          <circle cx={point.x} cy={point.y} r="4" fill="rgb(94,234,212)" />
+          <circle cx={point.x} cy={point.y} r="7" fill="rgba(94,234,212,0.16)" />
+        </g>
+      ))}
+      {coordinates.map((point, index) => {
+        const shouldShow = index === 0 || index === coordinates.length - 1 || coordinates.length <= 6;
+        return shouldShow ? (
+          <text
+            key={`${point.date}-label`}
+            x={point.x}
+            y={chartHeight - 9}
+            fill="rgb(148,163,184)"
+            fontSize="10"
+            textAnchor="middle"
+          >
+            {point.label}
+          </text>
+        ) : null;
+      })}
+    </svg>
   );
+}
+
+function formatCompactNumber(value: number) {
+  if (value >= 1000000) {
+    return `${Math.round(value / 100000) / 10}M`;
+  }
+  if (value >= 1000) {
+    return `${Math.round(value / 100) / 10}K`;
+  }
+  return formatTokenNumber(value);
 }
 
 function formatTokenNumber(value: number) {
