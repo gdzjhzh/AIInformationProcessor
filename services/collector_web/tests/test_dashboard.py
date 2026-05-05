@@ -63,7 +63,7 @@ def _prepare_env(monkeypatch, tmp_path, rss_source_urls_json=RSS_SOURCE_URLS_JSO
     poll_runs_dir.mkdir(parents=True, exist_ok=True)
     mainline_env_path.write_text(
         "LLM_MODEL=deepseek-v4-flash\n"
-        "LLM_REASONING_EFFORT=high\n"
+        "LLM_REASONING_EFFORT=max\n"
         "LLM_THINKING_TYPE=enabled\n",
         encoding="utf-8",
     )
@@ -312,7 +312,7 @@ def test_status_page_shows_human_readable_runtime_summary(monkeypatch, tmp_path)
     assert "deepseek-v4-pro" in response.text
     assert "deepseek-v4-flash" in response.text
     assert "enabled" in response.text
-    assert "high" in response.text
+    assert "max" in response.text
     assert "/static/js/status.js" in response.text
 
 
@@ -403,7 +403,7 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
     assert payload["links"]["mainline_llm_switch"] == "/api/mainline-llm/switch"
     assert payload["mainline_llm"]["configured_model"] == "deepseek-v4-flash"
     assert payload["mainline_llm"]["live_model"] == ""
-    assert payload["mainline_llm"]["configured_reasoning_effort"] == "high"
+    assert payload["mainline_llm"]["configured_reasoning_effort"] == "max"
     assert payload["mainline_llm"]["configured_thinking_type"] == "enabled"
     assert payload["mainline_llm"]["target_model"] == "deepseek-v4-pro"
     assert payload["rss_poll"]["items_selected_for_processing"] == 2
@@ -805,6 +805,40 @@ def test_mainline_llm_switch_updates_env_and_restarts_n8n(monkeypatch, tmp_path)
     assert settings.mainline_llm_env_path.read_text(encoding="utf-8") == (
         "LLM_MODEL=deepseek-v4-pro\n"
         "LLM_REASONING_EFFORT=high\n"
+        "LLM_THINKING_TYPE=enabled\n"
+    )
+
+
+def test_mainline_llm_switch_sets_flash_reasoning_to_max(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    settings = get_settings()
+    settings.mainline_llm_env_path.write_text(
+        "LLM_MODEL=deepseek-v4-pro\n"
+        "LLM_REASONING_EFFORT=high\n"
+        "LLM_THINKING_TYPE=enabled\n",
+        encoding="utf-8",
+    )
+
+    def fake_missing_requirements(settings):
+        return []
+
+    def fake_recreate_container(settings, model):
+        assert settings.mainline_llm_container_name == "signal-to-obsidian-n8n-1"
+        assert model == "deepseek-v4-flash"
+        return "deepseek-v4-flash"
+
+    monkeypatch.setattr(mainline_llm_module, "_missing_requirements", fake_missing_requirements)
+    monkeypatch.setattr(mainline_llm_module, "_recreate_container_with_model", fake_recreate_container)
+
+    result = mainline_llm_module.switch_mainline_llm_model(settings, "deepseek-v4-flash")
+
+    assert result["previous_model"] == "deepseek-v4-pro"
+    assert result["configured_model"] == "deepseek-v4-flash"
+    assert result["configured_reasoning_effort"] == "max"
+    assert result["live_model"] == "deepseek-v4-flash"
+    assert settings.mainline_llm_env_path.read_text(encoding="utf-8") == (
+        "LLM_MODEL=deepseek-v4-flash\n"
+        "LLM_REASONING_EFFORT=max\n"
         "LLM_THINKING_TYPE=enabled\n"
     )
 

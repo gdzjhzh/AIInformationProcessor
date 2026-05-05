@@ -16,6 +16,12 @@ class MainlineLlmSwitchError(RuntimeError):
     pass
 
 
+MAINLINE_REASONING_EFFORT_BY_MODEL = {
+    "deepseek-v4-flash": "max",
+    "deepseek-v4-pro": "high",
+}
+
+
 class UnixSocketHttpConnection(http.client.HTTPConnection):
     def __init__(self, socket_path: Path):
         super().__init__("localhost")
@@ -135,6 +141,13 @@ def _replace_env(env: list[str], key: str, value: str) -> list[str]:
     return updated
 
 
+def _reasoning_effort_for_model(settings: Settings, model: str) -> str:
+    return (
+        MAINLINE_REASONING_EFFORT_BY_MODEL.get(model.strip(), "")
+        or settings.mainline_llm_reasoning_effort
+    )
+
+
 def _build_host_config(inspect_payload: dict[str, Any]) -> dict[str, Any]:
     host_config = inspect_payload.get("HostConfig") or {}
     keys = [
@@ -184,7 +197,11 @@ def _build_container_create_payload(
 ) -> dict[str, Any]:
     config = inspect_payload.get("Config") or {}
     env = _replace_env(list(config.get("Env") or []), "LLM_MODEL", model)
-    env = _replace_env(env, "LLM_REASONING_EFFORT", settings.mainline_llm_reasoning_effort)
+    env = _replace_env(
+        env,
+        "LLM_REASONING_EFFORT",
+        _reasoning_effort_for_model(settings, model),
+    )
     env = _replace_env(env, "LLM_THINKING_TYPE", settings.mainline_llm_thinking_type)
     payload: dict[str, Any] = {
         "Image": config.get("Image"),
@@ -372,7 +389,7 @@ def get_mainline_llm_status(settings: Settings) -> dict[str, Any]:
     configured_model = _read_env_value(settings.mainline_llm_env_path, "LLM_MODEL")
     configured_reasoning_effort = (
         _read_env_value(settings.mainline_llm_env_path, "LLM_REASONING_EFFORT")
-        or settings.mainline_llm_reasoning_effort
+        or _reasoning_effort_for_model(settings, configured_model)
     )
     configured_thinking_type = (
         _read_env_value(settings.mainline_llm_env_path, "LLM_THINKING_TYPE")
@@ -427,13 +444,14 @@ def switch_mainline_llm_model(settings: Settings, target_model: str | None = Non
 
     original_text = _read_env_text(settings.mainline_llm_env_path)
     previous_model = _read_env_value(settings.mainline_llm_env_path, "LLM_MODEL")
+    reasoning_effort = _reasoning_effort_for_model(settings, model)
 
     try:
         _write_env_value(settings.mainline_llm_env_path, "LLM_MODEL", model)
         _write_env_value(
             settings.mainline_llm_env_path,
             "LLM_REASONING_EFFORT",
-            settings.mainline_llm_reasoning_effort,
+            reasoning_effort,
         )
         _write_env_value(
             settings.mainline_llm_env_path,
