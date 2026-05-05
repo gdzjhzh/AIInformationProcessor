@@ -26,8 +26,8 @@ export default async function ManualSubmitPage() {
         )}
 
         <section className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
-          <article className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">
+          <article className="rounded-lg border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/15 backdrop-blur">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
               Submit Surface
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-normal">
@@ -35,27 +35,27 @@ export default async function ManualSubmitPage() {
             </h2>
             <div className="mt-5 grid gap-3">
               <label className="grid gap-2">
-                <span className="text-sm font-semibold text-stone-700">媒体 URL</span>
+                <span className="text-sm font-semibold text-slate-300">媒体 URL</span>
                 <input
                   disabled
                   placeholder="https://example.com/media"
-                  className="h-12 rounded-md border border-stone-200 bg-stone-100 px-3 text-sm text-stone-500"
+                  className="h-12 rounded-md border border-white/10 bg-white/[0.035] px-3 text-sm text-slate-500"
                 />
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-2">
-                  <span className="text-sm font-semibold text-stone-700">轮询次数</span>
+                  <span className="text-sm font-semibold text-slate-300">轮询次数</span>
                   <input
                     disabled
                     placeholder="默认"
-                    className="h-12 rounded-md border border-stone-200 bg-stone-100 px-3 text-sm text-stone-500"
+                    className="h-12 rounded-md border border-white/10 bg-white/[0.035] px-3 text-sm text-slate-500"
                   />
                 </label>
                 <label className="grid gap-2">
-                  <span className="text-sm font-semibold text-stone-700">说话人识别</span>
+                  <span className="text-sm font-semibold text-slate-300">说话人识别</span>
                   <select
                     disabled
-                    className="h-12 rounded-md border border-stone-200 bg-stone-100 px-3 text-sm text-stone-500"
+                    className="h-12 rounded-md border border-white/10 bg-white/[0.035] px-3 text-sm text-slate-500"
                   >
                     <option>由 04_video_transcript_ingest 决定</option>
                   </select>
@@ -63,7 +63,7 @@ export default async function ManualSubmitPage() {
               </div>
               <button
                 disabled
-                className="mt-2 h-12 rounded-md bg-stone-300 px-4 text-sm font-semibold text-stone-600"
+                className="mt-2 h-12 rounded-md border border-white/10 bg-white/10 px-4 text-sm font-semibold text-slate-400"
               >
                 提交功能暂未接入
               </button>
@@ -96,9 +96,9 @@ export default async function ManualSubmitPage() {
 
         <section>
           <SectionTitle eyebrow="History" title="最近提交记录" />
-          <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
+          <div className="rounded-lg border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/15 backdrop-blur">
             {submissions.length ? (
-              <div className="divide-y divide-stone-200">
+              <div className="divide-y divide-white/10">
                 {submissions.map((submission) => (
                   <article key={submission.id ?? submission.url} className="p-4">
                     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
@@ -106,7 +106,7 @@ export default async function ManualSubmitPage() {
                         <h3 className="truncate text-base font-semibold">
                           {textValue(submission.title || submission.request_url || submission.url, "未命名提交")}
                         </h3>
-                        <p className="mt-1 break-all font-mono text-xs text-stone-500">
+                        <p className="mt-1 break-all font-mono text-xs text-slate-500">
                           {textValue(submission.request_url || submission.url, "")}
                         </p>
                       </div>
@@ -136,11 +136,11 @@ export default async function ManualSubmitPage() {
 
 function Meta({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="rounded border border-stone-200 bg-stone-50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+    <div className="rounded border border-white/10 bg-white/[0.035] p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 break-words font-mono text-xs text-stone-800">
+      <p className="mt-1 break-words font-mono text-xs text-slate-300">
         {textValue(value, "无数据")}
       </p>
     </div>

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #030712;
+  --foreground: #f8fafc;
 }
 
 @theme inline {
@@ -12,11 +12,6 @@
   --font-mono: "Geist Mono", "Geist Mono Fallback", "Cascadia Mono", Consolas, monospace;
 }
 
-:root {
-  --background: #f6f6f2;
-  --foreground: #171717;
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -24,6 +19,6 @@ body {
 }
 
 ::selection {
-  background: #b8f1df;
-  color: #10201b;
+  background: #34d399;
+  color: #04120d;
 }

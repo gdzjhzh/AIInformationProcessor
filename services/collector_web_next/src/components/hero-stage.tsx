@@ -68,15 +68,15 @@ export function HeroStage({
       <div className="min-h-[28rem] [perspective:1200px]">
         <motion.div
           style={{ rotateX, scale }}
-          className="h-full rounded-xl border border-stone-900 bg-stone-950 p-2 shadow-2xl shadow-stone-500/30"
+          className="h-full rounded-xl border border-white/10 bg-black p-2 shadow-2xl shadow-emerald-950/30"
         >
-          <div className="grid h-full overflow-hidden rounded-lg border border-white/10 bg-[#f8f7f1] p-4">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+          <div className="grid h-full overflow-hidden rounded-lg border border-white/10 bg-slate-950 p-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                   Runtime Surface
                 </p>
-                <h3 className="text-lg font-semibold text-stone-950">
+                <h3 className="text-lg font-semibold text-white">
                   Read-only cockpit
                 </h3>
               </div>
@@ -92,22 +92,22 @@ export function HeroStage({
               <PreviewTile icon={GitBranch} label="Backend" value={apiMode} />
             </div>
             <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-lg border border-stone-200 bg-white p-4">
-                <div className="mb-3 h-2 w-24 rounded-full bg-emerald-200" />
+              <div className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <div className="mb-3 h-2 w-24 rounded-full bg-emerald-400/60" />
                 <div className="space-y-2">
-                  <div className="h-3 rounded-full bg-stone-200" />
-                  <div className="h-3 w-5/6 rounded-full bg-stone-200" />
-                  <div className="h-3 w-2/3 rounded-full bg-stone-200" />
+                  <div className="h-3 rounded-full bg-white/10" />
+                  <div className="h-3 w-5/6 rounded-full bg-white/10" />
+                  <div className="h-3 w-2/3 rounded-full bg-white/10" />
                 </div>
               </div>
-              <div className="rounded-lg border border-stone-200 bg-white p-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
                 <div className="mb-4 flex items-end gap-2">
-                  <span className="h-12 flex-1 rounded bg-sky-200" />
-                  <span className="h-20 flex-1 rounded bg-emerald-300" />
-                  <span className="h-9 flex-1 rounded bg-amber-200" />
-                  <span className="h-16 flex-1 rounded bg-stone-300" />
+                  <span className="h-12 flex-1 rounded bg-sky-400/50" />
+                  <span className="h-20 flex-1 rounded bg-emerald-400/70" />
+                  <span className="h-9 flex-1 rounded bg-amber-300/60" />
+                  <span className="h-16 flex-1 rounded bg-slate-500/60" />
                 </div>
-                <div className="h-3 w-20 rounded-full bg-stone-200" />
+                <div className="h-3 w-20 rounded-full bg-white/10" />
               </div>
             </div>
           </div>
@@ -138,12 +138,12 @@ function PreviewTile({
   value: string | number;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-3">
-      <Icon className="h-4 w-4 text-emerald-700" />
-      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+    <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
+      <Icon className="h-4 w-4 text-emerald-300" />
+      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
         {label}
       </p>
-      <strong className="mt-1 block truncate font-mono text-xl font-semibold tracking-normal text-stone-950">
+      <strong className="mt-1 block truncate font-mono text-xl font-semibold tracking-normal text-white">
         {value}
       </strong>
     </div>

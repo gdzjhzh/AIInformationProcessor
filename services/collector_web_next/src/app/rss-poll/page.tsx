@@ -41,21 +41,21 @@ export default async function RssPollPage() {
           <StatCard label="写入" value={totals.wrote} detail="最终写入 Obsidian 的数量。" />
         </section>
 
-        <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
-          <div className="border-b border-stone-200 p-4">
-            <p className="text-sm font-medium text-stone-600">
+        <section className="rounded-lg border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/15 backdrop-blur">
+          <div className="border-b border-white/10 p-4">
+            <p className="text-sm font-medium text-slate-400">
               最近完成时间：
-              <span className="font-mono text-stone-950">
+              <span className="font-mono text-white">
                 {textValue(poll.data.run_finished_at, "无数据")}
               </span>
             </p>
-            <p className="mt-1 break-all font-mono text-xs text-stone-500">
+            <p className="mt-1 break-all font-mono text-xs text-slate-500">
               {textValue(poll.data.file_path, "没有 poll_runs 文件路径")}
             </p>
           </div>
 
           {sources.length ? (
-            <div className="divide-y divide-stone-200">
+            <div className="divide-y divide-white/10">
               {sources.map((source, index) => (
                 <article key={`${source.feed_url ?? "source"}-${index}`} className="p-4">
                   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
@@ -63,7 +63,7 @@ export default async function RssPollPage() {
                       <h3 className="truncate text-base font-semibold">
                         {textValue(source.source_name, "未命名源")}
                       </h3>
-                      <p className="mt-1 truncate font-mono text-xs text-stone-500">
+                      <p className="mt-1 truncate font-mono text-xs text-slate-500">
                         {textValue(source.feed_url, "")}
                       </p>
                     </div>
@@ -83,11 +83,11 @@ export default async function RssPollPage() {
                     <Mini label="qdrant" value={source.qdrant_commit_count} />
                   </div>
                   {!!source.new_titles?.length && (
-                    <div className="mt-4 rounded border border-emerald-100 bg-emerald-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
+                    <div className="mt-4 rounded border border-emerald-400/20 bg-emerald-400/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">
                         New titles
                       </p>
-                      <ul className="mt-2 space-y-1 text-sm text-stone-700">
+                      <ul className="mt-2 space-y-1 text-sm text-slate-300">
                         {source.new_titles.slice(0, 3).map((title) => (
                           <li key={title} className="truncate">
                             {title}
@@ -112,11 +112,11 @@ export default async function RssPollPage() {
 
 function Mini({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="rounded border border-stone-200 bg-stone-50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+    <div className="rounded border border-white/10 bg-white/[0.035] p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 font-mono text-xl font-semibold text-stone-950">
+      <p className="mt-1 font-mono text-xl font-semibold text-white">
         {numberValue(value)}
       </p>
     </div>

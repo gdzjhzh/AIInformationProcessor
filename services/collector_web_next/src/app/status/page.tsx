@@ -57,14 +57,14 @@ export default async function StatusPage() {
                 checks.map((check) => (
                   <article
                     key={check.id ?? check.title}
-                    className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm"
+                    className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-base font-semibold">
                           {textValue(check.title, "检查项")}
                         </h3>
-                        <p className="mt-2 text-sm leading-6 text-stone-600">
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
                           {textValue(check.summary, "暂无摘要")}
                         </p>
                       </div>
@@ -77,7 +77,7 @@ export default async function StatusPage() {
                         {check.detail_lines.slice(0, 4).map((line) => (
                           <li
                             key={line}
-                            className="rounded border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-xs text-stone-600"
+                            className="rounded border border-white/10 bg-white/[0.035] px-3 py-2 font-mono text-xs text-slate-400"
                           >
                             {line}
                           </li>
@@ -94,7 +94,7 @@ export default async function StatusPage() {
 
           <div>
             <SectionTitle eyebrow="Mainline" title="主链模型状态" />
-            <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+            <article className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur">
               <div className="grid gap-3">
                 <KeyValue label="配置模型" value={mainline.configured_model} />
                 <KeyValue label="运行模型" value={mainline.live_model} />
@@ -113,11 +113,11 @@ export default async function StatusPage() {
 
 function KeyValue({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="rounded border border-stone-200 bg-stone-50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+    <div className="rounded border border-white/10 bg-white/[0.035] p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 break-words font-mono text-sm text-stone-900">
+      <p className="mt-1 break-words font-mono text-sm text-slate-200">
         {textValue(value, "无数据")}
       </p>
     </div>

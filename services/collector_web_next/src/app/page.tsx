@@ -57,14 +57,14 @@ export default async function HomePage() {
                 {platformGroups.slice(0, 5).map((group, index) => (
                   <article
                     key={`${group.platform ?? "platform"}-${index}`}
-                    className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm"
+                    className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <h3 className="truncate text-base font-semibold">
                           {textValue(group.label, "未命名平台")}
                         </h3>
-                        <p className="mt-1 font-mono text-xs text-stone-500">
+                        <p className="mt-1 font-mono text-xs text-slate-500">
                           {textValue(group.platform, "unknown")}
                         </p>
                       </div>
@@ -76,12 +76,12 @@ export default async function HomePage() {
                       {(group.subscriptions ?? []).slice(0, 3).map((subscription, itemIndex) => (
                         <div
                           key={`${subscription.source_url ?? "source"}-${itemIndex}`}
-                          className="rounded border border-stone-200 bg-stone-50 px-3 py-2"
+                          className="rounded border border-white/10 bg-white/[0.035] px-3 py-2"
                         >
                           <p className="truncate text-sm font-medium">
                             {textValue(subscription.display_name, "未命名订阅")}
                           </p>
-                          <p className="mt-1 truncate font-mono text-xs text-stone-500">
+                          <p className="mt-1 truncate font-mono text-xs text-slate-500">
                             {textValue(subscription.source_url, "")}
                           </p>
                         </div>
@@ -102,7 +102,7 @@ export default async function HomePage() {
           <div className="grid gap-5">
             <section>
               <SectionTitle eyebrow="Status" title="后端状态" />
-              <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+              <article className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-base font-semibold">FastAPI 控制层</h3>
                   <StatusPill tone={status.data.overall_status_tone ?? mode}>
@@ -111,9 +111,9 @@ export default async function HomePage() {
                 </div>
                 <div className="mt-4 space-y-3">
                   {(status.data.checks ?? []).slice(0, 4).map((check) => (
-                    <div key={check.id ?? check.title} className="rounded border border-stone-200 p-3">
+                    <div key={check.id ?? check.title} className="rounded border border-white/10 bg-white/[0.025] p-3">
                       <p className="text-sm font-semibold">{textValue(check.title, "检查项")}</p>
-                      <p className="mt-1 text-sm leading-6 text-stone-600">
+                      <p className="mt-1 text-sm leading-6 text-slate-400">
                         {textValue(check.summary, "暂无摘要")}
                       </p>
                     </div>
@@ -124,13 +124,13 @@ export default async function HomePage() {
 
             <section>
               <SectionTitle eyebrow="Recent" title="手动提交历史" />
-              <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+              <article className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur">
                 {recentSubmissions.length ? (
                   <div className="space-y-3">
                     {recentSubmissions.slice(0, 4).map((submission) => (
                       <div
                         key={submission.id ?? submission.request_url ?? submission.url}
-                        className="rounded border border-stone-200 p-3"
+                        className="rounded border border-white/10 bg-white/[0.025] p-3"
                       >
                         <p className="truncate text-sm font-medium">
                           {textValue(
@@ -138,14 +138,14 @@ export default async function HomePage() {
                             "未命名提交",
                           )}
                         </p>
-                        <p className="mt-1 font-mono text-xs text-stone-500">
+                        <p className="mt-1 font-mono text-xs text-slate-500">
                           {textValue(submission.status, "unknown")}
                         </p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm leading-6 text-stone-600">
+                  <p className="text-sm leading-6 text-slate-400">
                     暂无可展示的提交历史。
                   </p>
                 )}
@@ -156,7 +156,7 @@ export default async function HomePage() {
 
         <section>
           <SectionTitle eyebrow="RSS" title="最近一轮轮询" />
-          <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+          <article className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur">
             <div className="grid gap-3 sm:grid-cols-4">
               <StatCard
                 label="订阅源"

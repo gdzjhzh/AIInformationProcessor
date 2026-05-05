@@ -17,16 +17,16 @@ export function statusToneClass(tone?: string) {
   switch (tone) {
     case "success":
     case "live":
-      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+      return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
     case "warning":
     case "action":
-      return "border-amber-200 bg-amber-50 text-amber-800";
+      return "border-amber-400/30 bg-amber-400/10 text-amber-200";
     case "error":
-      return "border-rose-200 bg-rose-50 text-rose-800";
+      return "border-rose-400/30 bg-rose-400/10 text-rose-200";
     case "accent":
-      return "border-sky-200 bg-sky-50 text-sky-800";
+      return "border-sky-400/30 bg-sky-400/10 text-sky-200";
     default:
-      return "border-stone-200 bg-stone-100 text-stone-700";
+      return "border-slate-500/30 bg-slate-400/10 text-slate-200";
   }
 }
 

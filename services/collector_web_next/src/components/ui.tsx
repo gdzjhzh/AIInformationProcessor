@@ -37,14 +37,14 @@ export function StatCard({
   detail: string;
 }) {
   return (
-    <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+    <article className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
         {label}
       </p>
-      <strong className="mt-3 block font-mono text-3xl font-semibold tracking-normal text-stone-950">
+      <strong className="mt-3 block font-mono text-3xl font-semibold tracking-normal text-white">
         {value}
       </strong>
-      <p className="mt-2 text-sm leading-6 text-stone-600">{detail}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{detail}</p>
     </article>
   );
 }
@@ -61,10 +61,10 @@ export function SectionTitle({
   return (
     <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
           {eyebrow}
         </p>
-        <h2 className="mt-1 text-2xl font-semibold tracking-normal text-stone-950">
+        <h2 className="mt-1 text-2xl font-semibold tracking-normal text-white">
           {title}
         </h2>
       </div>
@@ -75,7 +75,7 @@ export function SectionTitle({
 
 export function EmptyPanel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-stone-300 bg-white/70 p-5 text-sm leading-6 text-stone-600">
+    <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.035] p-5 text-sm leading-6 text-slate-400">
       {children}
     </div>
   );
