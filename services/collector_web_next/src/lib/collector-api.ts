@@ -34,6 +34,7 @@ export type PlatformGroup = {
 export type ManualSubmission = {
   id?: number;
   url?: string;
+  request_url?: string;
   status?: string;
   created_at?: string;
   updated_at?: string;
@@ -46,6 +47,8 @@ export type CollectionsPayload = {
   summary?: DashboardSummary;
   platform_groups?: PlatformGroup[];
   manual_submission_summary?: {
+    recent_count?: number;
+    active_count?: number;
     total_count?: number;
     running_count?: number;
     success_count?: number;
@@ -116,6 +119,8 @@ const FALLBACK_COLLECTIONS: CollectionsPayload = {
   platform_groups: [],
   manual_submission_summary: {
     total_count: 0,
+    recent_count: 0,
+    active_count: 0,
     running_count: 0,
     success_count: 0,
     failed_count: 0,
@@ -147,7 +152,7 @@ const FALLBACK_RSS_POLL: RssPollPayload = {
 function apiBaseUrl() {
   return (
     process.env.COLLECTOR_WEB_API_BASE_URL?.replace(/\/$/, "") ||
-    "http://127.0.0.1:8300"
+    "http://127.0.0.1:18300"
   );
 }
 

@@ -25,16 +25,16 @@ Open:
 http://127.0.0.1:3000
 ```
 
-By default, the frontend reads:
+By default, the frontend reads the current Docker Compose host port used by this repo:
 
 ```text
-http://127.0.0.1:8300
+http://127.0.0.1:18300
 ```
 
 Override it with:
 
 ```powershell
-$env:COLLECTOR_WEB_API_BASE_URL="http://127.0.0.1:8300"
+$env:COLLECTOR_WEB_API_BASE_URL="http://127.0.0.1:18300"
 npm run dev
 ```
 

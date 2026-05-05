@@ -73,12 +73,12 @@ export default async function ManualSubmitPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <StatCard
               label="总提交"
-              value={numberValue(summary.total_count)}
-              detail="FastAPI 记录的手动提交总数。"
+              value={numberValue(summary.total_count ?? summary.recent_count ?? submissions.length)}
+              detail="FastAPI 返回的最近提交记录数量。"
             />
             <StatCard
               label="运行中"
-              value={numberValue(summary.running_count)}
+              value={numberValue(summary.running_count ?? summary.active_count)}
               detail="仍在处理或等待回调的提交。"
             />
             <StatCard
@@ -104,10 +104,10 @@ export default async function ManualSubmitPage() {
                     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                       <div className="min-w-0">
                         <h3 className="truncate text-base font-semibold">
-                          {textValue(submission.title || submission.url, "未命名提交")}
+                          {textValue(submission.title || submission.request_url || submission.url, "未命名提交")}
                         </h3>
                         <p className="mt-1 break-all font-mono text-xs text-stone-500">
-                          {textValue(submission.url, "")}
+                          {textValue(submission.request_url || submission.url, "")}
                         </p>
                       </div>
                       <StatusPill tone={submission.status === "success" ? "success" : "muted"}>

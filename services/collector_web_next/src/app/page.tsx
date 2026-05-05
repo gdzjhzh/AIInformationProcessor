@@ -128,9 +128,15 @@ export default async function HomePage() {
                 {recentSubmissions.length ? (
                   <div className="space-y-3">
                     {recentSubmissions.slice(0, 4).map((submission) => (
-                      <div key={submission.id ?? submission.url} className="rounded border border-stone-200 p-3">
+                      <div
+                        key={submission.id ?? submission.request_url ?? submission.url}
+                        className="rounded border border-stone-200 p-3"
+                      >
                         <p className="truncate text-sm font-medium">
-                          {textValue(submission.title || submission.url, "未命名提交")}
+                          {textValue(
+                            submission.title || submission.request_url || submission.url,
+                            "未命名提交",
+                          )}
                         </p>
                         <p className="mt-1 font-mono text-xs text-stone-500">
                           {textValue(submission.status, "unknown")}
