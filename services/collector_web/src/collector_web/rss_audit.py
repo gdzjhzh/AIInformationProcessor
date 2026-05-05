@@ -81,6 +81,16 @@ def _status_label(value: str) -> str:
     }.get(value or "unknown", value or "未知")
 
 
+def _source_gate_status_label(value: str) -> str:
+    return {
+        "changed": "有新内容",
+        "unchanged": "来源未变化",
+        "empty": "本轮为空",
+        "rss_error": "RSS 失败",
+        "not_checked": "未检查",
+    }.get(value or "not_checked", value or "未知")
+
+
 def _audit_status_label(value: str) -> str:
     return {
         "written": "已写入",
@@ -110,6 +120,42 @@ def _audit_reason_label(value: str) -> str:
     }.get(value or "score_not_available", value or "未知原因")
 
 
+def _skip_layer_label(value: str) -> str:
+    return {
+        "source_last_seen_gate": "来源门禁",
+        "qdrant_gate": "去重门禁",
+        "action_policy": "策略层",
+        "vault_writer": "写入层",
+        "qdrant_commit": "向量提交",
+        "llm_scoring": "LLM 评分",
+        "pre_llm": "LLM 前",
+        "rss_read": "RSS 拉取",
+        "transcript_ingest": "转写入口",
+        "normalize_text_object": "文本标准化",
+        "error": "错误处理",
+    }.get(value or "", value or "未知层级")
+
+
+def _infer_skip_layer(audit_reason: str, audit_status: str, has_score: bool) -> str:
+    if audit_reason == "source_last_seen_gate":
+        return "source_last_seen_gate"
+    if audit_reason in {"silent_dedupe", "llm_not_requested"}:
+        return "qdrant_gate"
+    if audit_reason == "action_policy_skipped":
+        return "action_policy"
+    if audit_reason in {"vault_written", "vault_write_error"}:
+        return "vault_writer"
+    if audit_reason == "qdrant_skipped":
+        return "qdrant_commit"
+    if audit_reason.endswith("_error"):
+        return audit_reason.removesuffix("_error") or "error"
+    if has_score:
+        return "llm_scoring"
+    if audit_status in {"not_scored", "seen"}:
+        return "pre_llm"
+    return ""
+
+
 def _primary_score(item: dict[str, Any]) -> int | None:
     keep_score = _to_float_or_none(item.get("keep_score"))
     if keep_score is not None:
@@ -136,6 +182,18 @@ def _normalize_item(source: dict[str, Any], item: dict[str, Any], index: int) ->
     audit_reason = _as_string(item.get("audit_reason")) or "score_not_available"
     original_url = _as_string(item.get("url"))
     primary_score = _primary_score(item)
+    has_score = primary_score is not None
+    llm_ran = item.get("llm_ran")
+    if not isinstance(llm_ran, bool):
+        llm_ran = has_score
+    skip_layer = _as_string(item.get("skip_layer")) or _infer_skip_layer(
+        audit_reason, audit_status, has_score
+    )
+    source_gate_status = (
+        _as_string(item.get("source_gate_status"))
+        or _as_string(source.get("source_gate_status"))
+        or "not_checked"
+    )
 
     return {
         "index": index,
@@ -149,6 +207,12 @@ def _normalize_item(source: dict[str, Any], item: dict[str, Any], index: int) ->
         "item_id": _as_string(item.get("item_id")),
         "original_id": _as_string(item.get("original_id")),
         "author": _as_string(item.get("author")),
+        "source_gate_status": source_gate_status,
+        "source_gate_status_label": _source_gate_status_label(source_gate_status),
+        "llm_ran": llm_ran,
+        "llm_status_label": "LLM 已跑" if llm_ran else "LLM 未跑",
+        "skip_layer": skip_layer,
+        "skip_layer_label": _skip_layer_label(skip_layer),
         "audit_status": audit_status,
         "audit_status_label": _audit_status_label(audit_status),
         "audit_reason": audit_reason,
@@ -181,7 +245,7 @@ def _normalize_item(source: dict[str, Any], item: dict[str, Any], index: int) ->
         "matched_score": _to_float_or_none(item.get("matched_score")),
         "matched_title": _as_string(item.get("matched_title")),
         "can_open_original": bool(original_url),
-        "has_score": primary_score is not None,
+        "has_score": has_score,
         "is_written": audit_status == "written",
     }
 
@@ -191,6 +255,8 @@ def _normalize_source(source: dict[str, Any]) -> dict[str, Any]:
     items = [_normalize_item(source, item, index + 1) for index, item in enumerate(raw_items)]
     rss_status = _as_string(source.get("rss_status")) or "unknown"
     transcript_status = _as_string(source.get("transcript_status")) or "unknown"
+
+    source_gate_status = _as_string(source.get("source_gate_status")) or "not_checked"
 
     return {
         "source_name": _as_string(source.get("source_name")) or "未命名订阅源",
@@ -202,7 +268,8 @@ def _normalize_source(source: dict[str, Any]) -> dict[str, Any]:
         "transcript_status": transcript_status,
         "transcript_status_label": _status_label(transcript_status),
         "transcript_error": _as_string(source.get("transcript_error")),
-        "source_gate_status": _as_string(source.get("source_gate_status")) or "not_checked",
+        "source_gate_status": source_gate_status,
+        "source_gate_status_label": _source_gate_status_label(source_gate_status),
         "is_new_since_last_poll": bool(source.get("is_new_since_last_poll")),
         "item_count": _to_int(source.get("item_count")),
         "new_item_count": _to_int(source.get("new_item_count")),

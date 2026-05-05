@@ -118,6 +118,8 @@
                         RSS {{ source.rss_status_label }}
                     </span>
                     <span class="status-badge muted">Transcript {{ source.transcript_status_label }}</span>
+                    <span class="collection-stats-inline">看到 {{ source.item_count }} 条 / 新内容 {{ source.new_item_count }} 条 / 写入 {{ source.wrote_count }} 条 / 审计 {{ source.audit_item_count }} 条</span>
+                    <span class="status-badge muted">Source Gate {{ source.source_gate_status_label }}</span>
                 </div>
                 <p class="collection-meta">
                     <a href="{{ source.feed_url }}" target="_blank" rel="noopener">{{ source.feed_url }}</a>
@@ -125,12 +127,6 @@
                 {% if source.rss_error or source.transcript_error %}
                 <p class="status-line is-error">{{ source.rss_error or source.transcript_error }}</p>
                 {% endif %}
-            </div>
-            <div class="collection-stats">
-                <span>看到 {{ source.item_count }} 条</span>
-                <span>新内容 {{ source.new_item_count }} 条</span>
-                <span>写入 {{ source.wrote_count }} 条</span>
-                <span>审计 {{ source.audit_item_count }} 条</span>
             </div>
         </header>
 
@@ -176,6 +172,8 @@
                     {% if item.audit_detail %}
                     <span class="rss-detail">{{ item.audit_detail }}</span>
                     {% endif %}
+                    <span class="rss-detail">{{ item.llm_status_label }} / {{ item.skip_layer_label }}</span>
+                    <span class="rss-detail">source gate: {{ item.source_gate_status_label }}</span>
                 </div>
                 <div class="rss-score-box">
                     {% if item.primary_score is not none %}

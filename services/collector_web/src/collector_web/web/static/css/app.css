@@ -769,6 +769,16 @@ button.text-link-button {
     font-size: 0.9rem;
 }
 
+.collection-stats-inline {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 .platform-badge,
 .status-badge,
 .explanation-badge {
@@ -1112,6 +1122,10 @@ button.text-link-button {
     .source-diagnostic-stats {
         justify-content: flex-start;
         text-align: left;
+    }
+
+    .collection-stats-inline {
+        white-space: normal;
     }
 }
 

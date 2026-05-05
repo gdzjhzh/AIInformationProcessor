@@ -438,7 +438,7 @@ def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
                 "items_seen": 1,
                 "items_selected_for_processing": 1,
                 "items_written": 1,
-                "poll_runs_version": 5,
+                "poll_runs_version": 6,
                 "sources": [
                     {
                         "source_name": "Hacker News",
@@ -460,6 +460,9 @@ def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
                                 "url": "https://openai.com/index/delivering-low-latency-voice-ai-at-scale/",
                                 "published_at": "2026-05-05T01:00:00+00:00",
                                 "item_id": "item-1",
+                                "source_gate_status": "changed",
+                                "llm_ran": True,
+                                "skip_layer": "vault_writer",
                                 "audit_status": "written",
                                 "audit_reason": "vault_written",
                                 "dedupe_action": "full_push",
@@ -501,7 +504,7 @@ def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
     assert payload["ok"] is True
     assert payload["schema_has_item_details"] is True
     assert payload["poll"]["execution_id"] == "11863"
-    assert payload["poll"]["poll_runs_version"] == 5
+    assert payload["poll"]["poll_runs_version"] == 6
     assert payload["item_count"] == 1
     assert payload["written_item_count"] == 1
     assert payload["scored_item_count"] == 1
@@ -511,6 +514,9 @@ def test_rss_poll_latest_api_returns_item_audit(monkeypatch, tmp_path):
     assert item["original_url"].startswith("https://openai.com/")
     assert item["audit_status_label"] == "已写入"
     assert item["audit_reason_label"] == "已写入 Obsidian"
+    assert item["source_gate_status_label"] == "有新内容"
+    assert item["llm_status_label"] == "LLM 已跑"
+    assert item["skip_layer_label"] == "写入层"
     assert item["primary_score"] == 84
     assert item["score_dimensions"]["novelty"] == 17
     assert item["vault_path"] == "00_Inbox/demo.md"
@@ -534,10 +540,10 @@ def test_rss_poll_page_shows_audit_table(monkeypatch, tmp_path):
                 "source_count": 1,
                 "success_source_count": 1,
                 "failed_source_count": 0,
-                "items_seen": 1,
-                "items_selected_for_processing": 1,
+                "items_seen": 2,
+                "items_selected_for_processing": 2,
                 "items_written": 1,
-                "poll_runs_version": 5,
+                "poll_runs_version": 6,
                 "sources": [
                     {
                         "source_name": "Hacker News",
@@ -545,19 +551,35 @@ def test_rss_poll_page_shows_audit_table(monkeypatch, tmp_path):
                         "feed_url": "http://rsshub:1200/hackernews?limit=5",
                         "rss_status": "success",
                         "transcript_status": "not_requested",
-                        "item_count": 1,
-                        "new_item_count": 1,
+                        "source_gate_status": "changed",
+                        "item_count": 2,
+                        "new_item_count": 2,
                         "wrote_count": 1,
                         "items": [
                             {
                                 "title": "Agent Skills",
                                 "url": "https://example.com/agent-skills",
+                                "source_gate_status": "changed",
+                                "llm_ran": True,
+                                "skip_layer": "vault_writer",
                                 "audit_status": "written",
                                 "audit_reason": "vault_written",
                                 "vault_path": "00_Inbox/agent-skills.md",
                                 "keep_score": 88,
                                 "score_dimensions": {"novelty": 18},
-                            }
+                            },
+                            {
+                                "title": "Holiday Video Promo",
+                                "url": "https://example.com/holiday-video",
+                                "source_gate_status": "changed",
+                                "llm_ran": True,
+                                "skip_layer": "action_policy",
+                                "audit_status": "skipped",
+                                "audit_reason": "action_policy_skipped",
+                                "audit_detail": "Action policy decided not to write this scored item.",
+                                "keep_score": 14,
+                                "score_dimensions": {"information_density": 2},
+                            },
                         ],
                     }
                 ],
@@ -578,6 +600,11 @@ def test_rss_poll_page_shows_audit_table(monkeypatch, tmp_path):
     assert "Agent Skills" in response.text
     assert 'href="https://example.com/agent-skills"' in response.text
     assert "00_Inbox/agent-skills.md" in response.text
+    assert "Holiday Video Promo" in response.text
+    assert "LLM 已跑" in response.text
+    assert "策略层" in response.text
+    assert "Source Gate 有新内容" in response.text
+    assert "看到 2 条 / 新内容 2 条 / 写入 1 条 / 审计 2 条" in response.text
     assert "88" in response.text
     assert "/static/js/rss_poll.js" in response.text
 
