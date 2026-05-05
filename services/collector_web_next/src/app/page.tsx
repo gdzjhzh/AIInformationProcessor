@@ -19,6 +19,26 @@ export default async function HomePage() {
   const summary = collections.data.summary ?? {};
   const platformGroups = collections.data.platform_groups ?? [];
   const recentSubmissions = collections.data.manual_submissions ?? [];
+  const pollSummary = rssPoll.data.poll ?? {};
+  const llmUsage = pollSummary.llm_usage ?? rssPoll.data.llm_usage ?? {};
+  const hasTokenUsage =
+    Boolean(pollSummary.llm_usage || rssPoll.data.llm_usage) ||
+    "llm_total_tokens" in pollSummary ||
+    "llm_prompt_tokens" in pollSummary ||
+    "llm_completion_tokens" in pollSummary ||
+    "llm_total_tokens" in rssPoll.data;
+  const tokenUsage = {
+    totalTokens: numberValue(llmUsage.total_tokens ?? pollSummary.llm_total_tokens ?? rssPoll.data.llm_total_tokens),
+    inputTokens: numberValue(llmUsage.prompt_tokens ?? pollSummary.llm_prompt_tokens ?? rssPoll.data.llm_prompt_tokens),
+    outputTokens: numberValue(
+      llmUsage.completion_tokens ?? pollSummary.llm_completion_tokens ?? rssPoll.data.llm_completion_tokens,
+    ),
+    calls: numberValue(llmUsage.calls ?? pollSummary.llm_calls ?? rssPoll.data.llm_calls),
+    usageMissing: numberValue(
+      llmUsage.usage_missing ?? pollSummary.llm_usage_missing ?? rssPoll.data.llm_usage_missing,
+    ),
+    hasData: hasTokenUsage,
+  };
 
   return (
     <AppShell>
@@ -27,6 +47,7 @@ export default async function HomePage() {
           apiMode={mode}
           subscriptionCount={numberValue(summary.subscription_count)}
           activeCount={numberValue(summary.active_subscription_count)}
+          tokenUsage={tokenUsage}
         />
 
         <section className="grid gap-4 md:grid-cols-3">

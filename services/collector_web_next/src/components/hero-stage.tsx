@@ -8,14 +8,25 @@ import { Boxes, GitBranch, ShieldCheck } from "lucide-react";
 import { GooeyText } from "@/components/gooey-text";
 import { SparklesCore } from "@/components/sparkles-core";
 
+type TokenUsage = {
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  calls: number;
+  usageMissing: number;
+  hasData: boolean;
+};
+
 export function HeroStage({
   apiMode,
   subscriptionCount,
   activeCount,
+  tokenUsage,
 }: {
   apiMode: "live" | "offline";
   subscriptionCount: number;
   activeCount: number;
+  tokenUsage: TokenUsage;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -85,9 +96,7 @@ export function HeroStage({
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                   Runtime Surface
                 </p>
-                <h3 className="text-lg font-semibold text-white">
-                  Read-only cockpit
-                </h3>
+                <h3 className="text-lg font-semibold text-white">Read-only cockpit</h3>
               </div>
               <div className="flex gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
@@ -100,25 +109,7 @@ export function HeroStage({
               <PreviewTile icon={ShieldCheck} label="Active" value={activeCount} />
               <PreviewTile icon={GitBranch} label="Backend" value={apiMode} />
             </div>
-            <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
-                <div className="mb-3 h-2 w-24 rounded-full bg-emerald-400/60" />
-                <div className="space-y-2">
-                  <div className="h-3 rounded-full bg-white/10" />
-                  <div className="h-3 w-5/6 rounded-full bg-white/10" />
-                  <div className="h-3 w-2/3 rounded-full bg-white/10" />
-                </div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
-                <div className="mb-4 flex items-end gap-2">
-                  <span className="h-12 flex-1 rounded bg-sky-400/50" />
-                  <span className="h-20 flex-1 rounded bg-emerald-400/70" />
-                  <span className="h-9 flex-1 rounded bg-amber-300/60" />
-                  <span className="h-16 flex-1 rounded bg-slate-500/60" />
-                </div>
-                <div className="h-3 w-20 rounded-full bg-white/10" />
-              </div>
-            </div>
+            <TokenUsagePanel tokenUsage={tokenUsage} />
           </div>
         </motion.div>
       </div>
@@ -157,4 +148,86 @@ function PreviewTile({
       </strong>
     </div>
   );
+}
+
+function TokenUsagePanel({ tokenUsage }: { tokenUsage: TokenUsage }) {
+  const total = Math.max(tokenUsage.totalTokens, 0);
+  const inputPercent = total > 0 ? Math.round((tokenUsage.inputTokens / total) * 100) : 0;
+  const outputPercent = total > 0 ? Math.round((tokenUsage.outputTokens / total) * 100) : 0;
+  const statusText = tokenUsage.hasData
+    ? `本轮 ${formatTokenNumber(tokenUsage.calls)} 次 LLM 调用`
+    : "等待新版轮询记录 token";
+
+  return (
+    <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
+      <div className="rounded-lg border border-emerald-300/15 bg-emerald-300/[0.055] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
+              Token Usage
+            </p>
+            <strong className="mt-2 block font-mono text-3xl font-semibold tracking-normal text-white">
+              {formatTokenNumber(tokenUsage.totalTokens)}
+            </strong>
+          </div>
+          <span className="rounded border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-xs font-semibold text-emerald-100">
+            {tokenUsage.hasData ? "live" : "pending"}
+          </span>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-slate-400">
+          总 token 使用量。数据来自最新 RSS 主链 poll_runs 摘要。
+        </p>
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+          <span
+            className="block h-full rounded-full bg-gradient-to-r from-emerald-300 to-cyan-300"
+            style={{ width: `${Math.min(inputPercent + outputPercent, 100)}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        <TokenSplitRow label="输入 token" value={tokenUsage.inputTokens} percent={inputPercent} />
+        <TokenSplitRow label="输出 token" value={tokenUsage.outputTokens} percent={outputPercent} />
+        <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
+          <div className="flex items-center justify-between gap-3 text-xs text-slate-400">
+            <span>{statusText}</span>
+            {tokenUsage.usageMissing > 0 ? (
+              <span>{formatTokenNumber(tokenUsage.usageMissing)} 次缺失 usage</span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TokenSplitRow({
+  label,
+  value,
+  percent,
+}: {
+  label: string;
+  value: number;
+  percent: number;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-slate-300">{label}</span>
+        <strong className="font-mono text-xl font-semibold tracking-normal text-white">
+          {formatTokenNumber(value)}
+        </strong>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <span
+          className="block h-full rounded-full bg-cyan-300/80"
+          style={{ width: `${Math.min(Math.max(percent, 0), 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function formatTokenNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(Math.max(Math.round(value), 0));
 }

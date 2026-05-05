@@ -67,6 +67,32 @@ def _as_object(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+_LLM_USAGE_FIELDS = (
+    "calls",
+    "usage_missing",
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "cached_prompt_tokens",
+    "prompt_cache_hit_tokens",
+    "prompt_cache_miss_tokens",
+    "reasoning_tokens",
+)
+
+
+def _normalize_llm_usage(value: Any, *, fallback: dict[str, Any] | None = None) -> dict[str, int]:
+    usage = _as_object(value)
+    fallback = fallback or {}
+    return {
+        field: _to_int(usage.get(field) if field in usage else fallback.get(f"llm_{field}"))
+        for field in _LLM_USAGE_FIELDS
+    }
+
+
+def _flatten_llm_usage(usage: dict[str, int]) -> dict[str, int]:
+    return {f"llm_{field}": _to_int(usage.get(field)) for field in _LLM_USAGE_FIELDS}
+
+
 class _SummaryTextExtractor(HTMLParser):
     _BLOCK_TAGS = {
         "blockquote",
@@ -428,6 +454,7 @@ def _normalize_source(source: dict[str, Any]) -> dict[str, Any]:
     ]
     rss_status = _as_string(source.get("rss_status")) or "unknown"
     transcript_status = _as_string(source.get("transcript_status")) or "unknown"
+    llm_usage = _normalize_llm_usage(source.get("llm_usage"), fallback=source)
 
     source_gate_status = _as_string(source.get("source_gate_status")) or "not_checked"
 
@@ -460,6 +487,8 @@ def _normalize_source(source: dict[str, Any]) -> dict[str, Any]:
         "scored_item_count": sum(1 for item in items if item["has_score"]),
         "written_item_count": sum(1 for item in items if item["is_written"]),
         "failed_item_count": sum(1 for item in items if item["audit_status"] == "failed"),
+        "llm_usage": llm_usage,
+        **_flatten_llm_usage(llm_usage),
     }
 
 
@@ -493,6 +522,7 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
     sources = [_normalize_source(source) for source in raw_sources]
     flat_items = [item for source in sources for item in source["items"]]
     run_finished_at = _as_string(payload.get("run_finished_at"))
+    llm_usage = _normalize_llm_usage(payload.get("llm_usage"), fallback=payload)
 
     return {
         "ok": True,
@@ -520,6 +550,8 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
             ),
             "items_written": _to_int(payload.get("items_written")),
             "poll_runs_version": _to_int(payload.get("poll_runs_version")),
+            "llm_usage": llm_usage,
+            **_flatten_llm_usage(llm_usage),
         },
         "sources": sources,
         "items": flat_items,
@@ -527,5 +559,7 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
         "scored_item_count": sum(1 for item in flat_items if item["has_score"]),
         "written_item_count": sum(1 for item in flat_items if item["is_written"]),
         "failed_item_count": sum(1 for item in flat_items if item["audit_status"] == "failed"),
+        "llm_usage": llm_usage,
+        **_flatten_llm_usage(llm_usage),
         "schema_has_item_details": any(source["audit_item_count"] > 0 for source in sources),
     }

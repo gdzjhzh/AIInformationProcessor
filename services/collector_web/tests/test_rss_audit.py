@@ -1,6 +1,39 @@
 from collector_web.rss_audit import _normalize_source
 
 
+def test_normalize_source_exposes_llm_token_usage_totals():
+    source = {
+        "source_name": "AI News",
+        "source_type": "rss",
+        "llm_usage": {
+            "calls": 3,
+            "usage_missing": 1,
+            "prompt_tokens": 1200,
+            "completion_tokens": 340,
+            "total_tokens": 1540,
+        },
+        "items": [],
+    }
+
+    normalized_source = _normalize_source(source)
+
+    assert normalized_source["llm_usage"] == {
+        "calls": 3,
+        "usage_missing": 1,
+        "prompt_tokens": 1200,
+        "completion_tokens": 340,
+        "total_tokens": 1540,
+        "cached_prompt_tokens": 0,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 0,
+        "reasoning_tokens": 0,
+    }
+    assert normalized_source["llm_calls"] == 3
+    assert normalized_source["llm_prompt_tokens"] == 1200
+    assert normalized_source["llm_completion_tokens"] == 340
+    assert normalized_source["llm_total_tokens"] == 1540
+
+
 def test_normalize_source_dedupes_same_item_audit_states():
     episode_url = "https://www.xiaoyuzhoufm.com/episode/69e999241e94ae6921f2901d"
     source = {

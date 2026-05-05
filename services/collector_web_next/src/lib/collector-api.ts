@@ -88,10 +88,50 @@ export type ServiceStatusPayload = {
   };
 };
 
+export type LlmTokenUsage = {
+  calls?: number;
+  usage_missing?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  cached_prompt_tokens?: number;
+  prompt_cache_hit_tokens?: number;
+  prompt_cache_miss_tokens?: number;
+  reasoning_tokens?: number;
+};
+
+export type RssPollSummary = {
+  execution_id?: string;
+  workflow?: string;
+  workflow_id?: string;
+  run_started_at?: string;
+  run_finished_at?: string;
+  source_count?: number;
+  success_source_count?: number;
+  failed_source_count?: number;
+  items_seen?: number;
+  items_selected_for_processing?: number;
+  items_written?: number;
+  poll_runs_version?: number;
+  llm_usage?: LlmTokenUsage;
+  llm_calls?: number;
+  llm_usage_missing?: number;
+  llm_prompt_tokens?: number;
+  llm_completion_tokens?: number;
+  llm_total_tokens?: number;
+};
+
 export type RssPollPayload = {
   ok?: boolean;
   found?: boolean;
   file_path?: string;
+  poll?: RssPollSummary;
+  llm_usage?: LlmTokenUsage;
+  llm_calls?: number;
+  llm_usage_missing?: number;
+  llm_prompt_tokens?: number;
+  llm_completion_tokens?: number;
+  llm_total_tokens?: number;
   run_started_at?: string;
   run_finished_at?: string;
   sources?: Array<{
@@ -104,6 +144,12 @@ export type RssPollPayload = {
     new_item_count?: number;
     wrote_count?: number;
     qdrant_commit_count?: number;
+    llm_usage?: LlmTokenUsage;
+    llm_calls?: number;
+    llm_usage_missing?: number;
+    llm_prompt_tokens?: number;
+    llm_completion_tokens?: number;
+    llm_total_tokens?: number;
     sample_titles?: string[];
     new_titles?: string[];
     wrote_paths?: string[];
