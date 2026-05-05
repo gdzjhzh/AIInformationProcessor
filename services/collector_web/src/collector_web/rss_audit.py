@@ -160,6 +160,48 @@ def _find_latest_poll_run_file(poll_runs_dir: Path) -> Path | None:
     return max(candidates, key=lambda item: item.stat().st_mtime, default=None)
 
 
+def _poll_run_day_label(payload: dict[str, Any], fallback_file: Path) -> tuple[str, str]:
+    raw_datetime = _as_string(payload.get("run_finished_at") or payload.get("run_started_at"))
+    parsed = _parse_datetime(raw_datetime)
+    if parsed is None:
+        parsed = datetime.fromtimestamp(fallback_file.stat().st_mtime, tz=timezone.utc)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    local_date = parsed.astimezone().date()
+    return local_date.isoformat(), local_date.strftime("%m-%d")
+
+
+def _build_token_history(poll_runs_dir: Path, *, day_limit: int = 14) -> list[dict[str, Any]]:
+    if not poll_runs_dir.exists():
+        return []
+
+    by_date: dict[str, dict[str, Any]] = {}
+    for poll_run_file in poll_runs_dir.rglob("*_01_rss_to_obsidian_raw.json"):
+        try:
+            payload = json.loads(poll_run_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+
+        date_key, label = _poll_run_day_label(payload, poll_run_file)
+        usage = _normalize_llm_usage(payload.get("llm_usage"), fallback=payload)
+        entry = by_date.setdefault(
+            date_key,
+            {
+                "date": date_key,
+                "label": label,
+                "execution_count": 0,
+                **_flatten_llm_usage({}),
+            },
+        )
+        entry["execution_count"] += 1
+        for field in _LLM_USAGE_FIELDS:
+            entry[f"llm_{field}"] += usage[field]
+
+    return [by_date[key] for key in sorted(by_date.keys())][-day_limit:]
+
+
 def _status_label(value: str) -> str:
     return {
         "success": "成功",
@@ -500,6 +542,7 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
             "error": "poll_runs summary not found",
             "latest_file": "",
             "poll": {},
+            "token_history": [],
             "sources": [],
             "items": [],
             "schema_has_item_details": False,
@@ -513,6 +556,7 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
             "error": f"failed to parse poll_runs summary: {exc}",
             "latest_file": str(latest_file),
             "poll": {},
+            "token_history": _build_token_history(settings.poll_runs_dir),
             "sources": [],
             "items": [],
             "schema_has_item_details": False,
@@ -523,6 +567,7 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
     flat_items = [item for source in sources for item in source["items"]]
     run_finished_at = _as_string(payload.get("run_finished_at"))
     llm_usage = _normalize_llm_usage(payload.get("llm_usage"), fallback=payload)
+    token_history = _build_token_history(settings.poll_runs_dir)
 
     return {
         "ok": True,
@@ -555,6 +600,7 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
         },
         "sources": sources,
         "items": flat_items,
+        "token_history": token_history,
         "item_count": len(flat_items),
         "scored_item_count": sum(1 for item in flat_items if item["has_score"]),
         "written_item_count": sum(1 for item in flat_items if item["is_written"]),

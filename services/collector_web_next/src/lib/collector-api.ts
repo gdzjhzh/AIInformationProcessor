@@ -121,6 +121,17 @@ export type RssPollSummary = {
   llm_total_tokens?: number;
 };
 
+export type TokenHistoryPoint = {
+  date?: string;
+  label?: string;
+  execution_count?: number;
+  llm_calls?: number;
+  llm_usage_missing?: number;
+  llm_prompt_tokens?: number;
+  llm_completion_tokens?: number;
+  llm_total_tokens?: number;
+};
+
 export type RssPollPayload = {
   ok?: boolean;
   found?: boolean;
@@ -132,6 +143,7 @@ export type RssPollPayload = {
   llm_prompt_tokens?: number;
   llm_completion_tokens?: number;
   llm_total_tokens?: number;
+  token_history?: TokenHistoryPoint[];
   run_started_at?: string;
   run_finished_at?: string;
   sources?: Array<{

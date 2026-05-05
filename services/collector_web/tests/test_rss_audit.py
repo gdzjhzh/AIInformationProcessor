@@ -1,4 +1,6 @@
-from collector_web.rss_audit import _normalize_source
+import json
+
+from collector_web.rss_audit import _build_token_history, _normalize_source
 
 
 def test_normalize_source_exposes_llm_token_usage_totals():
@@ -32,6 +34,82 @@ def test_normalize_source_exposes_llm_token_usage_totals():
     assert normalized_source["llm_prompt_tokens"] == 1200
     assert normalized_source["llm_completion_tokens"] == 340
     assert normalized_source["llm_total_tokens"] == 1540
+
+
+def test_build_token_history_groups_poll_runs_by_day(tmp_path):
+    poll_runs_dir = tmp_path / "poll_runs"
+    month_dir = poll_runs_dir / "2026" / "05"
+    month_dir.mkdir(parents=True)
+    first_run = {
+        "run_finished_at": "2026-05-04T10:00:00Z",
+        "llm_usage": {
+            "calls": 2,
+            "prompt_tokens": 100,
+            "completion_tokens": 40,
+            "total_tokens": 140,
+        },
+    }
+    second_run = {
+        "run_finished_at": "2026-05-04T14:00:00Z",
+        "llm_total_tokens": 60,
+        "llm_prompt_tokens": 50,
+        "llm_completion_tokens": 10,
+    }
+    third_run = {
+        "run_finished_at": "2026-05-05T10:00:00Z",
+        "llm_usage": {
+            "calls": 1,
+            "prompt_tokens": 30,
+            "completion_tokens": 20,
+            "total_tokens": 50,
+        },
+    }
+
+    (month_dir / "execution-1_01_rss_to_obsidian_raw.json").write_text(
+        json.dumps(first_run),
+        encoding="utf-8",
+    )
+    (month_dir / "execution-2_01_rss_to_obsidian_raw.json").write_text(
+        json.dumps(second_run),
+        encoding="utf-8",
+    )
+    (month_dir / "execution-3_01_rss_to_obsidian_raw.json").write_text(
+        json.dumps(third_run),
+        encoding="utf-8",
+    )
+
+    history = _build_token_history(poll_runs_dir)
+
+    assert history == [
+        {
+            "date": "2026-05-04",
+            "label": "05-04",
+            "execution_count": 2,
+            "llm_calls": 2,
+            "llm_usage_missing": 0,
+            "llm_prompt_tokens": 150,
+            "llm_completion_tokens": 50,
+            "llm_total_tokens": 200,
+            "llm_cached_prompt_tokens": 0,
+            "llm_prompt_cache_hit_tokens": 0,
+            "llm_prompt_cache_miss_tokens": 0,
+            "llm_reasoning_tokens": 0,
+        },
+        {
+            "date": "2026-05-05",
+            "label": "05-05",
+            "execution_count": 1,
+            "llm_calls": 1,
+            "llm_usage_missing": 0,
+            "llm_prompt_tokens": 30,
+            "llm_completion_tokens": 20,
+            "llm_total_tokens": 50,
+            "llm_cached_prompt_tokens": 0,
+            "llm_prompt_cache_hit_tokens": 0,
+            "llm_prompt_cache_miss_tokens": 0,
+            "llm_reasoning_tokens": 0,
+        },
+    ]
 
 
 def test_normalize_source_dedupes_same_item_audit_states():

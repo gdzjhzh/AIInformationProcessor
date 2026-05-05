@@ -39,6 +39,11 @@ export default async function HomePage() {
     ),
     hasData: hasTokenUsage,
   };
+  const tokenHistory = (rssPoll.data.token_history ?? []).map((point) => ({
+    date: textValue(point.date, ""),
+    label: textValue(point.label, textValue(point.date, "")),
+    totalTokens: numberValue(point.llm_total_tokens),
+  }));
 
   return (
     <AppShell>
@@ -48,6 +53,7 @@ export default async function HomePage() {
           subscriptionCount={numberValue(summary.subscription_count)}
           activeCount={numberValue(summary.active_subscription_count)}
           tokenUsage={tokenUsage}
+          tokenHistory={tokenHistory}
         />
 
         <section className="grid gap-4 md:grid-cols-3">
