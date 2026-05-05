@@ -5,6 +5,8 @@ import type { ElementType } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Boxes, GitBranch, ShieldCheck } from "lucide-react";
 
+import { SparklesCore } from "@/components/sparkles-core";
+
 export function HeroStage({
   apiMode,
   subscriptionCount,
@@ -28,26 +30,38 @@ export function HeroStage({
     <section ref={containerRef} className="relative grid gap-5 lg:grid-cols-[0.86fr_1.14fr]">
       <motion.div
         style={{ y: translateY }}
-        className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm"
+        className="relative overflow-hidden rounded-lg border border-emerald-300/20 bg-stone-950 p-6 text-white shadow-2xl shadow-emerald-950/20"
       >
-        <div className="flex items-center gap-2">
-          <span className="rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-            Next Frontend Lab
-          </span>
-          <span className="rounded border border-stone-200 bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
-            {apiMode === "live" ? "FastAPI 已连接" : "FastAPI 离线态"}
-          </span>
-        </div>
-        <h2 className="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-normal text-stone-950">
-          用现代组件方式重画 Collector Web 控制台
-        </h2>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-stone-600">
-          当前版本只读取已有 FastAPI API，不执行提交、重跑、切换模型等操作。
-        </p>
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <MiniMetric label="订阅源" value={subscriptionCount} />
-          <MiniMetric label="启用中" value={activeCount} />
-          <MiniMetric label="交互按钮" value="0" />
+        <SparklesCore
+          background="#020617"
+          className="absolute inset-0"
+          maxSize={1.8}
+          minSize={0.4}
+          particleColor="#8ff8d2"
+          particleDensity={85}
+          speed={2.4}
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(16,185,129,0.24),transparent_32%),linear-gradient(135deg,rgba(2,6,23,0.46),rgba(2,6,23,0.88))]" />
+        <div className="relative z-10">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded border border-emerald-300/40 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100">
+              Next Frontend Lab
+            </span>
+            <span className="rounded border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-semibold text-stone-100">
+              {apiMode === "live" ? "FastAPI 已连接" : "FastAPI 离线态"}
+            </span>
+          </div>
+          <h2 className="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-normal text-white">
+            用现代组件方式重画 Collector Web 控制台
+          </h2>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-stone-300">
+            当前版本只读取已有 FastAPI API，不执行提交、重跑、切换模型等操作。
+          </p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <MiniMetric label="订阅源" value={subscriptionCount} />
+            <MiniMetric label="启用中" value={activeCount} />
+            <MiniMetric label="交互按钮" value="0" />
+          </div>
         </div>
       </motion.div>
 
@@ -105,9 +119,9 @@ export function HeroStage({
 
 function MiniMetric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-      <p className="text-xs font-medium text-stone-500">{label}</p>
-      <strong className="mt-1 block font-mono text-2xl font-semibold tracking-normal">
+    <div className="rounded-lg border border-white/15 bg-white/10 p-3 backdrop-blur-sm">
+      <p className="text-xs font-medium text-stone-300">{label}</p>
+      <strong className="mt-1 block font-mono text-2xl font-semibold tracking-normal text-white">
         {value}
       </strong>
     </div>
