@@ -61,6 +61,19 @@ def ensure_source_last_seen_storage_dir(storage_root: Path) -> str | None:
     return None if existed else str(source_last_seen_root)
 
 
+def ensure_sqlite_sidecar_files(db_path: Path) -> list[str]:
+    """Pre-create SQLite WAL sidecars for Docker Desktop Windows bind mounts."""
+    if not db_path.exists():
+        return []
+
+    created: list[str] = []
+    for sidecar in (Path(f"{db_path}-wal"), Path(f"{db_path}-shm")):
+        if not sidecar.exists():
+            sidecar.touch()
+            created.append(str(sidecar))
+    return created
+
+
 def wait_for_http(base_url: str, timeout_seconds: int, poll_interval_seconds: float) -> dict[str, Any]:
     deadline = time.time() + timeout_seconds
     last_error = ""
@@ -312,6 +325,14 @@ def main() -> int:
     if sync_result.returncode != 0:
         recovery_output: list[str] = []
         if service_stopped:
+            created_sidecars = ensure_sqlite_sidecar_files(args.db_path)
+            step_results.append(
+                {
+                    "step": "ensure_sqlite_sidecar_files_before_recovery_start",
+                    "db_path": str(args.db_path),
+                    "created_files": created_sidecars,
+                }
+            )
             recovery_result = run_command(start_command, cwd=args.compose_dir)
             step_results.append(
                 {
@@ -355,7 +376,75 @@ def main() -> int:
         }
     )
 
+    alignment_command = [
+        sys.executable,
+        str(script_dir / "check_runtime_alignment.py"),
+        "--workflow-dir",
+        str(args.workflow_dir),
+        "--db-path",
+        str(args.db_path),
+        "--debug-log",
+        str(args.debug_log),
+    ]
+    if args.include_untracked:
+        alignment_command.append("--include-untracked")
+    if args.allow_runtime_extras:
+        alignment_command.append("--allow-runtime-extras")
+    for workflow_id in include_ids:
+        alignment_command.extend(["--workflow-id", workflow_id])
+
+    alignment_result = run_command(alignment_command, cwd=args.compose_dir)
+    step_results.append(
+        {
+            "step": "check_runtime_alignment",
+            "command": alignment_command,
+            "returncode": alignment_result.returncode,
+        }
+    )
+    if alignment_result.returncode != 0:
+        recovery_output: list[str] = []
+        if service_stopped:
+            created_sidecars = ensure_sqlite_sidecar_files(args.db_path)
+            step_results.append(
+                {
+                    "step": "ensure_sqlite_sidecar_files_before_alignment_failure_recovery",
+                    "db_path": str(args.db_path),
+                    "created_files": created_sidecars,
+                }
+            )
+            recovery_result = run_command(start_command, cwd=args.compose_dir)
+            step_results.append(
+                {
+                    "step": "recover_n8n_service_after_alignment_failure",
+                    "command": start_command,
+                    "returncode": recovery_result.returncode,
+                }
+            )
+            recovery_output.extend(filter(None, [recovery_result.stdout, recovery_result.stderr]))
+        append_debug_log(
+            script_name="publish_runtime.py",
+            stage="publish_runtime",
+            status="failure",
+            summary="Runtime alignment check failed after stop/sync flow.",
+            details={"steps": step_results},
+            raw_output="\n".join(filter(None, [alignment_result.stdout, alignment_result.stderr, *recovery_output])),
+            log_path=args.debug_log,
+        )
+        sys.stdout.write(alignment_result.stdout)
+        sys.stderr.write(alignment_result.stderr)
+        for chunk in recovery_output:
+            sys.stderr.write(chunk)
+        return alignment_result.returncode
+
     if not args.no_restart:
+        created_sidecars = ensure_sqlite_sidecar_files(args.db_path)
+        step_results.append(
+            {
+                "step": "ensure_sqlite_sidecar_files_before_start",
+                "db_path": str(args.db_path),
+                "created_files": created_sidecars,
+            }
+        )
         restart_result = run_command(start_command, cwd=args.compose_dir)
         step_results.append(
             {
@@ -397,45 +486,6 @@ def main() -> int:
             return 1
 
         step_results.append({"step": "wait_for_n8n", **readiness})
-
-    alignment_command = [
-        sys.executable,
-        str(script_dir / "check_runtime_alignment.py"),
-        "--workflow-dir",
-        str(args.workflow_dir),
-        "--db-path",
-        str(args.db_path),
-        "--debug-log",
-        str(args.debug_log),
-    ]
-    if args.include_untracked:
-        alignment_command.append("--include-untracked")
-    if args.allow_runtime_extras:
-        alignment_command.append("--allow-runtime-extras")
-    for workflow_id in include_ids:
-        alignment_command.extend(["--workflow-id", workflow_id])
-
-    alignment_result = run_command(alignment_command, cwd=args.compose_dir)
-    step_results.append(
-        {
-            "step": "check_runtime_alignment",
-            "command": alignment_command,
-            "returncode": alignment_result.returncode,
-        }
-    )
-    if alignment_result.returncode != 0:
-        append_debug_log(
-            script_name="publish_runtime.py",
-            stage="publish_runtime",
-            status="failure",
-            summary="Runtime alignment check failed after stop/sync/start flow.",
-            details={"steps": step_results},
-            raw_output="\n".join(filter(None, [alignment_result.stdout, alignment_result.stderr])),
-            log_path=args.debug_log,
-        )
-        sys.stdout.write(alignment_result.stdout)
-        sys.stderr.write(alignment_result.stderr)
-        return alignment_result.returncode
 
     optional_steps = [
         (
@@ -498,8 +548,8 @@ def main() -> int:
         stage="publish_runtime",
         status="success",
         summary=(
-            "Publish flow completed: tracked repo workflows synced with n8n stopped, runtime restarted, "
-            "and definition-hash alignment checked."
+            "Publish flow completed: tracked repo workflows synced and definition-hash alignment checked "
+            "with n8n stopped, then runtime restarted."
         ),
         details={"steps": step_results, "debug_log": args.debug_log},
         log_path=args.debug_log,
