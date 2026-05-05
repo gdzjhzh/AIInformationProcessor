@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Geist", "Geist Fallback", "Segoe UI", "Noto Sans SC", sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", "Cascadia Mono", Consolas, monospace;
+}
+
+:root {
+  --background: #f6f6f2;
+  --foreground: #171717;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), "Segoe UI", "Noto Sans SC", sans-serif;
+}
+
+::selection {
+  background: #b8f1df;
+  color: #10201b;
+}
