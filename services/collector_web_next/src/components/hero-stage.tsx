@@ -6,7 +6,6 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { Boxes, GitBranch, ShieldCheck } from "lucide-react";
 
 import { GooeyText } from "@/components/gooey-text";
-import { SparklesCore } from "@/components/sparkles-core";
 
 type TokenUsage = {
   totalTokens: number;
@@ -50,17 +49,8 @@ export function HeroStage({
     <section ref={containerRef} className="relative grid gap-5 lg:grid-cols-[0.86fr_1.14fr]">
       <motion.div
         style={{ y: translateY }}
-        className="relative overflow-hidden rounded-lg border border-emerald-300/20 bg-stone-950 p-6 text-white shadow-2xl shadow-emerald-950/20"
+        className="relative overflow-hidden rounded-lg border border-emerald-300/20 bg-slate-950/68 p-6 text-white shadow-2xl shadow-emerald-950/20 backdrop-blur-sm"
       >
-        <SparklesCore
-          background="#020617"
-          className="absolute inset-0"
-          maxSize={1.8}
-          minSize={0.4}
-          particleColor="#8ff8d2"
-          particleDensity={85}
-          speed={2.4}
-        />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(16,185,129,0.24),transparent_32%),linear-gradient(135deg,rgba(2,6,23,0.46),rgba(2,6,23,0.88))]" />
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2">

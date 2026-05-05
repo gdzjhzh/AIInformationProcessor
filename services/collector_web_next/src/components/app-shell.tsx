@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Activity, DatabaseZap, Radio, SendHorizontal } from "lucide-react";
 
+import { SparklesCore } from "@/components/sparkles-core";
+
 const navItems = [
   { href: "/", label: "总览", icon: Activity },
   { href: "/status", label: "服务状态", icon: DatabaseZap },
@@ -10,8 +12,20 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(16,185,129,0.13),transparent_30%),radial-gradient(circle_at_84%_8%,rgba(59,130,246,0.12),transparent_28%),linear-gradient(180deg,#020617,#030712_34%,#050816)]" />
+    <div className="relative min-h-screen bg-slate-950 text-slate-100">
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_16%_12%,rgba(16,185,129,0.13),transparent_30%),radial-gradient(circle_at_84%_8%,rgba(59,130,246,0.12),transparent_28%),linear-gradient(180deg,#020617,#030712_34%,#050816)]" />
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 opacity-[0.38]">
+        <SparklesCore
+          id="collector-page-sparkles"
+          background="transparent"
+          className="absolute inset-0"
+          maxSize={1.35}
+          minSize={0.3}
+          particleColor="#8ff8d2"
+          particleDensity={52}
+          speed={1.8}
+        />
+      </div>
       <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/78 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Link href="/" className="min-w-0">
