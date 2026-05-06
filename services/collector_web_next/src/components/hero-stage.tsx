@@ -43,17 +43,15 @@ export function HeroStage({
     offset: ["start start", "end start"],
   });
 
-  const rotateX = useTransform(scrollYProgress, [0, 1], [14, 0]);
-  const scale = useTransform(scrollYProgress, [0, 1], [0.96, 1]);
   const translateY = useTransform(scrollYProgress, [0, 1], [0, -42]);
 
   return (
     <section ref={containerRef} className="relative grid gap-5">
       <motion.div
         style={{ y: translateY }}
-        className="relative overflow-hidden rounded-lg border border-emerald-300/20 bg-slate-950/68 p-6 text-white shadow-2xl shadow-emerald-950/20 backdrop-blur-sm"
+        className="relative overflow-hidden rounded-lg border border-white/15 bg-black/20 p-6 text-white shadow-2xl shadow-black/20 backdrop-blur-[2px]"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(16,185,129,0.24),transparent_32%),linear-gradient(135deg,rgba(2,6,23,0.46),rgba(2,6,23,0.88))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(16,185,129,0.08),transparent_32%),linear-gradient(135deg,rgba(2,6,23,0.08),rgba(2,6,23,0.18))]" />
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded border border-emerald-300/40 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100">
@@ -85,12 +83,11 @@ export function HeroStage({
         </div>
       </motion.div>
 
-      <div className="min-h-[28rem] [perspective:1200px]">
+      <div className="min-h-[28rem]">
         <motion.div
-          style={{ rotateX, scale }}
-          className="h-full rounded-xl border border-white/10 bg-black p-2 shadow-2xl shadow-emerald-950/30"
+          className="h-full rounded-xl border border-white/10 bg-black/15 p-2 shadow-2xl shadow-black/20 backdrop-blur-[2px]"
         >
-          <div className="grid h-full overflow-hidden rounded-lg border border-white/10 bg-slate-950 p-4">
+          <div className="grid h-full overflow-hidden rounded-lg border border-white/10 bg-black/20 p-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
@@ -115,7 +112,7 @@ export function HeroStage({
 
 function MiniMetric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border border-white/15 bg-white/10 p-3 backdrop-blur-sm">
+    <div className="rounded-lg border border-white/15 bg-black/[0.18] p-3 backdrop-blur-[1px]">
       <p className="text-xs font-medium text-stone-300">{label}</p>
       <strong className="mt-1 block font-mono text-2xl font-semibold tracking-normal text-white">
         {value}
@@ -183,7 +180,7 @@ function DailyUsageTile({
   const Icon = metric.icon;
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
+    <div className="rounded-lg border border-white/10 bg-black/[0.18] p-3 backdrop-blur-[1px]">
       <div className="flex items-center justify-between gap-3">
         <Icon className="h-4 w-4 shrink-0 text-emerald-300" />
         <span className="truncate font-mono text-xs text-slate-500">{dateLabel}</span>
@@ -216,7 +213,7 @@ function TokenUsageChart({
   const maxTotal = Math.max(...points.map((point) => point.totalTokens), 0);
 
   return (
-    <div className="rounded-lg border border-emerald-300/15 bg-emerald-300/[0.055] p-4">
+    <div className="rounded-lg border border-emerald-300/15 bg-emerald-300/[0.035] p-4 backdrop-blur-[1px]">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
           Daily total tokens
