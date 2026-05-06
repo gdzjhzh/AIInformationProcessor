@@ -19,6 +19,10 @@ type TokenUsage = {
 type TokenHistoryPoint = {
   date: string;
   label: string;
+  executionCount?: number;
+  calls?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   totalTokens: number;
 };
 
@@ -102,23 +106,7 @@ export function HeroStage({
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
               </div>
             </div>
-            <div className="grid gap-3 py-4 md:grid-cols-3">
-              <PreviewTile
-                icon={Boxes}
-                label="Total tokens"
-                value={formatTokenNumber(tokenUsage.totalTokens)}
-              />
-              <PreviewTile
-                icon={ShieldCheck}
-                label="Input tokens"
-                value={formatTokenNumber(tokenUsage.inputTokens)}
-              />
-              <PreviewTile
-                icon={GitBranch}
-                label="Output tokens"
-                value={formatTokenNumber(tokenUsage.outputTokens)}
-              />
-            </div>
+            <DailyUsageCards tokenUsage={tokenUsage} tokenHistory={tokenHistory} />
             <TokenUsageChart tokenUsage={tokenUsage} tokenHistory={tokenHistory} />
           </div>
         </motion.div>
@@ -138,24 +126,74 @@ function MiniMetric({ label, value }: { label: string; value: string | number })
   );
 }
 
-function PreviewTile({
+function DailyUsageCards({
+  tokenUsage,
+  tokenHistory,
+}: {
+  tokenUsage: TokenUsage;
+  tokenHistory?: TokenHistoryPoint[];
+}) {
+  const history = tokenHistory ?? [];
+  const dailyPoints =
+    history.length > 0
+      ? history.slice(-3)
+      : [
+          {
+            date: "latest",
+            label: "Today",
+            calls: tokenUsage.calls,
+            inputTokens: tokenUsage.inputTokens,
+            outputTokens: tokenUsage.outputTokens,
+            totalTokens: tokenUsage.totalTokens,
+          },
+        ];
+
+  return (
+    <div className="grid gap-3 py-4 md:grid-cols-3">
+      {dailyPoints.map((point, index) => (
+        <DailyUsageTile
+          key={`${point.date || point.label}-${index}`}
+          icon={index === 0 ? Boxes : index === 1 ? ShieldCheck : GitBranch}
+          point={point}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DailyUsageTile({
   icon: Icon,
-  label,
-  value,
+  point,
 }: {
   icon: ElementType;
-  label: string;
-  value: string | number;
+  point: TokenHistoryPoint;
 }) {
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
-      <Icon className="h-4 w-4 text-emerald-300" />
+      <div className="flex items-center justify-between gap-3">
+        <Icon className="h-4 w-4 shrink-0 text-emerald-300" />
+        <span className="truncate font-mono text-xs text-slate-500">{point.label || point.date}</span>
+      </div>
       <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-        {label}
+        Daily tokens
       </p>
-      <strong className="mt-1 block truncate font-mono text-xl font-semibold tracking-normal text-white">
-        {value}
+      <strong className="mt-1 block truncate font-mono text-2xl font-semibold tracking-normal text-white">
+        {formatTokenNumber(point.totalTokens)}
       </strong>
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-white/10 pt-3 text-[0.68rem] text-slate-400">
+        <span>
+          <span className="block font-mono text-slate-200">{formatCompactNumber(point.calls ?? 0)}</span>
+          calls
+        </span>
+        <span>
+          <span className="block font-mono text-slate-200">{formatCompactNumber(point.inputTokens ?? 0)}</span>
+          input
+        </span>
+        <span>
+          <span className="block font-mono text-slate-200">{formatCompactNumber(point.outputTokens ?? 0)}</span>
+          output
+        </span>
+      </div>
     </div>
   );
 }
@@ -202,12 +240,12 @@ function TokenLineChart({
   points: TokenHistoryPoint[];
   maxTotal: number;
 }) {
-  const chartWidth = 420;
-  const chartHeight = 172;
-  const paddingLeft = 52;
-  const paddingRight = 18;
-  const paddingTop = 18;
-  const paddingBottom = 34;
+  const chartWidth = 760;
+  const chartHeight = 284;
+  const paddingLeft = 64;
+  const paddingRight = 28;
+  const paddingTop = 24;
+  const paddingBottom = 52;
   const plotWidth = chartWidth - paddingLeft - paddingRight;
   const plotHeight = chartHeight - paddingTop - paddingBottom;
   const denominator = Math.max(maxTotal, 1);
@@ -230,7 +268,7 @@ function TokenLineChart({
 
   return (
     <svg
-      className="h-44 w-full overflow-visible"
+      className="h-72 w-full overflow-visible"
       viewBox={`0 0 ${chartWidth} ${chartHeight}`}
       role="img"
       aria-label="Daily total token line chart"
@@ -293,7 +331,9 @@ function TokenLineChart({
         </g>
       ))}
       {coordinates.map((point, index) => {
-        const shouldShow = index === 0 || index === coordinates.length - 1 || coordinates.length <= 6;
+        const labelEvery = Math.max(1, Math.ceil(coordinates.length / 8));
+        const shouldShow =
+          index === 0 || index === coordinates.length - 1 || index % labelEvery === 0;
         return shouldShow ? (
           <text
             key={`${point.date}-label`}
