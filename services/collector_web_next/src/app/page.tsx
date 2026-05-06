@@ -42,8 +42,6 @@ export default async function HomePage() {
   const tokenHistory = (rssPoll.data.token_history ?? []).map((point) => ({
     date: textValue(point.date, ""),
     label: textValue(point.label, textValue(point.date, "")),
-    executionCount: numberValue(point.execution_count),
-    calls: numberValue(point.llm_calls),
     inputTokens: numberValue(point.llm_prompt_tokens),
     outputTokens: numberValue(point.llm_completion_tokens),
     totalTokens: numberValue(point.llm_total_tokens),

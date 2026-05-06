@@ -19,8 +19,6 @@ type TokenUsage = {
 type TokenHistoryPoint = {
   date: string;
   label: string;
-  executionCount?: number;
-  calls?: number;
   inputTokens?: number;
   outputTokens?: number;
   totalTokens: number;
@@ -134,65 +132,70 @@ function DailyUsageCards({
   tokenHistory?: TokenHistoryPoint[];
 }) {
   const history = tokenHistory ?? [];
-  const dailyPoints =
+  const latestPoint =
     history.length > 0
-      ? history.slice(-3)
-      : [
-          {
-            date: "latest",
-            label: "Today",
-            calls: tokenUsage.calls,
-            inputTokens: tokenUsage.inputTokens,
-            outputTokens: tokenUsage.outputTokens,
-            totalTokens: tokenUsage.totalTokens,
-          },
-        ];
+      ? history[history.length - 1]
+      : {
+          date: "latest",
+          label: "Today",
+          inputTokens: tokenUsage.inputTokens,
+          outputTokens: tokenUsage.outputTokens,
+          totalTokens: tokenUsage.totalTokens,
+        };
+  const metrics = [
+    {
+      icon: ShieldCheck,
+      label: "每日输入",
+      value: latestPoint.inputTokens ?? 0,
+    },
+    {
+      icon: GitBranch,
+      label: "每日输出",
+      value: latestPoint.outputTokens ?? 0,
+    },
+    {
+      icon: Boxes,
+      label: "每日总量",
+      value: latestPoint.totalTokens,
+    },
+  ];
 
   return (
     <div className="grid gap-3 py-4 md:grid-cols-3">
-      {dailyPoints.map((point, index) => (
-        <DailyUsageTile
-          key={`${point.date || point.label}-${index}`}
-          icon={index === 0 ? Boxes : index === 1 ? ShieldCheck : GitBranch}
-          point={point}
-        />
+      {metrics.map((metric) => (
+        <DailyUsageTile key={metric.label} metric={metric} dateLabel={latestPoint.label || latestPoint.date} />
       ))}
     </div>
   );
 }
 
 function DailyUsageTile({
-  icon: Icon,
-  point,
+  metric,
+  dateLabel,
 }: {
-  icon: ElementType;
-  point: TokenHistoryPoint;
+  metric: {
+    icon: ElementType;
+    label: string;
+    value: number;
+  };
+  dateLabel: string;
 }) {
+  const Icon = metric.icon;
+
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.045] p-3">
       <div className="flex items-center justify-between gap-3">
         <Icon className="h-4 w-4 shrink-0 text-emerald-300" />
-        <span className="truncate font-mono text-xs text-slate-500">{point.label || point.date}</span>
+        <span className="truncate font-mono text-xs text-slate-500">{dateLabel}</span>
       </div>
       <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-        Daily tokens
+        {metric.label}
       </p>
       <strong className="mt-1 block truncate font-mono text-2xl font-semibold tracking-normal text-white">
-        {formatTokenNumber(point.totalTokens)}
+        {formatTokenNumber(metric.value)}
       </strong>
-      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-white/10 pt-3 text-[0.68rem] text-slate-400">
-        <span>
-          <span className="block font-mono text-slate-200">{formatCompactNumber(point.calls ?? 0)}</span>
-          calls
-        </span>
-        <span>
-          <span className="block font-mono text-slate-200">{formatCompactNumber(point.inputTokens ?? 0)}</span>
-          input
-        </span>
-        <span>
-          <span className="block font-mono text-slate-200">{formatCompactNumber(point.outputTokens ?? 0)}</span>
-          output
-        </span>
+      <div className="mt-3 border-t border-white/10 pt-3">
+        <span className="font-mono text-xs text-slate-500">tokens / day</span>
       </div>
     </div>
   );
