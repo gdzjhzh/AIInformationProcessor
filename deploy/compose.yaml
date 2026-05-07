@@ -225,6 +225,24 @@ services:
       COLLECTOR_WEB_CALIBRATION_COMPARE_TIMEOUT_SECONDS: ${COLLECTOR_WEB_CALIBRATION_COMPARE_TIMEOUT_SECONDS:-30}
       RSS_SOURCE_URLS_JSON: ${RSS_SOURCE_URLS_JSON:-[]}
 
+  collector-web-next:
+    build:
+      context: ../services/collector_web_next
+      dockerfile: Dockerfile
+    image: ${COLLECTOR_WEB_NEXT_IMAGE:-signal-to-obsidian-collector-web-next:local}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${COLLECTOR_WEB_NEXT_PORT:-18310}:3000"
+    environment:
+      TZ: ${TZ:-America/New_York}
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      COLLECTOR_WEB_API_BASE_URL: ${COLLECTOR_WEB_NEXT_API_BASE_URL:-http://collector-web:8300}
+    depends_on:
+      - collector-web
+
   rsshub:
     image: ${RSSHUB_IMAGE:-diygod/rsshub:latest}
     restart: unless-stopped

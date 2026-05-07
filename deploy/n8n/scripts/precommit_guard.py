@@ -17,7 +17,8 @@ WORKFLOW_BOUNDARY_SCRIPT = Path(__file__).resolve().with_name("validate_workflow
 REGRESSION_MATRIX_SCRIPT = Path(__file__).resolve().with_name("validate_regression_matrix.py")
 SMOKE_SCRIPT = Path(__file__).resolve().with_name("smoke_qdrant_gate.py")
 DEFAULT_ENV_FILE = ROOT_DIR / "deploy" / ".env"
-DEFAULT_QDRANT_BASE_URL = "http://127.0.0.1:6333"
+DEFAULT_QDRANT_HOST = "127.0.0.1"
+DEFAULT_QDRANT_PORT = "6333"
 
 CONTRACT_TRIGGERS = (
     "contracts/",
@@ -80,6 +81,33 @@ def ensure_qdrant_reachable(base_url: str) -> bool:
         return False
 
 
+def read_env_value(env_file: Path, key: str) -> str | None:
+    try:
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError:
+        lines = env_file.read_text(encoding="utf-8-sig").splitlines()
+
+    prefix = f"{key}="
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or not line.startswith(prefix):
+            continue
+        value = line[len(prefix) :].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        return value
+    return None
+
+
+def resolve_qdrant_base_url(env_file: Path, explicit_base_url: str | None) -> str:
+    if explicit_base_url:
+        return explicit_base_url
+
+    env_port = read_env_value(env_file, "QDRANT_PORT")
+    port = env_port or os.getenv("QDRANT_PORT") or DEFAULT_QDRANT_PORT
+    return f"http://{DEFAULT_QDRANT_HOST}:{port}"
+
+
 def run_contract_check(paths: list[str]) -> int:
     if not should_run(paths, CONTRACT_TRIGGERS):
         print("[pre-commit] contract: skipped (no contract-sensitive files changed)")
@@ -93,7 +121,7 @@ def run_contract_check(paths: list[str]) -> int:
     return run_command([sys.executable, str(REGRESSION_MATRIX_SCRIPT)], label="regression-matrix")
 
 
-def run_smoke_check(paths: list[str], *, env_file: Path, qdrant_base_url: str) -> int:
+def run_smoke_check(paths: list[str], *, env_file: Path, qdrant_base_url: str | None) -> int:
     if not should_run(paths, SMOKE_TRIGGERS):
         print("[pre-commit] smoke: skipped (no runtime-sensitive files changed)")
         return 0
@@ -110,6 +138,7 @@ def run_smoke_check(paths: list[str], *, env_file: Path, qdrant_base_url: str) -
         )
         return 1
 
+    qdrant_base_url = resolve_qdrant_base_url(env_file, qdrant_base_url)
     if not ensure_qdrant_reachable(qdrant_base_url):
         return 1
 
@@ -143,8 +172,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--qdrant-base-url",
-        default=DEFAULT_QDRANT_BASE_URL,
-        help="Host-reachable Qdrant base URL used by runtime smoke.",
+        default=None,
+        help="Host-reachable Qdrant base URL used by runtime smoke. Defaults to deploy/.env QDRANT_PORT.",
     )
     parser.add_argument(
         "paths",
