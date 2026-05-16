@@ -127,6 +127,46 @@ npx -y @larksuite/cli im +chat-search --as bot --query "目标群名"
 npx -y @larksuite/cli im +messages-send --as bot --chat-id "oc_xxx" --text "Signal to Obsidian 飞书应用机器人测试"
 ```
 
+### 飞书卡片回调 Cloudflare Tunnel
+
+飞书应用机器人要接收“展开完整卡片”按钮回调时，飞书云端必须能访问一个公网 HTTPS URL。仓库提供了 `feishu-tunnel` profile，只暴露回调路径，不暴露完整 `collector-web` 管理界面：
+
+```text
+飞书 -> Cloudflare Tunnel -> feishu-callback-proxy:8080 -> collector-web:8300/api/feishu/card-action
+```
+
+安全边界：
+- `feishu-callback-proxy` 使用 `nginx`，只转发 `POST /api/feishu/card-action`
+- `/health` 只返回 `ok`，其余路径全部 `404`
+- `cloudflared` 不映射宿主机端口，只主动连到 Cloudflare
+- Tunnel token 只放 ignored 的 `deploy/.env`，不要提交
+
+Cloudflare Zero Trust 后台配置：
+1. 创建一个 Cloudflare Tunnel，复制 tunnel token 到 `deploy/.env`：
+   ```env
+   CLOUDFLARED_TUNNEL_TOKEN=...
+   ```
+2. 在 tunnel 的 Public Hostname 里添加域名，例如：
+   ```text
+   feishu-callback.example.com -> http://feishu-callback-proxy:8080
+   ```
+3. 在飞书开放平台把卡片回调地址配置成：
+   ```text
+   https://feishu-callback.example.com/api/feishu/card-action
+   ```
+4. 启动 tunnel profile：
+   ```powershell
+   docker compose --profile feishu-tunnel up -d feishu-callback-proxy cloudflared
+   ```
+
+本地验证代理只暴露允许的路径：
+
+```powershell
+docker compose --profile feishu-tunnel up -d feishu-callback-proxy
+docker compose exec feishu-callback-proxy nginx -t
+docker compose exec feishu-callback-proxy wget -qO- http://127.0.0.1:8080/health
+```
+
 `06_manual_media_submit.json` 是本地手动媒体入口，只接 `YouTube / 播客 / 其他音视频 URL`，然后先走 `04` transcript adapter，再显式进入共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`；它不处理文章正文或通用手动笔记。默认本地 webhook 为：
 
 ```text
@@ -214,6 +254,7 @@ docker compose --profile headless up -d browserless rsshub
 - `FEISHU_APP_NOTIFY_URL`: n8n 调用 `collector-web` 的内部通知入口，默认 `http://collector-web:8300/api/internal/feishu/notify`
 - `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_TARGET_CHAT_ID`: 飞书应用机器人发送 compact 卡片所需配置
 - `FEISHU_VERIFICATION_TOKEN` / `FEISHU_ENCRYPT_KEY`: 飞书卡片回调校验配置；当前实现支持未加密 URL verification 和卡片按钮回调，生产公网回调建议补齐飞书侧校验配置
+- `CLOUDFLARED_TUNNEL_TOKEN`: Cloudflare Tunnel 连接 token。只用于 `feishu-tunnel` profile，不要提交到 Git
 
 ### 飞书消息卡片测试
 
