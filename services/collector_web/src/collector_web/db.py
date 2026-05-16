@@ -287,6 +287,34 @@ def init_database(settings: Settings) -> None:
                 ON manual_submissions(created_at DESC, id DESC);
             CREATE INDEX IF NOT EXISTS idx_manual_submissions_status
                 ON manual_submissions(status, created_at DESC, id DESC);
+
+            CREATE TABLE IF NOT EXISTS feishu_app_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                notification_id TEXT NOT NULL UNIQUE,
+                item_id TEXT,
+                title TEXT NOT NULL,
+                source_name TEXT,
+                source_type TEXT,
+                canonical_url TEXT,
+                vault_path TEXT,
+                payload_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'sent', 'failed', 'expanded')),
+                chat_id TEXT,
+                message_id TEXT,
+                request_json TEXT,
+                response_json TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                sent_at TEXT,
+                expanded_at TEXT,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_feishu_app_notifications_item_id
+                ON feishu_app_notifications(item_id);
+            CREATE INDEX IF NOT EXISTS idx_feishu_app_notifications_created_at
+                ON feishu_app_notifications(created_at DESC, id DESC);
             """
         )
 

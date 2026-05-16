@@ -15,6 +15,7 @@ from ..calibration_compare import (
 )
 from ..config import get_settings
 from ..db import init_database
+from ..feishu_app import FeishuAppError, handle_card_action, send_compact_notification
 from ..manual_submit import (
     ManualMediaSubmitError,
     cancel_manual_submission,
@@ -59,6 +60,10 @@ class MainlineLlmSwitchRequest(BaseModel):
     model: str | None = None
 
 
+class FeishuNotifyRequest(BaseModel):
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 def _build_submit_payload(payload: ManualMediaSubmitRequest) -> dict[str, Any]:
     submit_payload = {"url": payload.url.strip()}
     if payload.max_polls is not None:
@@ -96,6 +101,12 @@ def create_app() -> FastAPI:
             "manual_media_submit_url": settings.manual_media_submit_url,
             "qdrant_base_url": settings.qdrant_base_url,
             "qdrant_collection": settings.qdrant_collection,
+            "feishu_notify_mode": settings.feishu_notify_mode,
+            "feishu_app_configured": bool(
+                settings.feishu_app_id
+                and settings.feishu_app_secret
+                and settings.feishu_target_chat_id
+            ),
         }
 
     @app.get("/api/collections")
@@ -122,6 +133,26 @@ def create_app() -> FastAPI:
         try:
             return switch_mainline_llm_model(settings, payload.model)
         except MainlineLlmSwitchError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/api/internal/feishu/notify", status_code=status.HTTP_202_ACCEPTED)
+    async def feishu_notify_api(payload: FeishuNotifyRequest) -> dict[str, Any]:
+        try:
+            return send_compact_notification(settings, payload.payload)
+        except FeishuAppError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/api/feishu/card-action")
+    async def feishu_card_action_api(request: Request) -> dict[str, Any]:
+        try:
+            payload = await request.json()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid JSON body") from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="invalid callback body")
+        try:
+            return handle_card_action(settings, payload)
+        except FeishuAppError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @app.post("/api/calibration-compare", status_code=status.HTTP_202_ACCEPTED)

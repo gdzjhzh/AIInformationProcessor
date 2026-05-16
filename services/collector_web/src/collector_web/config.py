@@ -45,6 +45,14 @@ class Settings:
     mainline_llm_thinking_type: str
     mainline_llm_container_name: str
     mainline_llm_docker_socket_path: Path
+    feishu_notify_mode: str
+    feishu_app_id: str
+    feishu_app_secret: str
+    feishu_target_chat_id: str
+    feishu_callback_verification_token: str
+    feishu_callback_encrypt_key: str
+    feishu_api_base_url: str
+    feishu_request_timeout_seconds: int
 
 
 @lru_cache(maxsize=1)
@@ -208,5 +216,22 @@ def get_settings() -> Settings:
                 "COLLECTOR_WEB_MAINLINE_LLM_DOCKER_SOCKET_PATH",
                 "/var/run/docker.sock",
             ).strip()
+        ),
+        feishu_notify_mode=os.getenv("FEISHU_NOTIFY_MODE", "webhook").strip().lower()
+        or "webhook",
+        feishu_app_id=os.getenv("FEISHU_APP_ID", "").strip(),
+        feishu_app_secret=os.getenv("FEISHU_APP_SECRET", "").strip(),
+        feishu_target_chat_id=os.getenv("FEISHU_TARGET_CHAT_ID", "").strip(),
+        feishu_callback_verification_token=os.getenv(
+            "FEISHU_VERIFICATION_TOKEN",
+            "",
+        ).strip(),
+        feishu_callback_encrypt_key=os.getenv("FEISHU_ENCRYPT_KEY", "").strip(),
+        feishu_api_base_url=os.getenv(
+            "FEISHU_API_BASE_URL",
+            "https://open.feishu.cn",
+        ).strip().rstrip("/"),
+        feishu_request_timeout_seconds=int(
+            os.getenv("FEISHU_REQUEST_TIMEOUT_SECONDS", "20")
         ),
     )

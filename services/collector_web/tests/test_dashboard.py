@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 import collector_web.calibration_compare as calibration_compare_module
 import collector_web.mainline_llm as mainline_llm_module
 import collector_web.db as db_module
+import collector_web.feishu_app as feishu_app_module
 import collector_web.precheck as precheck_module
 import collector_web.status as status_module
 from collector_web.api import app as app_module
@@ -18,6 +19,7 @@ from collector_web.repository import (
     get_manual_submission,
     mark_manual_submission_running,
 )
+from collector_web.feishu_app import get_notification
 
 RSS_SOURCE_URLS_JSON = """
 [
@@ -174,6 +176,176 @@ def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path)
     assert job["file_links"][0]["url"] == (
         "http://127.0.0.1:18080/model-compare/job-1/2026-04-25_deepseek.md"
     )
+
+
+def test_feishu_app_notify_api_sends_compact_card(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_NOTIFY_MODE", "app")
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_test_app")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "test-secret")
+    monkeypatch.setenv("FEISHU_TARGET_CHAT_ID", "oc_test")
+    get_settings.cache_clear()
+
+    sent_cards = []
+
+    def fake_send_card_message(settings, *, chat_id, card, idempotency_key):
+        sent_cards.append(
+            {
+                "chat_id": chat_id,
+                "card": card,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return {"code": 0, "data": {"message_id": "om_test"}}
+
+    monkeypatch.setattr(feishu_app_module, "send_card_message", fake_send_card_message)
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/internal/feishu/notify",
+            json={
+                "payload": {
+                    "feishu_notification_id": "notify-test-1",
+                    "item_id": "item-1",
+                    "title": "重要文章",
+                    "note_quick_take": "这篇值得看，因为它给出一个新的执行判断。",
+                    "summary": "完整摘要",
+                    "should_notify": True,
+                    "vault_write_status": "written",
+                }
+            },
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "sent"
+    assert body["delivery_mode"] == "feishu_app"
+    assert body["notification_id"] == "notify-test-1"
+    assert body["message_id"] == "om_test"
+    assert sent_cards[0]["chat_id"] == "oc_test"
+    assert sent_cards[0]["card"]["header"]["title"]["content"] == "AI 推荐"
+    assert sent_cards[0]["idempotency_key"] == "notify-test-1"
+
+    notification = get_notification(get_settings(), "notify-test-1")
+    assert notification is not None
+    assert notification["status"] == "sent"
+    assert notification["message_id"] == "om_test"
+    assert notification["notification_payload"]["item_id"] == "item-1"
+
+
+def test_feishu_app_notify_api_is_idempotent_after_sent(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_NOTIFY_MODE", "app")
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_test_app")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "test-secret")
+    monkeypatch.setenv("FEISHU_TARGET_CHAT_ID", "oc_test")
+    get_settings.cache_clear()
+
+    send_count = 0
+
+    def fake_send_card_message(settings, *, chat_id, card, idempotency_key):
+        nonlocal send_count
+        send_count += 1
+        return {"code": 0, "data": {"message_id": "om_once"}}
+
+    monkeypatch.setattr(feishu_app_module, "send_card_message", fake_send_card_message)
+    payload = {
+        "payload": {
+            "feishu_notification_id": "notify-idempotent",
+            "item_id": "item-idempotent",
+            "title": "幂等文章",
+            "summary": "完整摘要",
+            "should_notify": True,
+            "vault_write_status": "written",
+        }
+    }
+
+    with TestClient(create_app()) as client:
+        first_response = client.post("/api/internal/feishu/notify", json=payload)
+        second_response = client.post("/api/internal/feishu/notify", json=payload)
+
+    assert first_response.status_code == 202
+    assert second_response.status_code == 202
+    assert second_response.json()["idempotent"] is True
+    assert second_response.json()["message_id"] == "om_once"
+    assert send_count == 1
+
+
+def test_feishu_card_action_replies_with_full_card(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_NOTIFY_MODE", "app")
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_test_app")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "test-secret")
+    monkeypatch.setenv("FEISHU_TARGET_CHAT_ID", "oc_default")
+    get_settings.cache_clear()
+
+    sent_cards = []
+
+    def fake_send_card_message(settings, *, chat_id, card, idempotency_key):
+        sent_cards.append(
+            {
+                "chat_id": chat_id,
+                "title": card["header"]["title"]["content"],
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return {"code": 0, "data": {"message_id": f"om_{len(sent_cards)}"}}
+
+    monkeypatch.setattr(feishu_app_module, "send_card_message", fake_send_card_message)
+
+    with TestClient(create_app()) as client:
+        create_response = client.post(
+            "/api/internal/feishu/notify",
+            json={
+                "payload": {
+                    "feishu_notification_id": "notify-test-2",
+                    "item_id": "item-2",
+                    "title": "另一篇文章",
+                    "note_quick_take": "一句话推荐",
+                    "summary": "这里是完整摘要。",
+                    "note_key_points": ["观点一", "观点二"],
+                    "should_notify": True,
+                    "vault_write_status": "written",
+                }
+            },
+        )
+        callback_response = client.post(
+            "/api/feishu/card-action",
+            json={
+                "event": {
+                    "context": {"open_chat_id": "oc_callback"},
+                    "action": {
+                        "value": {
+                            "action": "show_full",
+                            "notification_id": "notify-test-2",
+                        }
+                    },
+                }
+            },
+        )
+
+    assert create_response.status_code == 202
+    assert callback_response.status_code == 200
+    assert callback_response.json()["toast"]["type"] == "success"
+    assert [entry["title"] for entry in sent_cards] == ["AI 推荐", "AI 信息摘要"]
+    assert sent_cards[1]["chat_id"] == "oc_callback"
+    assert sent_cards[1]["idempotency_key"] == "notify-test-2-full"
+    assert get_notification(get_settings(), "notify-test-2")["status"] == "expanded"
+
+
+def test_feishu_card_action_url_verification(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_VERIFICATION_TOKEN", "verify-token")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/feishu/card-action",
+            json={"token": "verify-token", "challenge": "challenge-code"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"challenge": "challenge-code"}
 
 
 def test_calibration_compare_open_directory_api(monkeypatch, tmp_path):

@@ -108,6 +108,25 @@ docker compose up -d memos n8n qdrant redis rsshub
 
 `09_feishu_notify.json` 是写库后的即时通知支路。`01` 和 `06` 都会在 `05_common_vault_writer` 写入 Obsidian 之后调用它；只有当 `should_notify=true`、`vault_write_status=written` 且 `FEISHU_WEBHOOK_URL` 已配置时，才会用群机器人消息卡片把轻量摘要推送到飞书。它不会把飞书 webhook URL 写回下游 JSON。
 
+如果要把飞书通知切成“一句话推荐 + 点击后展开完整卡片”，可以把通知模式切到飞书应用机器人：
+
+```env
+FEISHU_NOTIFY_MODE=app
+FEISHU_APP_ID=cli_xxx
+FEISHU_APP_SECRET=...
+FEISHU_TARGET_CHAT_ID=oc_xxx
+```
+
+此模式下 `09_feishu_notify.json` 不再直接调用群机器人 webhook，而是把通知候选发给 `collector-web` 的 `/api/internal/feishu/notify`。`collector-web` 会用飞书应用机器人发送 compact 卡片，并把完整摘要保存到本地 `feishu_app_notifications` 表；卡片按钮回调入口是 `/api/feishu/card-action`，用于按 `notification_id` 发送完整大卡片。飞书云端要能访问这个回调地址，生产使用时需要给 `collector-web` 配公网 URL 或反向隧道，并在飞书开放平台订阅卡片回传交互回调。
+
+开发和验权时可以用官方 CLI 快速找群与试发：
+
+```powershell
+npx -y @larksuite/cli auth login --domain im
+npx -y @larksuite/cli im +chat-search --as bot --query "目标群名"
+npx -y @larksuite/cli im +messages-send --as bot --chat-id "oc_xxx" --text "Signal to Obsidian 飞书应用机器人测试"
+```
+
 `06_manual_media_submit.json` 是本地手动媒体入口，只接 `YouTube / 播客 / 其他音视频 URL`，然后先走 `04` transcript adapter，再显式进入共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05`；它不处理文章正文或通用手动笔记。默认本地 webhook 为：
 
 ```text
@@ -191,6 +210,10 @@ docker compose --profile headless up -d browserless rsshub
 - `QDRANT_DIFF_THRESHOLD` / `QDRANT_SILENT_THRESHOLD`: 控制 `full_push -> diff_push -> silent` 的分界值，默认分别为 `0.85 / 0.97`
 - `VIDEO_TRANSCRIPT_BASE_URL` / `VIDEO_TRANSCRIPT_API_KEY`: 用于音视频转文本
 - `FEISHU_WEBHOOK_URL`: 用于 n8n 在 `09_feishu_notify` 中通过飞书群机器人消息卡片即时推送高价值摘要
+- `FEISHU_NOTIFY_MODE`: 飞书通知模式。默认 `webhook`；设为 `app` 时改由 `collector-web` 使用飞书应用机器人发送一句话推荐卡片
+- `FEISHU_APP_NOTIFY_URL`: n8n 调用 `collector-web` 的内部通知入口，默认 `http://collector-web:8300/api/internal/feishu/notify`
+- `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_TARGET_CHAT_ID`: 飞书应用机器人发送 compact 卡片所需配置
+- `FEISHU_VERIFICATION_TOKEN` / `FEISHU_ENCRYPT_KEY`: 飞书卡片回调校验配置；当前实现支持未加密 URL verification 和卡片按钮回调，生产公网回调建议补齐飞书侧校验配置
 
 ### 飞书消息卡片测试
 
