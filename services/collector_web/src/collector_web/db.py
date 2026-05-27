@@ -89,10 +89,12 @@ def _sync_env_subscriptions(conn: sqlite3.Connection, collection_id: int) -> Non
 
     now = utc_now()
     changed = False
+    current_source_keys: set[str] = set()
     for source in sources:
         source_key, resolved_url = _derive_source_identity(
             source["source_type"], source["feed_url"]
         )
+        current_source_keys.add(source_key)
         platform = _guess_platform(source["source_type"], source["feed_url"])
         existing = conn.execute(
             """
@@ -195,6 +197,22 @@ def _sync_env_subscriptions(conn: sqlite3.Connection, collection_id: int) -> Non
             ),
         )
         changed = True
+
+    if current_source_keys:
+        placeholders = ", ".join("?" for _ in current_source_keys)
+        cursor = conn.execute(
+            f"""
+            UPDATE subscriptions
+            SET status = 'archived',
+                updated_at = ?
+            WHERE collection_id = ?
+              AND status != 'archived'
+              AND source_key NOT IN ({placeholders})
+            """,
+            (now, collection_id, *sorted(current_source_keys)),
+        )
+        if cursor.rowcount:
+            changed = True
 
     if changed:
         conn.execute(

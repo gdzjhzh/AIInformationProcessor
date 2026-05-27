@@ -1392,6 +1392,38 @@ def test_collections_api_syncs_new_env_subscription_into_existing_db(monkeypatch
     assert rss_group["subscriptions"][0]["source_url"] == "https://www.ruanyifeng.com/blog/atom.xml"
 
 
+def test_collections_api_archives_env_subscriptions_removed_from_source_list(monkeypatch, tmp_path):
+    db_path = _prepare_env(monkeypatch, tmp_path, UPDATED_RSS_SOURCE_URLS_JSON)
+
+    with TestClient(create_app()) as client:
+        first_response = client.get("/api/collections")
+
+    assert first_response.status_code == 200
+    assert first_response.json()["summary"]["subscription_count"] == 3
+
+    _prepare_env(monkeypatch, tmp_path, RSS_SOURCE_URLS_JSON)
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/collections")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["subscription_count"] == 2
+    assert payload["summary"]["platform_count"] == 2
+    assert {group["platform"] for group in payload["platform_groups"]} == {
+        "bilibili",
+        "xiaoyuzhou",
+    }
+
+    with sqlite3.connect(db_path) as conn:
+        status = conn.execute(
+            "SELECT status FROM subscriptions WHERE source_url = ?",
+            ("https://www.ruanyifeng.com/blog/atom.xml",),
+        ).fetchone()[0]
+
+    assert status == "archived"
+
+
 def test_connect_falls_back_to_delete_journal_mode_when_wal_fails(monkeypatch, tmp_path):
     executed = []
 
