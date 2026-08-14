@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}登录 · Collector Web{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <p class="eyebrow">Collector Web</p>
+    <h2>登录后才能执行写操作</h2>
+    <p class="muted">浏览器使用 Session，不会拿到 n8n 内部令牌。</p>
+    {% if login_error %}
+    <p class="submit-result is-error">{{ login_error }}</p>
+    {% endif %}
+    <form method="post" action="/login" class="stack">
+        <input type="hidden" name="next" value="{{ next_path }}">
+        <label>
+            控制台密码
+            <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit">登录</button>
+    </form>
+</section>
+{% endblock %}

@@ -254,10 +254,10 @@ function renderCompareHistory(items = readCompareHistory()) {
 }
 
 function collectorAuthHeaders(extra = {}) {
-  const token = document.body?.dataset?.internalToken || "";
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
   const headers = { ...extra };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (csrf) {
+    headers["X-Collector-CSRF"] = csrf;
   }
   return headers;
 }
@@ -265,6 +265,7 @@ function collectorAuthHeaders(extra = {}) {
 async function requestCompareJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
+    credentials: "same-origin",
     headers: collectorAuthHeaders(options.headers || {}),
   });
   const payload = await response.json();

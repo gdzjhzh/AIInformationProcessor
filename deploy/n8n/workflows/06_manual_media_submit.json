@@ -659,6 +659,21 @@
         4160,
         220
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const expected = String($env.COLLECTOR_WEB_INTERNAL_TOKEN || '').trim();\n\nconst readHeader = (headers, name) => {\n  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {\n    return '';\n  }\n  const target = String(name || '').toLowerCase();\n  for (const [key, value] of Object.entries(headers)) {\n    if (String(key).toLowerCase() !== target) {\n      continue;\n    }\n    if (Array.isArray(value)) {\n      return String(value[0] || '').trim();\n    }\n    return String(value || '').trim();\n  }\n  return '';\n};\n\nconst headers = ($json && $json.headers && typeof $json.headers === 'object') ? $json.headers : {};\nconst auth = readHeader(headers, 'authorization');\nconst dedicated = readHeader(headers, 'x-collector-internal-token');\nconst bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';\nconst provided = dedicated || bearer;\n\nif (expected && provided !== expected) {\n  throw new Error('unauthorized webhook');\n}\n\nreturn { json: $json };\n"
+      },
+      "id": "c0a1e2b3-4d56-4789-a012-3456789abcde",
+      "name": "Verify Internal Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        320
+      ]
     }
   ],
   "connections": {
@@ -666,7 +681,7 @@
       "main": [
         [
           {
-            "node": "Normalize Manual Media Request",
+            "node": "Verify Internal Token",
             "type": "main",
             "index": 0
           }
@@ -1066,6 +1081,17 @@
         [
           {
             "node": "03b Qdrant Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Internal Token": {
+      "main": [
+        [
+          {
+            "node": "Normalize Manual Media Request",
             "type": "main",
             "index": 0
           }

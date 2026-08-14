@@ -4,9 +4,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -96,6 +98,23 @@ def qdrant_uuid(name: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, name))
 
 
+def normalize_canonical_url(value: object) -> str:
+    """与 03 Decide Dedupe Action 的 normalizeUrl 对齐：去掉 fragment、跟踪参数和尾部斜杠。"""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parsed = urllib.parse.urlparse(text)
+    if not parsed.scheme or not parsed.netloc:
+        return text.split("#", 1)[0].rstrip("/")
+    query_pairs = [
+        (key, val)
+        for key, val in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        if not re.match(r"^(utm_|spm|from|share_|scene)", key, re.I)
+    ]
+    cleaned = parsed._replace(fragment="", query=urllib.parse.urlencode(query_pairs, doseq=True))
+    return urllib.parse.urlunparse(cleaned).rstrip("/")
+
+
 def decide_action(
     item_id: str,
     content_hash: str,
@@ -103,7 +122,9 @@ def decide_action(
     match: dict | None,
     diff_threshold: float,
     silent_threshold: float,
+    canonical_url: str = "",
 ) -> dict[str, object]:
+    del source_type  # 与线上 03 一致：hash 变化不再按 transcript 特例 silent。
     dedupe_action = "full_push"
     notification_mode = "full"
     should_write_to_vault = True
@@ -114,6 +135,13 @@ def decide_action(
 
     same_item = bool(matched_payload and matched_payload.get("item_id") == item_id)
     same_content = bool(same_item and matched_payload.get("content_hash") == content_hash)
+    original_url = normalize_canonical_url(canonical_url)
+    matched_url = normalize_canonical_url(
+        (matched_payload or {}).get("canonical_url")
+        or (matched_payload or {}).get("url")
+        or (matched_payload or {}).get("link")
+    )
+    same_canonical_url = bool(original_url and matched_url and original_url == matched_url)
 
     if same_content:
         dedupe_action = "silent"
@@ -123,6 +151,15 @@ def decide_action(
         should_upsert_qdrant = False
     elif same_item:
         # 必须与 03 Decide Dedupe Action 的 same_item_content_changed 一致，含 transcript。
+        dedupe_action = "diff_push"
+        notification_mode = "incremental"
+    elif same_canonical_url and matched_score >= silent_threshold:
+        dedupe_action = "silent"
+        notification_mode = "silent"
+        should_write_to_vault = False
+        should_notify = False
+        should_upsert_qdrant = False
+    elif same_canonical_url:
         dedupe_action = "diff_push"
         notification_mode = "incremental"
     elif match and matched_score >= diff_threshold:
@@ -222,6 +259,7 @@ def run_smoke(
             "item_id": "smoke-similar-item",
             "content_hash": "sha256:similar",
             "source_type": "rss",
+            "canonical_url": "https://example.com/other",
             "vector": make_unit_vector(qdrant_vector_size, 0.9),
             "expected": "diff_push",
         },
@@ -247,6 +285,33 @@ def run_smoke(
             "content_hash": "sha256:transcript-updated",
             "source_type": "transcript",
             "vector": make_unit_vector(qdrant_vector_size, 1.0),
+            "expected": "diff_push",
+        },
+        {
+            "name": "silent_same_url_high_similarity_different_item",
+            "item_id": "smoke-other-item",
+            "content_hash": "sha256:other",
+            "source_type": "rss",
+            "canonical_url": "https://example.com/base",
+            "vector": make_unit_vector(qdrant_vector_size, 0.99),
+            "expected": "silent",
+        },
+        {
+            "name": "silent_same_url_with_tracking_query",
+            "item_id": "smoke-tracked-item",
+            "content_hash": "sha256:tracked",
+            "source_type": "rss",
+            "canonical_url": "https://example.com/base?utm_source=rss",
+            "vector": make_unit_vector(qdrant_vector_size, 0.99),
+            "expected": "silent",
+        },
+        {
+            "name": "diff_push_same_url_below_silent_threshold",
+            "item_id": "smoke-other-item-low",
+            "content_hash": "sha256:other-low",
+            "source_type": "rss",
+            "canonical_url": "https://example.com/base",
+            "vector": make_unit_vector(qdrant_vector_size, 0.90),
             "expected": "diff_push",
         },
     ]
@@ -294,6 +359,7 @@ def run_smoke(
                 match=match,
                 diff_threshold=diff_threshold,
                 silent_threshold=silent_threshold,
+                canonical_url=str(scenario.get("canonical_url") or ""),
             )
             actual = str(outcome["dedupe_action"])
             scenario_results.append(

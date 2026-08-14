@@ -20,6 +20,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
+      # 只绑 127.0.0.1 给编辑器。06/08 webhook 必须带内部令牌，不能再当公开入口。
       - "127.0.0.1:${N8N_PORT:-5678}:5678"
     volumes:
       - ./data/n8n:/home/node/.n8n
@@ -73,7 +74,7 @@ services:
       - qdrant
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.17.1}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
@@ -205,6 +206,8 @@ services:
       COLLECTOR_WEB_HOST: 0.0.0.0
       COLLECTOR_WEB_PORT: 8300
       COLLECTOR_WEB_INTERNAL_TOKEN: ${COLLECTOR_WEB_INTERNAL_TOKEN:-}
+      COLLECTOR_WEB_UI_PASSWORD: ${COLLECTOR_WEB_UI_PASSWORD:-}
+      COLLECTOR_WEB_SESSION_SECRET: ${COLLECTOR_WEB_SESSION_SECRET:-}
       COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
       COLLECTOR_WEB_POLL_RUNS_DIR: /data/n8n_poll_runs
       COLLECTOR_WEB_N8N_DATABASE_PATH: /data/n8n/database.sqlite

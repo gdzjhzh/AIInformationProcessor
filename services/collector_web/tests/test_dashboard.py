@@ -178,22 +178,131 @@ def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path)
     )
 
 
+def test_home_page_does_not_render_internal_token(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLECTOR_WEB_INTERNAL_TOKEN", "internal-secret-should-not-leak")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "internal-secret-should-not-leak" not in response.text
+    assert "data-internal-token" not in response.text
+
+
+def test_health_does_not_expose_webhook_urls(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.get("/health")
+
+    payload = response.json()
+    assert response.status_code == 200
+    dumped = json.dumps(payload)
+    assert "/webhook/" not in dumped
+    assert "manual-media-submit" not in dumped
+    assert "rss-poll-rerun" not in dumped
+    assert "manual_media_submit_url" not in payload
+
+
+def test_status_api_does_not_expose_webhook_urls(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/status")
+
+    payload = response.json()
+    assert response.status_code == 200
+    dumped = json.dumps(payload)
+    assert "/webhook/" not in dumped
+    webhook_values = [
+        item["value"]
+        for item in payload["config_items"]
+        if "webhook" in str(item["label"]).lower()
+    ]
+    assert webhook_values
+    assert all(value in {"已配置", "未配置"} for value in webhook_values)
+
+
+def test_browser_write_requires_session_and_csrf(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLECTOR_WEB_UI_PASSWORD", "ui-secret")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        denied = client.post("/api/rss-poll/rerun")
+        login = client.post(
+            "/login",
+            data={"password": "ui-secret", "next": "/"},
+            follow_redirects=False,
+        )
+        home = client.get("/")
+        csrf = ""
+        marker = 'name="csrf-token" content="'
+        if marker in home.text:
+            csrf = home.text.split(marker, 1)[1].split('"', 1)[0]
+        missing_csrf = client.post("/api/rss-poll/rerun")
+
+    assert denied.status_code == 401
+    assert login.status_code == 303
+    assert csrf
+    assert missing_csrf.status_code == 403
+
+
+def test_browser_write_succeeds_after_login(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLECTOR_WEB_UI_PASSWORD", "ui-secret")
+    get_settings.cache_clear()
+
+    def fake_trigger(settings):
+        return {"ok": True, "accepted": True, "status_code": 202, "response": {"stage": "ok"}}
+
+    monkeypatch.setattr(app_module, "trigger_rss_poll_rerun", fake_trigger)
+
+    with TestClient(create_app()) as client:
+        client.post("/login", data={"password": "ui-secret", "next": "/"}, follow_redirects=False)
+        home = client.get("/")
+        csrf = home.text.split('name="csrf-token" content="', 1)[1].split('"', 1)[0]
+        allowed = client.post("/api/rss-poll/rerun", headers={"X-Collector-CSRF": csrf})
+
+    assert allowed.status_code == 202
+
+
+def test_internal_token_wrong_length_is_unauthorized(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLECTOR_WEB_INTERNAL_TOKEN", "internal-secret")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/internal/feishu/notify",
+            headers={"Authorization": "Bearer short"},
+            json={"payload": {"title": "长度不匹配"}},
+        )
+
+    assert response.status_code == 401
+
+
 def test_mutating_control_plane_requires_internal_token(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     monkeypatch.setenv("COLLECTOR_WEB_INTERNAL_TOKEN", "internal-secret")
     get_settings.cache_clear()
 
     with TestClient(create_app()) as client:
-        rerun = client.post("/api/rss-poll/rerun")
-        switch = client.post("/api/mainline-llm/switch", json={"model": "deepseek-v4-flash"})
-        submit = client.post(
-            "/api/manual-media-submit",
-            json={"url": "https://www.xiaoyuzhoufm.com/episode/abc"},
+        notify = client.post(
+            "/api/internal/feishu/notify",
+            json={"payload": {"title": "未授权通知"}},
+        )
+        callback = client.post(
+            "/api/internal/manual-media-submit-callback",
+            json={"submission_id": 1, "result": {"ok": True}},
         )
 
-    assert rerun.status_code == 401
-    assert switch.status_code == 401
-    assert submit.status_code == 401
+    assert notify.status_code == 401
+    assert callback.status_code == 401
 
 
 def test_internal_feishu_notify_rejects_missing_token(monkeypatch, tmp_path):

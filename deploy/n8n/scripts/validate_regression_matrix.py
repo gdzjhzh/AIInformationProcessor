@@ -675,6 +675,50 @@ def check_feishu_notify_uses_card_v2() -> list[CheckFailure]:
     return failures
 
 
+def check_ingress_webhooks_require_internal_token() -> list[CheckFailure]:
+    """守门：06/08 webhook 必须先校验内部令牌，不能裸入口。"""
+    failures: list[CheckFailure] = []
+    targets = (
+        ("06_manual_media_submit.json", "Verify Internal Token"),
+        ("08_rss_poll_rerun.json", "Verify Internal Token"),
+    )
+    for workflow_name, node_name in targets:
+        workflow = load_workflow(workflow_name)
+        require_code_contains(
+            workflow_name,
+            workflow,
+            node_name,
+            "COLLECTOR_WEB_INTERNAL_TOKEN",
+            failures,
+        )
+        require_code_contains(
+            workflow_name,
+            workflow,
+            node_name,
+            "unauthorized webhook",
+            failures,
+        )
+    return failures
+
+
+def check_smoke_qdrant_gate_aligns_with_03() -> list[CheckFailure]:
+    """守门：smoke decide_action 必须覆盖 03 的 sameCanonicalUrl / silent_threshold。"""
+    failures: list[CheckFailure] = []
+    smoke_path = SCRIPT_DIR / "smoke_qdrant_gate.py"
+    source = smoke_path.read_text(encoding="utf-8")
+    for needle in (
+        "same_canonical_url",
+        "silent_threshold",
+        "silent_same_url_high_similarity_different_item",
+        "diff_push_same_url_below_silent_threshold",
+    ):
+        if needle not in source:
+            failures.append(
+                CheckFailure(str(smoke_path), f"smoke decide_action is missing {needle}")
+            )
+    return failures
+
+
 def check_same_item_content_change_is_diff_push() -> list[CheckFailure]:
     """守门：同一 item_id 内容更新必须 diff_push，不能被高相似度向量直接 silent。"""
     failures: list[CheckFailure] = []
@@ -821,6 +865,8 @@ CHECKS: dict[str, Callable[[], list[CheckFailure]]] = {
     "rss_transcript_uses_shared_mainline": check_rss_transcript_uses_shared_mainline,
     "manual_media_uses_shared_mainline": check_manual_media_uses_shared_mainline,
     "feishu_notify_uses_card_v2": check_feishu_notify_uses_card_v2,
+    "ingress_webhooks_require_internal_token": check_ingress_webhooks_require_internal_token,
+    "smoke_qdrant_gate_aligns_with_03": check_smoke_qdrant_gate_aligns_with_03,
     "same_item_content_change_is_diff_push": check_same_item_content_change_is_diff_push,
     "continue_on_error_reads_object_errors": check_continue_on_error_reads_object_errors,
     "source_last_seen_preserves_speaker_tristate": check_source_last_seen_preserves_speaker_tristate,

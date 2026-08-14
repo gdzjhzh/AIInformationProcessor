@@ -3,6 +3,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from .auth import internal_request_headers
 from .config import Settings
 
 
@@ -14,7 +15,7 @@ def trigger_rss_poll_rerun(settings: Settings) -> dict[str, Any]:
     request = urllib.request.Request(
         settings.rss_poll_rerun_url,
         data=json.dumps({"source": "collector_web"}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=internal_request_headers(settings),
         method="POST",
     )
 
@@ -48,6 +49,5 @@ def trigger_rss_poll_rerun(settings: Settings) -> dict[str, Any]:
         "ok": True,
         "accepted": parsed.get("accepted", True),
         "status_code": status_code,
-        "webhook_url": settings.rss_poll_rerun_url,
         "response": parsed,
     }

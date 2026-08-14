@@ -54,6 +54,8 @@ class Settings:
     feishu_api_base_url: str
     feishu_request_timeout_seconds: int
     internal_token: str
+    ui_password: str
+    session_secret: str
 
 
 @lru_cache(maxsize=1)
@@ -236,4 +238,6 @@ def get_settings() -> Settings:
             os.getenv("FEISHU_REQUEST_TIMEOUT_SECONDS", "20")
         ),
         internal_token=os.getenv("COLLECTOR_WEB_INTERNAL_TOKEN", "").strip(),
+        ui_password=os.getenv("COLLECTOR_WEB_UI_PASSWORD", "").strip(),
+        session_secret=os.getenv("COLLECTOR_WEB_SESSION_SECRET", "").strip(),
     )

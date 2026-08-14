@@ -2,8 +2,6 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlparse
-
 from .config import Settings
 from .db import connect, utc_now
 from .mainline_llm import get_mainline_llm_status
@@ -556,19 +554,13 @@ def _build_manual_submit_status(settings: Settings) -> tuple[dict[str, Any], dic
     active_count = sum(1 for item in recent_submissions if item["is_active"])
     latest_submission = recent_submissions[0] if recent_submissions else None
 
-    parsed_webhook = urlparse(settings.manual_media_submit_url)
-    webhook_target = (
-        f"{parsed_webhook.scheme}://{parsed_webhook.netloc}"
-        if parsed_webhook.scheme and parsed_webhook.netloc
-        else settings.manual_media_submit_url
-    )
+    webhook_target = "已配置" if settings.manual_media_submit_url else "未配置"
 
     if latest_submission is None:
         tone = "muted"
         summary = "手动提交通道已经配置，但当前还没有历史记录。"
         detail_lines = [
-            f"Webhook 目标: {webhook_target}",
-            f"Webhook 路径: {parsed_webhook.path or '/'}",
+            f"Webhook: {webhook_target}",
             "最近手动提交: 暂无",
         ]
         affects_overall = False
@@ -579,7 +571,7 @@ def _build_manual_submit_status(settings: Settings) -> tuple[dict[str, Any], dic
             f"最近提交 #{latest_submission['id']}: {latest_submission['status_label']}",
             f"时间: {_format_datetime(latest_submission['created_at'])}",
             f"URL: {latest_submission['request_url']}",
-            f"Webhook 目标: {webhook_target}",
+            f"Webhook: {webhook_target}",
         ]
         affects_overall = False
     elif latest_submission["status"] == "needs_confirmation":
@@ -624,7 +616,7 @@ def _build_manual_submit_status(settings: Settings) -> tuple[dict[str, Any], dic
             f"最近提交 #{latest_submission['id']}: {latest_submission['status_label']}",
             f"时间: {_format_datetime(latest_submission['created_at'])}",
             f"URL: {latest_submission['request_url']}",
-            f"Webhook 目标: {webhook_target}",
+            f"Webhook: {webhook_target}",
         ]
         if latest_submission["vault_path"]:
             detail_lines.append(f"最近写入路径: {latest_submission['vault_path']}")
@@ -752,7 +744,7 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
         },
         {
             "label": "手动提交 webhook",
-            "value": settings.manual_media_submit_url,
+            "value": "已配置" if settings.manual_media_submit_url else "未配置",
         },
         {
             "label": "Qdrant base URL",
@@ -792,7 +784,7 @@ def get_service_status(settings: Settings) -> dict[str, Any]:
         },
         {
             "label": "RSS 手动重跑 webhook",
-            "value": settings.rss_poll_rerun_url,
+            "value": "已配置" if settings.rss_poll_rerun_url else "未配置",
         },
     ]
 

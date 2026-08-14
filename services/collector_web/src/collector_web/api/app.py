@@ -1,9 +1,9 @@
-import hmac
 import json
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -15,7 +15,16 @@ from ..calibration_compare import (
     publicize_calibration_compare_payload,
     submit_calibration_compare,
 )
-from ..config import Settings, get_settings
+from ..auth import (
+    attach_session_cookie,
+    clear_session_cookie,
+    encode_session,
+    passwords_match,
+    require_browser_session,
+    require_internal_token,
+    template_auth_context,
+)
+from ..config import get_settings
 from ..db import init_database
 from ..feishu_app import FeishuAppError, FeishuCallbackAuthError, handle_card_action, send_compact_notification
 from ..manual_submit import (
@@ -66,23 +75,27 @@ class FeishuNotifyRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
-def _extract_internal_token(request: Request) -> str:
-    """从 Authorization Bearer 或专用头取出内部调用令牌。"""
-    authorization = request.headers.get("Authorization", "").strip()
-    scheme, _, credential = authorization.partition(" ")
-    if scheme.lower() == "bearer" and credential.strip():
-        return credential.strip()
-    return request.headers.get("X-Collector-Internal-Token", "").strip()
+def _safe_next_path(value: str) -> str:
+    """只允许站内相对跳转，避免登录后被带到外站。"""
+    candidate = (value or "").strip() or "/"
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc or not candidate.startswith("/"):
+        return "/"
+    return candidate
 
 
-def _require_internal_token(request: Request, settings: Settings) -> None:
-    """内部接口鉴权：配置了令牌时必须匹配，未配置则保持本机兼容。"""
-    expected = settings.internal_token
-    if not expected:
-        return
-    provided = _extract_internal_token(request)
-    if not provided or not hmac.compare_digest(provided, expected):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid internal token")
+def _form_value(form: dict[str, list[str]], name: str, default: str = "") -> str:
+    """读取 application/x-www-form-urlencoded 字段的第一个值。"""
+    values = form.get(name) or []
+    if not values:
+        return default
+    return values[0]
+
+
+async def _read_urlencoded_form(request: Request) -> dict[str, list[str]]:
+    """解析登录表单，不引入 python-multipart。"""
+    raw = (await request.body()).decode("utf-8", errors="replace")
+    return parse_qs(raw, keep_blank_values=True)
 
 
 def _build_submit_payload(payload: ManualMediaSubmitRequest) -> dict[str, Any]:
@@ -108,7 +121,13 @@ def create_app() -> FastAPI:
 
     if settings.static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(settings.static_dir)), name="static")
-    templates.env.globals["internal_token"] = settings.internal_token
+
+    def page_context(request: Request, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        """组装页面模板变量；只注入 CSRF/登录态，不下发内部令牌。"""
+        context = {"request": request, **template_auth_context(request, settings)}
+        if extra:
+            context.update(extra)
+        return context
 
     @app.on_event("startup")
     async def startup_event() -> None:
@@ -118,10 +137,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, object]:
         return {
             "ok": True,
-            "db_path": str(settings.db_path),
             "db_exists": settings.db_path.exists(),
-            "manual_media_submit_url": settings.manual_media_submit_url,
-            "qdrant_base_url": settings.qdrant_base_url,
             "qdrant_collection": settings.qdrant_collection,
             "feishu_notify_mode": settings.feishu_notify_mode,
             "feishu_app_configured": bool(
@@ -129,7 +145,40 @@ def create_app() -> FastAPI:
                 and settings.feishu_app_secret
                 and settings.feishu_target_chat_id
             ),
+            "internal_auth_configured": bool(settings.internal_token),
+            "browser_auth_configured": bool(settings.ui_password),
         }
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request, next: str = "/") -> HTMLResponse:
+        return templates.TemplateResponse(
+            "login.html",
+            page_context(request, {"next_path": _safe_next_path(next), "login_error": ""}),
+        )
+
+    @app.post("/login")
+    async def login_submit(request: Request) -> Any:
+        form = await _read_urlencoded_form(request)
+        password = _form_value(form, "password")
+        next_path = _safe_next_path(_form_value(form, "next", "/"))
+        if not settings.ui_password or not passwords_match(password, settings.ui_password):
+            return templates.TemplateResponse(
+                "login.html",
+                page_context(
+                    request,
+                    {"next_path": next_path, "login_error": "密码不正确"},
+                ),
+                status_code=401,
+            )
+        response = RedirectResponse(url=next_path, status_code=status.HTTP_303_SEE_OTHER)
+        attach_session_cookie(response, settings, encode_session(settings))
+        return response
+
+    @app.post("/logout")
+    async def logout_submit() -> RedirectResponse:
+        response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+        clear_session_cookie(response)
+        return response
 
     @app.get("/api/collections")
     async def collections_api() -> dict[str, object]:
@@ -145,7 +194,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/rss-poll/rerun", status_code=status.HTTP_202_ACCEPTED)
     async def rss_poll_rerun_api(request: Request) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         try:
             return trigger_rss_poll_rerun(settings)
         except RssPollRerunError as exc:
@@ -156,7 +205,7 @@ def create_app() -> FastAPI:
         request: Request,
         payload: MainlineLlmSwitchRequest,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         try:
             return switch_mainline_llm_model(settings, payload.model)
         except MainlineLlmSwitchError as exc:
@@ -167,7 +216,7 @@ def create_app() -> FastAPI:
         request: Request,
         payload: FeishuNotifyRequest,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_internal_token(request, settings)
         try:
             return send_compact_notification(settings, payload.payload)
         except FeishuAppError as exc:
@@ -199,7 +248,7 @@ def create_app() -> FastAPI:
         request: Request,
         payload: CalibrationCompareRequest,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         try:
             result = submit_calibration_compare(
                 settings,
@@ -223,7 +272,7 @@ def create_app() -> FastAPI:
         request: Request,
         job_id: str,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         try:
             return open_calibration_compare_directory(settings, job_id)
         except CalibrationCompareError as exc:
@@ -267,7 +316,7 @@ def create_app() -> FastAPI:
         request: Request,
         payload: ManualMediaSubmitRequest,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         try:
             submission = enqueue_manual_submission(
                 settings,
@@ -286,7 +335,7 @@ def create_app() -> FastAPI:
         request: Request,
         payload: ManualMediaPrecheckRequest,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         return precheck_manual_media_submission(settings, payload.url)
 
     @app.post(
@@ -297,7 +346,7 @@ def create_app() -> FastAPI:
         request: Request,
         submission_id: int,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         try:
             submission, cancel_mode = cancel_manual_submission(
                 settings,
@@ -320,7 +369,7 @@ def create_app() -> FastAPI:
         request: Request,
         submission_id: int,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_browser_session(request, settings)
         try:
             rerun_submission, delete_detail = delete_vector_and_rerun_submission(
                 settings,
@@ -340,7 +389,7 @@ def create_app() -> FastAPI:
         request: Request,
         payload: ManualMediaSubmitCallbackRequest,
     ) -> dict[str, Any]:
-        _require_internal_token(request, settings)
+        require_internal_token(request, settings)
         submission = complete_manual_submission(
             settings,
             payload.submission_id,
@@ -355,47 +404,37 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request) -> HTMLResponse:
-        context = {
-            "request": request,
-            **build_page_context(),
-        }
-        return templates.TemplateResponse("home.html", context)
+        return templates.TemplateResponse("home.html", page_context(request, build_page_context()))
 
     @app.get("/manual-media-submit", response_class=HTMLResponse)
     async def manual_media_submit_page(
         request: Request,
         submission_id: int | None = Query(default=None, ge=1),
     ) -> HTMLResponse:
-        context = {
-            "request": request,
-            **build_page_context(submission_id=submission_id),
-        }
-        return templates.TemplateResponse("manual_submit.html", context)
+        return templates.TemplateResponse(
+            "manual_submit.html",
+            page_context(request, build_page_context(submission_id=submission_id)),
+        )
 
     @app.get("/calibration-compare", response_class=HTMLResponse)
     async def calibration_compare_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(
             "calibration_compare.html",
-            {"request": request},
+            page_context(request),
         )
 
     @app.get("/rss-poll", response_class=HTMLResponse)
     async def rss_poll_page(request: Request) -> HTMLResponse:
-        audit = get_latest_rss_poll_audit(settings)
         return templates.TemplateResponse(
             "rss_poll.html",
-            {
-                "request": request,
-                "audit": audit,
-            },
+            page_context(request, {"audit": get_latest_rss_poll_audit(settings)}),
         )
 
     @app.get("/status", response_class=HTMLResponse)
     async def status_page(request: Request) -> HTMLResponse:
-        context = {
-            "request": request,
-            **get_service_status(settings),
-        }
-        return templates.TemplateResponse("status.html", context)
+        return templates.TemplateResponse(
+            "status.html",
+            page_context(request, get_service_status(settings)),
+        )
 
     return app

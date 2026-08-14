@@ -4,6 +4,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from .auth import internal_request_headers
 from .config import Settings
 from .qdrant import QdrantOperationError, delete_points_by_item_id
 from .repository import (
@@ -26,7 +27,7 @@ def submit_manual_media(settings: Settings, payload: dict[str, Any]) -> dict[str
     request = urllib.request.Request(
         settings.manual_media_submit_url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=internal_request_headers(settings),
         method="POST",
     )
 
