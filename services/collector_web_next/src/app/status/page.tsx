@@ -8,13 +8,14 @@ export default async function StatusPage() {
   const checks = status.data.checks ?? [];
   const mainline = status.data.mainline_llm ?? {};
   const rssPoll = status.data.rss_poll ?? {};
+  const overall = status.data.overall ?? {};
 
   return (
     <AppShell>
       <div className="grid gap-6">
         <SectionTitle eyebrow="Runtime" title="服务状态">
-          <StatusPill tone={status.data.overall_status_tone}>
-            {textValue(status.data.overall_status_label, status.ok ? "正常" : "离线")}
+          <StatusPill tone={overall.status_tone}>
+            {textValue(overall.status_label, status.ok ? "正常" : "离线")}
           </StatusPill>
         </SectionTitle>
 
@@ -34,7 +35,7 @@ export default async function StatusPage() {
           />
           <StatCard
             label="RSS 写入"
-            value={numberValue(rssPoll.wrote_count)}
+            value={numberValue(rssPoll.items_written)}
             detail="最近一轮 RSS 写入数量。"
           />
           <StatCard
@@ -44,7 +45,7 @@ export default async function StatusPage() {
           />
           <StatCard
             label="RSS 错误"
-            value={numberValue(rssPoll.error_count)}
+            value={numberValue(rssPoll.failed_source_count)}
             detail="最近一轮出现错误的源数量。"
           />
         </section>

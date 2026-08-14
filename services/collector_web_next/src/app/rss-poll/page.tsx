@@ -46,11 +46,11 @@ export default async function RssPollPage() {
             <p className="text-sm font-medium text-slate-400">
               最近完成时间：
               <span className="font-mono text-white">
-                {textValue(poll.data.run_finished_at, "无数据")}
+                {textValue(poll.data.poll?.run_finished_at, "无数据")}
               </span>
             </p>
             <p className="mt-1 break-all font-mono text-xs text-slate-500">
-              {textValue(poll.data.file_path, "没有 poll_runs 文件路径")}
+              {textValue(poll.data.latest_file, "没有 poll_runs 文件路径")}
             </p>
           </div>
 

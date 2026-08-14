@@ -37,6 +37,7 @@
 - `Qdrant`
 - `Memos`
 - `Video Transcript API`（已内嵌到 `services/VideoTranscriptAPI`，按需用 profile 启动）
+- `collector-web` 管理台，以及只读实验面板 `collector-web-next`
 - `Obsidian Vault` 本地目录挂载到 `n8n:/vault`
 
 ## 仍待补齐的模块
@@ -46,7 +47,8 @@
 - `memo auto`
 - `Every Day Analysis`
 - `微信群总结`
-- `订阅管理 Web 端`
+
+订阅管理 Web 端已经落地：日常写操作走 `collector-web`（`http://127.0.0.1:8300`），`collector-web-next` 只是只读实验面板。
 
 ## 直接启动核心服务
 
@@ -294,7 +296,7 @@ python deploy/n8n/scripts/send_feishu_card_test.py
 3. 再补 `飞书/企业微信推送`。
 4. 当前 repo 已收口成一条共享主链 `00 -> 01a -> 03 -> 02 -> 04a -> 05 -> 09 -> 03b`；`01` 直接喂这条主链，`06` 先经过 `04` transcript adapter 再接入。`03` 负责 search/decide，`05` 负责写入 Obsidian，`09` 负责按 `should_notify` 用飞书群机器人消息卡片即时推送，`03b` 最后执行 Qdrant upsert，避免索引先于主库提交。
 5. 再接入 `im2memo -> Memos -> memo auto` 这条增强支路。
-6. 最后补 `每日复盘` 和 `订阅管理 Web 端` 等外围能力。
+6. 最后补 `每日复盘` 等外围能力。订阅管理 Web 已可用，不要再把它当未交付项。
 ## 同步工作流到运行态
 
 仓库里的 `deploy/n8n/workflows/*.json` 是版本控制下的主定义，`deploy/data/n8n/database.sqlite` 只是运行态缓存。

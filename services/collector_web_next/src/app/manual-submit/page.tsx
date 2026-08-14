@@ -7,6 +7,8 @@ export default async function ManualSubmitPage() {
   const collections = await getCollections();
   const summary = collections.data.manual_submission_summary ?? {};
   const submissions = collections.data.manual_submissions ?? [];
+  const successCount = submissions.filter((item) => item.status === "completed").length;
+  const failedCount = submissions.filter((item) => item.status === "error").length;
 
   return (
     <AppShell>
@@ -73,23 +75,23 @@ export default async function ManualSubmitPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <StatCard
               label="总提交"
-              value={numberValue(summary.total_count ?? summary.recent_count ?? submissions.length)}
+              value={numberValue(summary.recent_count ?? submissions.length)}
               detail="FastAPI 返回的最近提交记录数量。"
             />
             <StatCard
               label="运行中"
-              value={numberValue(summary.running_count ?? summary.active_count)}
+              value={numberValue(summary.active_count)}
               detail="仍在处理或等待回调的提交。"
             />
             <StatCard
               label="成功"
-              value={numberValue(summary.success_count)}
-              detail="已完成并返回成功结果的提交。"
+              value={successCount}
+              detail="最近列表里状态为已完成的提交。"
             />
             <StatCard
               label="失败"
-              value={numberValue(summary.failed_count)}
-              detail="提交或下游处理失败的记录。"
+              value={failedCount}
+              detail="最近列表里状态为失败的提交。"
             />
           </div>
         </section>

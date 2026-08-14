@@ -1,8 +1,8 @@
 # Collector Web Next
 
-Next.js read-only frontend experiment for `collector_web`.
+Next.js **只读实验面板**，不是日常写操作入口。
 
-This app is intentionally separate from `services/collector_web`. It renders a modern React/Tailwind interface and reads existing FastAPI endpoints, but it does not submit media, rerun RSS, switch models, write `deploy/.env`, or restart containers.
+它单独渲染现有 FastAPI 的只读数据：不提交媒体、不重跑 RSS、不切模型、不写 `deploy/.env`、不重启容器。日常提交、重跑和模型切换仍走 `collector-web` 的 Jinja 控制台 `http://127.0.0.1:8300`。
 
 ## Development
 
@@ -47,16 +47,16 @@ COLLECTOR_WEB_API_BASE_URL=http://collector-web:8300
 
 This keeps `collector-web-next` read-only while `collector-web` remains the API/control-plane service. The intended migration path is to move UI surface area into `collector-web-next` first, then retire or narrow the old Jinja UI once the Next app covers the operational workflows.
 
-By default, the frontend reads the current Docker Compose host port used by this repo:
+By default, the frontend reads the FastAPI host port used by this repo:
 
 ```text
-http://127.0.0.1:18300
+http://127.0.0.1:8300
 ```
 
 Override it with:
 
 ```powershell
-$env:COLLECTOR_WEB_API_BASE_URL="http://127.0.0.1:18300"
+$env:COLLECTOR_WEB_API_BASE_URL="http://127.0.0.1:8300"
 npm run dev
 ```
 

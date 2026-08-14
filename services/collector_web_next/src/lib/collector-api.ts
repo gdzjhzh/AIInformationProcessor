@@ -51,8 +51,6 @@ export type CollectionsPayload = {
     active_count?: number;
     total_count?: number;
     running_count?: number;
-    success_count?: number;
-    failed_count?: number;
   };
   manual_submissions?: ManualSubmission[];
 };
@@ -67,16 +65,19 @@ export type StatusCheck = {
 };
 
 export type ServiceStatusPayload = {
-  overall_status_tone?: string;
-  overall_status_label?: string;
+  overall?: {
+    status_tone?: string;
+    status_label?: string;
+    summary?: string;
+  };
   checks?: StatusCheck[];
   rss_poll?: {
     run_finished_at?: string;
     run_finished_at_raw?: string;
     run_status?: string;
     source_count?: number;
-    wrote_count?: number;
-    error_count?: number;
+    items_written?: number;
+    failed_source_count?: number;
   };
   mainline_llm?: {
     configured_model?: string;
@@ -135,7 +136,7 @@ export type TokenHistoryPoint = {
 export type RssPollPayload = {
   ok?: boolean;
   found?: boolean;
-  file_path?: string;
+  latest_file?: string;
   poll?: RssPollSummary;
   llm_usage?: LlmTokenUsage;
   llm_calls?: number;
@@ -180,15 +181,15 @@ const FALLBACK_COLLECTIONS: CollectionsPayload = {
     recent_count: 0,
     active_count: 0,
     running_count: 0,
-    success_count: 0,
-    failed_count: 0,
   },
   manual_submissions: [],
 };
 
 const FALLBACK_STATUS: ServiceStatusPayload = {
-  overall_status_tone: "muted",
-  overall_status_label: "后端未连接",
+  overall: {
+    status_tone: "muted",
+    status_label: "后端未连接",
+  },
   checks: [
     {
       id: "collector-web-api",
@@ -210,7 +211,7 @@ const FALLBACK_RSS_POLL: RssPollPayload = {
 function apiBaseUrl() {
   return (
     process.env.COLLECTOR_WEB_API_BASE_URL?.replace(/\/$/, "") ||
-    "http://127.0.0.1:18300"
+    "http://127.0.0.1:8300"
   );
 }
 

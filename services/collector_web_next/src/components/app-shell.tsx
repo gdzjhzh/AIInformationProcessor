@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Signal to Obsidian
             </p>
             <h1 className="truncate text-lg font-semibold tracking-normal text-white">
-              Collector Web Next
+              Collector Web Next（只读实验）
             </h1>
           </Link>
           <nav className="flex shrink-0 gap-1 rounded-md border border-white/10 bg-white/5 p-1 shadow-2xl shadow-black/20">
