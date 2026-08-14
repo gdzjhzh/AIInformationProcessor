@@ -53,6 +53,7 @@ class Settings:
     feishu_callback_encrypt_key: str
     feishu_api_base_url: str
     feishu_request_timeout_seconds: int
+    internal_token: str
 
 
 @lru_cache(maxsize=1)
@@ -234,4 +235,5 @@ def get_settings() -> Settings:
         feishu_request_timeout_seconds=int(
             os.getenv("FEISHU_REQUEST_TIMEOUT_SECONDS", "20")
         ),
+        internal_token=os.getenv("COLLECTOR_WEB_INTERNAL_TOKEN", "").strip(),
     )

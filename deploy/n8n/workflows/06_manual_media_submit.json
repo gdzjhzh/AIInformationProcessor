@@ -639,6 +639,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + ($env.COLLECTOR_WEB_INTERNAL_TOKEN || '')}}"
             }
           ]
         },

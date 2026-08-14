@@ -90,6 +90,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{$json.feishu_notify.delivery_mode === 'feishu_app' ? ('Bearer ' + ($env.COLLECTOR_WEB_INTERNAL_TOKEN || '')) : ''}}"
             }
           ]
         },

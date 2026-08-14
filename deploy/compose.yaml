@@ -12,7 +12,7 @@ services:
       TZ: ${TZ:-America/New_York}
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
+    image: ${N8N_IMAGE:-docker.n8n.io/n8nio/n8n:2.16.1}
     restart: unless-stopped
     dns:
       - 1.1.1.1
@@ -68,6 +68,7 @@ services:
       FEISHU_WEBHOOK_URL: ${FEISHU_WEBHOOK_URL}
       FEISHU_NOTIFY_MODE: ${FEISHU_NOTIFY_MODE:-webhook}
       FEISHU_APP_NOTIFY_URL: ${FEISHU_APP_NOTIFY_URL:-http://collector-web:8300/api/internal/feishu/notify}
+      COLLECTOR_WEB_INTERNAL_TOKEN: ${COLLECTOR_WEB_INTERNAL_TOKEN:-}
     depends_on:
       - qdrant
 
@@ -203,6 +204,7 @@ services:
       TZ: ${TZ:-America/New_York}
       COLLECTOR_WEB_HOST: 0.0.0.0
       COLLECTOR_WEB_PORT: 8300
+      COLLECTOR_WEB_INTERNAL_TOKEN: ${COLLECTOR_WEB_INTERNAL_TOKEN:-}
       COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
       COLLECTOR_WEB_POLL_RUNS_DIR: /data/n8n_poll_runs
       COLLECTOR_WEB_N8N_DATABASE_PATH: /data/n8n/database.sqlite

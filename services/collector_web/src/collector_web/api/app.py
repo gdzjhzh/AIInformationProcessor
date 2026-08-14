@@ -1,3 +1,4 @@
+import hmac
 import json
 from typing import Any
 
@@ -14,7 +15,7 @@ from ..calibration_compare import (
     publicize_calibration_compare_payload,
     submit_calibration_compare,
 )
-from ..config import get_settings
+from ..config import Settings, get_settings
 from ..db import init_database
 from ..feishu_app import FeishuAppError, FeishuCallbackAuthError, handle_card_action, send_compact_notification
 from ..manual_submit import (
@@ -63,6 +64,25 @@ class MainlineLlmSwitchRequest(BaseModel):
 
 class FeishuNotifyRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+def _extract_internal_token(request: Request) -> str:
+    """从 Authorization Bearer 或专用头取出内部调用令牌。"""
+    authorization = request.headers.get("Authorization", "").strip()
+    scheme, _, credential = authorization.partition(" ")
+    if scheme.lower() == "bearer" and credential.strip():
+        return credential.strip()
+    return request.headers.get("X-Collector-Internal-Token", "").strip()
+
+
+def _require_internal_token(request: Request, settings: Settings) -> None:
+    """内部接口鉴权：配置了令牌时必须匹配，未配置则保持本机兼容。"""
+    expected = settings.internal_token
+    if not expected:
+        return
+    provided = _extract_internal_token(request)
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid internal token")
 
 
 def _build_submit_payload(payload: ManualMediaSubmitRequest) -> dict[str, Any]:
@@ -137,7 +157,11 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @app.post("/api/internal/feishu/notify", status_code=status.HTTP_202_ACCEPTED)
-    async def feishu_notify_api(payload: FeishuNotifyRequest) -> dict[str, Any]:
+    async def feishu_notify_api(
+        request: Request,
+        payload: FeishuNotifyRequest,
+    ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             return send_compact_notification(settings, payload.payload)
         except FeishuAppError as exc:
@@ -289,8 +313,10 @@ def create_app() -> FastAPI:
 
     @app.post("/api/internal/manual-media-submit-callback")
     async def manual_media_submit_callback_api(
+        request: Request,
         payload: ManualMediaSubmitCallbackRequest,
     ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         submission = complete_manual_submission(
             settings,
             payload.submission_id,

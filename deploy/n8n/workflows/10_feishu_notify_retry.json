@@ -62,6 +62,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{$json.retry_delivery_mode === 'feishu_app' ? ('Bearer ' + ($env.COLLECTOR_WEB_INTERNAL_TOKEN || '')) : ''}}"
             }
           ]
         },

@@ -178,6 +178,23 @@ def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path)
     )
 
 
+def test_internal_feishu_notify_rejects_missing_token(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_test_app")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "test-secret")
+    monkeypatch.setenv("FEISHU_TARGET_CHAT_ID", "oc_test")
+    monkeypatch.setenv("COLLECTOR_WEB_INTERNAL_TOKEN", "internal-secret")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/internal/feishu/notify",
+            json={"payload": {"title": "未授权通知", "should_notify": True}},
+        )
+
+    assert response.status_code == 401
+
+
 def test_feishu_app_notify_api_sends_compact_card(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     monkeypatch.setenv("FEISHU_NOTIFY_MODE", "app")
