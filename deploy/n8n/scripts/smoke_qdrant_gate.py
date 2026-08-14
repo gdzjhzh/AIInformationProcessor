@@ -130,6 +130,7 @@ def decide_action(
         should_notify = False
         should_upsert_qdrant = False
     elif same_item:
+        # 必须与 03 Decide Dedupe Action 的 same_item_content_changed 一致：hash 变了不能 silent。
         dedupe_action = "diff_push"
         notification_mode = "incremental"
     elif match and matched_score >= silent_threshold:

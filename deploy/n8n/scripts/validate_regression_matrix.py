@@ -313,6 +313,21 @@ def check_llm_score_scale_invariant() -> list[CheckFailure]:
         failures,
     )
 
+    bad_score = VALIDATE_CONTRACT._load_json(sorted((CONTRACT_DIR / "examples").glob("*.llm_score.json"))[0])
+    bad_score["score_scale"] = 50
+    const_issues = VALIDATE_CONTRACT.validate_document(
+        bad_score,
+        schema,
+        contract_name="llm_score",
+    )
+    if not any("const" in issue.message for issue in const_issues):
+        failures.append(
+            CheckFailure(
+                "contracts/validate_contract.py",
+                "score_scale const=100 must be rejected when the example uses 50",
+            )
+        )
+
     policy_workflow = load_workflow("04a_action_policy.json")
     require_code_contains(
         "04a_action_policy.json",
@@ -660,6 +675,27 @@ def check_feishu_notify_uses_card_v2() -> list[CheckFailure]:
     return failures
 
 
+def check_same_item_content_change_is_diff_push() -> list[CheckFailure]:
+    """守门：同一 item_id 内容更新必须 diff_push，不能被高相似度向量直接 silent。"""
+    failures: list[CheckFailure] = []
+    workflow = load_workflow("03_qdrant_gate.json")
+    require_code_contains(
+        "03_qdrant_gate.json",
+        workflow,
+        "Decide Dedupe Action",
+        "same_item_content_changed",
+        failures,
+    )
+    forbid_code_contains(
+        "03_qdrant_gate.json",
+        workflow,
+        "Decide Dedupe Action",
+        "same_item_vector_silent",
+        failures,
+    )
+    return failures
+
+
 def check_continue_on_error_reads_object_errors() -> list[CheckFailure]:
     """守门：continueRegularOutput 包装必须同时识别字符串和 {message} 失败对象。"""
     failures: list[CheckFailure] = []
@@ -778,6 +814,7 @@ CHECKS: dict[str, Callable[[], list[CheckFailure]]] = {
     "rss_transcript_uses_shared_mainline": check_rss_transcript_uses_shared_mainline,
     "manual_media_uses_shared_mainline": check_manual_media_uses_shared_mainline,
     "feishu_notify_uses_card_v2": check_feishu_notify_uses_card_v2,
+    "same_item_content_change_is_diff_push": check_same_item_content_change_is_diff_push,
     "continue_on_error_reads_object_errors": check_continue_on_error_reads_object_errors,
     "source_last_seen_preserves_speaker_tristate": check_source_last_seen_preserves_speaker_tristate,
     "local_verify_no_vault_write": check_local_verify_no_vault_write,

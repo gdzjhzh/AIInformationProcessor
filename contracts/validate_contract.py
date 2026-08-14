@@ -138,6 +138,14 @@ def _validate_schema(
             )
         )
 
+    if "const" in schema and value != schema["const"]:
+        issues.append(
+            ValidationIssue(
+                path=_format_path(path_parts),
+                message=f"value {value!r} does not equal const {schema['const']!r}",
+            )
+        )
+
     if isinstance(value, str):
         min_length = schema.get("minLength")
         if min_length is not None and len(value) < min_length:

@@ -26,10 +26,12 @@
 
 这个目录属于 runtime 排障证据，不属于 Obsidian 知识库内容。
 
-濡傛灉浠诲姟娑夊強鍒囨崲 `LLM_*` provider銆佹帴鍏ユ柊鐨勫ぇ妯″瀷 API銆佸垽鏂?`02_enrich_with_llm` 鍜?`VideoTranscriptAPI` 鍚勮鏀瑰摢閲屻€佹垨鑰呮帓鏌ヤ负浠€涔堟崲 provider 鍚庢姤鍏煎鎬ч敊璇紝鍏堢湅锛?
+如果任务涉及切换 `LLM_*` provider、接入新的大模型 API、判断 `02_enrich_with_llm` 和 `VideoTranscriptAPI` 各该改哪里，或者排查为什么换 provider 后报兼容性错误，先看：
+
 6. `deploy/LLM_PROVIDER_PLAYBOOK.md`
 
-涓嶈鍏堝幓 workflow JSON 鍜?transcript 浠ｇ爜閲岄噸鏂板弽鎺?`base_url`銆乣model`銆乣json_output` 鐨勮涔夈€傚厛鎸夎繖浠芥墜鍐岀‘璁ゆ槸涓婚摼 LLM銆乪mbedding锛岃繕鏄?transcript LLM锛屽啀鍐冲畾鏀瑰姩闈㈠拰楠岃瘉椤哄簭銆?
+不要先去 workflow JSON 和 transcript 代码里重新反推 `base_url`、`model`、`json_output` 的语义。先按这份手册确认是主链 LLM、embedding，还是 transcript LLM，再决定改动面和验证顺序。
+
 ## Transcript Runtime Boundary
 
 - `CapsWriter` 是宿主机本地服务，不在 Docker 里。

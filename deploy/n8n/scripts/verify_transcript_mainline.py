@@ -78,7 +78,7 @@ def validate_mainline_response(payload: dict[str, Any]) -> None:
         )
 
     dedupe_action = str(payload.get("dedupe_action", "")).strip().lower()
-    if dedupe_action not in {"push", "diff_push", "silent"}:
+    if dedupe_action not in {"full_push", "diff_push", "silent"}:
         raise RuntimeError(f"Unexpected dedupe_action in webhook response: {dedupe_action!r}")
 
     original_item = payload.get("original_item")
