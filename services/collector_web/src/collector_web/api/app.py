@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request, status
@@ -15,7 +16,7 @@ from ..calibration_compare import (
 )
 from ..config import get_settings
 from ..db import init_database
-from ..feishu_app import FeishuAppError, handle_card_action, send_compact_notification
+from ..feishu_app import FeishuAppError, FeishuCallbackAuthError, handle_card_action, send_compact_notification
 from ..manual_submit import (
     ManualMediaSubmitError,
     cancel_manual_submission,
@@ -144,14 +145,22 @@ def create_app() -> FastAPI:
 
     @app.post("/api/feishu/card-action")
     async def feishu_card_action_api(request: Request) -> dict[str, Any]:
+        raw_body = await request.body()
         try:
-            payload = await request.json()
+            payload = json.loads(raw_body)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="invalid JSON body") from exc
         if not isinstance(payload, dict):
             raise HTTPException(status_code=400, detail="invalid callback body")
         try:
-            return handle_card_action(settings, payload)
+            return handle_card_action(
+                settings,
+                payload,
+                headers=request.headers,
+                raw_body=raw_body,
+            )
+        except FeishuCallbackAuthError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
         except FeishuAppError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 

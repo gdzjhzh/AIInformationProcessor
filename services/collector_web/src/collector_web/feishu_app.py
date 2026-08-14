@@ -1,9 +1,11 @@
+import hashlib
+import hmac
 import json
 import sqlite3
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 from urllib import error, parse, request
 
 from .config import Settings
@@ -11,6 +13,12 @@ from .db import connect, utc_now
 
 
 class FeishuAppError(RuntimeError):
+    pass
+
+
+class FeishuCallbackAuthError(FeishuAppError):
+    """飞书回调鉴权失败，应返回 401 而不是 502。"""
+
     pass
 
 
@@ -564,6 +572,73 @@ def send_compact_notification(settings: Settings, payload: dict[str, Any]) -> di
     }
 
 
+def _header_value(headers: Mapping[str, str] | None, name: str) -> str:
+    """读取飞书回调头，兼容大小写不同的 Starlette / 代理写法。"""
+    if headers is None:
+        return ""
+    direct = headers.get(name)
+    if direct:
+        return _safe_string(direct)
+    lower_name = name.lower()
+    for key, value in headers.items():
+        if _safe_string(key).lower() == lower_name:
+            return _safe_string(value)
+    return ""
+
+
+def _extract_verification_token(payload: dict[str, Any]) -> str:
+    """从旧版 token 字段或新版 header.token 取出 verification token。"""
+    header = payload.get("header") if isinstance(payload.get("header"), dict) else {}
+    return _first_non_empty(payload.get("token"), header.get("token"))
+
+
+def compute_callback_signature(
+    timestamp: str,
+    nonce: str,
+    encrypt_key: str,
+    raw_body: bytes,
+) -> str:
+    """按飞书 Encrypt Key 策略计算 SHA256 签名。"""
+    digest = hashlib.sha256()
+    digest.update((timestamp + nonce + encrypt_key).encode("utf-8"))
+    digest.update(raw_body)
+    return digest.hexdigest()
+
+
+def verify_callback_request(
+    settings: Settings,
+    payload: dict[str, Any],
+    *,
+    headers: Mapping[str, str] | None = None,
+    raw_body: bytes | None = None,
+) -> dict[str, Any]:
+    """校验回调来自飞书；已配置的 token / 签名任一失败即拒绝。"""
+    if isinstance(payload.get("encrypt"), str) and payload["encrypt"].strip():
+        raise FeishuCallbackAuthError("encrypted Feishu callback is not supported without a decryptor")
+
+    if settings.feishu_callback_encrypt_key:
+        timestamp = _header_value(headers, "X-Lark-Request-Timestamp")
+        nonce = _header_value(headers, "X-Lark-Request-Nonce")
+        signature = _header_value(headers, "X-Lark-Signature")
+        if not timestamp or not nonce or not signature or raw_body is None:
+            raise FeishuCallbackAuthError("Feishu callback signature headers are missing")
+        expected = compute_callback_signature(
+            timestamp,
+            nonce,
+            settings.feishu_callback_encrypt_key,
+            raw_body,
+        )
+        if not hmac.compare_digest(expected, signature):
+            raise FeishuCallbackAuthError("Feishu callback signature mismatch")
+
+    if settings.feishu_callback_verification_token:
+        token = _extract_verification_token(payload)
+        if token != settings.feishu_callback_verification_token:
+            raise FeishuCallbackAuthError("Feishu callback verification token mismatch")
+
+    return payload
+
+
 def _extract_callback_action(payload: dict[str, Any]) -> dict[str, Any]:
     event = payload.get("event") if isinstance(payload.get("event"), dict) else {}
     action = event.get("action") if isinstance(event.get("action"), dict) else {}
@@ -573,27 +648,20 @@ def _extract_callback_action(payload: dict[str, Any]) -> dict[str, Any]:
     return payload.get("action") if isinstance(payload.get("action"), dict) else {}
 
 
-def _extract_callback_chat_id(payload: dict[str, Any], fallback: str) -> str:
-    event = payload.get("event") if isinstance(payload.get("event"), dict) else {}
-    candidates = [
-        event.get("context", {}).get("open_chat_id") if isinstance(event.get("context"), dict) else "",
-        event.get("open_chat_id"),
-        event.get("chat_id"),
-        event.get("message", {}).get("chat_id") if isinstance(event.get("message"), dict) else "",
-        fallback,
-    ]
-    for candidate in candidates:
-        text = _safe_string(candidate)
-        if text:
-            return text
-    return fallback
-
-
-def handle_card_action(settings: Settings, payload: dict[str, Any]) -> dict[str, Any]:
+def handle_card_action(
+    settings: Settings,
+    payload: dict[str, Any],
+    *,
+    headers: Mapping[str, str] | None = None,
+    raw_body: bytes | None = None,
+) -> dict[str, Any]:
+    payload = verify_callback_request(
+        settings,
+        payload,
+        headers=headers,
+        raw_body=raw_body,
+    )
     if _safe_string(payload.get("challenge")):
-        token = _safe_string(payload.get("token"))
-        if settings.feishu_callback_verification_token and token != settings.feishu_callback_verification_token:
-            raise FeishuAppError("Feishu callback verification token mismatch")
         return {"challenge": payload["challenge"]}
 
     action = _extract_callback_action(payload)
@@ -607,7 +675,9 @@ def handle_card_action(settings: Settings, payload: dict[str, Any]) -> dict[str,
         return {"toast": {"type": "warning", "content": "没有找到这条推荐的完整信息"}}
 
     full_card = build_full_card(notification.get("notification_payload") or {})
-    chat_id = _extract_callback_chat_id(payload, _safe_string(notification.get("chat_id")) or settings.feishu_target_chat_id)
+    chat_id = _safe_string(notification.get("chat_id")) or settings.feishu_target_chat_id
+    if not chat_id:
+        raise FeishuAppError("Feishu notification is missing a stored chat_id")
     response = send_card_message(
         settings,
         chat_id=chat_id,

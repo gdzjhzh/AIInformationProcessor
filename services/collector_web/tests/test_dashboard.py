@@ -277,6 +277,7 @@ def test_feishu_card_action_replies_with_full_card(monkeypatch, tmp_path):
     monkeypatch.setenv("FEISHU_APP_ID", "cli_test_app")
     monkeypatch.setenv("FEISHU_APP_SECRET", "test-secret")
     monkeypatch.setenv("FEISHU_TARGET_CHAT_ID", "oc_default")
+    monkeypatch.setenv("FEISHU_VERIFICATION_TOKEN", "verify-token")
     get_settings.cache_clear()
 
     sent_cards = []
@@ -312,6 +313,7 @@ def test_feishu_card_action_replies_with_full_card(monkeypatch, tmp_path):
         callback_response = client.post(
             "/api/feishu/card-action",
             json={
+                "token": "verify-token",
                 "event": {
                     "context": {"open_chat_id": "oc_callback"},
                     "action": {
@@ -320,7 +322,7 @@ def test_feishu_card_action_replies_with_full_card(monkeypatch, tmp_path):
                             "notification_id": "notify-test-2",
                         }
                     },
-                }
+                },
             },
         )
 
@@ -328,7 +330,7 @@ def test_feishu_card_action_replies_with_full_card(monkeypatch, tmp_path):
     assert callback_response.status_code == 200
     assert callback_response.json()["toast"]["type"] == "success"
     assert [entry["title"] for entry in sent_cards] == ["AI 推荐", "AI 信息摘要"]
-    assert sent_cards[1]["chat_id"] == "oc_callback"
+    assert sent_cards[1]["chat_id"] == "oc_default"
     assert sent_cards[1]["idempotency_key"] == "notify-test-2-full"
     assert get_notification(get_settings(), "notify-test-2")["status"] == "expanded"
 
@@ -346,6 +348,81 @@ def test_feishu_card_action_url_verification(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     assert response.json() == {"challenge": "challenge-code"}
+
+
+def test_feishu_card_action_rejects_missing_token(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_VERIFICATION_TOKEN", "verify-token")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/feishu/card-action",
+            json={
+                "event": {
+                    "action": {
+                        "value": {
+                            "action": "show_full",
+                            "notification_id": "notify-missing-token",
+                        }
+                    }
+                }
+            },
+        )
+
+    assert response.status_code == 401
+
+
+def test_feishu_card_action_rejects_wrong_token(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_VERIFICATION_TOKEN", "verify-token")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/feishu/card-action",
+            json={
+                "token": "wrong-token",
+                "event": {
+                    "action": {
+                        "value": {
+                            "action": "show_full",
+                            "notification_id": "notify-wrong-token",
+                        }
+                    }
+                },
+            },
+        )
+
+    assert response.status_code == 401
+
+
+def test_feishu_card_action_rejects_bad_signature(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_ENCRYPT_KEY", "encrypt-key")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/feishu/card-action",
+            headers={
+                "X-Lark-Request-Timestamp": "1",
+                "X-Lark-Request-Nonce": "nonce",
+                "X-Lark-Signature": "deadbeef",
+            },
+            json={
+                "event": {
+                    "action": {
+                        "value": {
+                            "action": "show_full",
+                            "notification_id": "notify-bad-sig",
+                        }
+                    }
+                }
+            },
+        )
+
+    assert response.status_code == 401
 
 
 def test_calibration_compare_open_directory_api(monkeypatch, tmp_path):
