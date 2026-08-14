@@ -664,7 +664,7 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const expected = String($env.COLLECTOR_WEB_INTERNAL_TOKEN || '').trim();\n\nconst readHeader = (headers, name) => {\n  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {\n    return '';\n  }\n  const target = String(name || '').toLowerCase();\n  for (const [key, value] of Object.entries(headers)) {\n    if (String(key).toLowerCase() !== target) {\n      continue;\n    }\n    if (Array.isArray(value)) {\n      return String(value[0] || '').trim();\n    }\n    return String(value || '').trim();\n  }\n  return '';\n};\n\nconst headers = ($json && $json.headers && typeof $json.headers === 'object') ? $json.headers : {};\nconst auth = readHeader(headers, 'authorization');\nconst dedicated = readHeader(headers, 'x-collector-internal-token');\nconst bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';\nconst provided = dedicated || bearer;\n\nif (expected && provided !== expected) {\n  throw new Error('unauthorized webhook');\n}\n\nreturn { json: $json };\n"
+        "jsCode": "const expected = String($env.COLLECTOR_WEB_INTERNAL_TOKEN || '').trim();\n\nconst readHeader = (headers, name) => {\n  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {\n    return '';\n  }\n  const target = String(name || '').toLowerCase();\n  for (const [key, value] of Object.entries(headers)) {\n    if (String(key).toLowerCase() !== target) {\n      continue;\n    }\n    if (Array.isArray(value)) {\n      return String(value[0] || '').trim();\n    }\n    return String(value || '').trim();\n  }\n  return '';\n};\n\nconst headers = ($json && $json.headers && typeof $json.headers === 'object') ? $json.headers : {};\nconst auth = readHeader(headers, 'authorization');\nconst dedicated = readHeader(headers, 'x-collector-internal-token');\nconst bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';\nconst provided = dedicated || bearer;\nconst authorized = !expected || provided === expected;\n\nif (!authorized) {\n  return { json: { webhook_authorized: false } };\n}\n\nreturn { json: { ...$json, webhook_authorized: true } };\n"
       },
       "id": "c0a1e2b3-4d56-4789-a012-3456789abcde",
       "name": "Verify Internal Token",
@@ -673,6 +673,43 @@
       "position": [
         520,
         320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{Boolean($json.webhook_authorized)}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-5e67-4890-b123-06authbranch001",
+      "name": "Webhook Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        640,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'unauthorized webhook' } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "b2c3d4e5-6f78-4901-c234-06authbranch002",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        860,
+        140
       ]
     }
   ],
@@ -1091,7 +1128,25 @@
       "main": [
         [
           {
+            "node": "Webhook Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Authorized?": {
+      "main": [
+        [
+          {
             "node": "Normalize Manual Media Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
             "type": "main",
             "index": 0
           }

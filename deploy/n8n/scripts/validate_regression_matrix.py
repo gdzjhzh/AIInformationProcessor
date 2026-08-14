@@ -695,9 +695,17 @@ def check_ingress_webhooks_require_internal_token() -> list[CheckFailure]:
             workflow_name,
             workflow,
             node_name,
-            "unauthorized webhook",
+            "webhook_authorized",
             failures,
         )
+        dumped = json.dumps(workflow, ensure_ascii=False)
+        if "Respond Unauthorized" not in dumped or "unauthorized webhook" not in dumped:
+            failures.append(
+                CheckFailure(
+                    workflow_name,
+                    "webhook must respond 401 unauthorized webhook when the internal token is missing",
+                )
+            )
     return failures
 
 

@@ -65,7 +65,7 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const expected = String($env.COLLECTOR_WEB_INTERNAL_TOKEN || '').trim();\n\nconst readHeader = (headers, name) => {\n  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {\n    return '';\n  }\n  const target = String(name || '').toLowerCase();\n  for (const [key, value] of Object.entries(headers)) {\n    if (String(key).toLowerCase() !== target) {\n      continue;\n    }\n    if (Array.isArray(value)) {\n      return String(value[0] || '').trim();\n    }\n    return String(value || '').trim();\n  }\n  return '';\n};\n\nconst headers = ($json && $json.headers && typeof $json.headers === 'object') ? $json.headers : {};\nconst auth = readHeader(headers, 'authorization');\nconst dedicated = readHeader(headers, 'x-collector-internal-token');\nconst bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';\nconst provided = dedicated || bearer;\n\nif (expected && provided !== expected) {\n  throw new Error('unauthorized webhook');\n}\n\nreturn { json: $json };\n"
+        "jsCode": "const expected = String($env.COLLECTOR_WEB_INTERNAL_TOKEN || '').trim();\n\nconst readHeader = (headers, name) => {\n  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {\n    return '';\n  }\n  const target = String(name || '').toLowerCase();\n  for (const [key, value] of Object.entries(headers)) {\n    if (String(key).toLowerCase() !== target) {\n      continue;\n    }\n    if (Array.isArray(value)) {\n      return String(value[0] || '').trim();\n    }\n    return String(value || '').trim();\n  }\n  return '';\n};\n\nconst headers = ($json && $json.headers && typeof $json.headers === 'object') ? $json.headers : {};\nconst auth = readHeader(headers, 'authorization');\nconst dedicated = readHeader(headers, 'x-collector-internal-token');\nconst bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';\nconst provided = dedicated || bearer;\nconst authorized = !expected || provided === expected;\n\nif (!authorized) {\n  return { json: { webhook_authorized: false } };\n}\n\nreturn { json: { ...$json, webhook_authorized: true } };\n"
       },
       "id": "d1b2c3d4-5e67-4890-b123-456789abcdef",
       "name": "Verify Internal Token",
@@ -74,6 +74,43 @@
       "position": [
         420,
         300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{Boolean($json.webhook_authorized)}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "e2f3a4b5-6c78-4901-c234-567890abcdef",
+      "name": "Webhook Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'unauthorized webhook' } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "f3a4b5c6-7d89-4012-d345-678901abcdef",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        720,
+        180
       ]
     }
   ],
@@ -93,12 +130,30 @@
       "main": [
         [
           {
+            "node": "Webhook Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Authorized?": {
+      "main": [
+        [
+          {
             "node": "Respond Accepted",
             "type": "main",
             "index": 0
           },
           {
             "node": "01 RSS to Obsidian Raw Inbox",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
             "type": "main",
             "index": 0
           }
