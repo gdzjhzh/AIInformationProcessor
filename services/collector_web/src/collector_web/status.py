@@ -1,13 +1,13 @@
 import json
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 from .config import Settings
 from .db import connect, utc_now
 from .mainline_llm import get_mainline_llm_status
+from .poll_run_files import find_latest_poll_run_file
 from .qdrant import QdrantOperationError, get_collection_snapshot
 from .repository import list_recent_manual_submissions
 
@@ -224,14 +224,6 @@ def _build_collector_status(settings: Settings) -> dict[str, Any]:
     )
 
 
-def _find_latest_poll_run_file(poll_runs_dir: Path) -> Path | None:
-    if not poll_runs_dir.exists():
-        return None
-
-    candidates = poll_runs_dir.rglob("*_01_rss_to_obsidian_raw.json")
-    return max(candidates, key=lambda item: item.stat().st_mtime, default=None)
-
-
 def _execution_status_label(value: str) -> str:
     return {
         "success": "成功",
@@ -431,7 +423,7 @@ def _build_rss_execution_status(settings: Settings) -> dict[str, Any]:
 
 
 def _build_rss_poll_status(settings: Settings) -> tuple[dict[str, Any], dict[str, Any]]:
-    latest_file = _find_latest_poll_run_file(settings.poll_runs_dir)
+    latest_file = find_latest_poll_run_file(settings.poll_runs_dir)
     if latest_file is None:
         tone = "warning" if settings.poll_runs_dir.exists() else "muted"
         summary = (

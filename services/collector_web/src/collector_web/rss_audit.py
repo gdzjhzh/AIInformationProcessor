@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import datetime, timezone
+from functools import lru_cache
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from .config import Settings
+from .poll_run_files import find_latest_poll_run_file, iter_poll_run_files_newest_first
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -153,13 +155,6 @@ def _summary_preview(value: Any, max_length: int = 320) -> str:
     return f"{text[:max_length].rstrip()}..."
 
 
-def _find_latest_poll_run_file(poll_runs_dir: Path) -> Path | None:
-    if not poll_runs_dir.exists():
-        return None
-    candidates = poll_runs_dir.rglob("*_01_rss_to_obsidian_raw.json")
-    return max(candidates, key=lambda item: item.stat().st_mtime, default=None)
-
-
 def _poll_run_day_label(payload: dict[str, Any], fallback_file: Path) -> tuple[str, str]:
     raw_datetime = _as_string(payload.get("run_finished_at") or payload.get("run_started_at"))
     parsed = _parse_datetime(raw_datetime)
@@ -171,12 +166,27 @@ def _poll_run_day_label(payload: dict[str, Any], fallback_file: Path) -> tuple[s
     return local_date.isoformat(), local_date.strftime("%m-%d")
 
 
-def _build_token_history(poll_runs_dir: Path, *, day_limit: int = 14) -> list[dict[str, Any]]:
-    if not poll_runs_dir.exists():
-        return []
+def _poll_run_file_signature(poll_run_file: Path) -> tuple[str, int, int]:
+    """生成最新轮询摘要的缓存签名，使新执行写入后自动失效。"""
+    try:
+        stat = poll_run_file.stat()
+    except OSError:
+        return str(poll_run_file), -1, -1
+    return str(poll_run_file), stat.st_mtime_ns, stat.st_size
+
+
+@lru_cache(maxsize=8)
+def _build_token_history_cached(
+    poll_runs_dir: Path,
+    day_limit: int,
+    latest_signature: tuple[str, int, int],
+) -> tuple[dict[str, Any], ...]:
+    """按最新文件签名缓存最近若干天的令牌历史，避免重复读取历史 JSON。"""
+    if day_limit <= 0 or not latest_signature:
+        return ()
 
     by_date: dict[str, dict[str, Any]] = {}
-    for poll_run_file in poll_runs_dir.rglob("*_01_rss_to_obsidian_raw.json"):
+    for poll_run_file in iter_poll_run_files_newest_first(poll_runs_dir):
         try:
             payload = json.loads(poll_run_file.read_text(encoding="utf-8"))
         except Exception:
@@ -185,6 +195,8 @@ def _build_token_history(poll_runs_dir: Path, *, day_limit: int = 14) -> list[di
             continue
 
         date_key, label = _poll_run_day_label(payload, poll_run_file)
+        if date_key not in by_date and len(by_date) >= day_limit:
+            break
         usage = _normalize_llm_usage(payload.get("llm_usage"), fallback=payload)
         entry = by_date.setdefault(
             date_key,
@@ -199,7 +211,25 @@ def _build_token_history(poll_runs_dir: Path, *, day_limit: int = 14) -> list[di
         for field in _LLM_USAGE_FIELDS:
             entry[f"llm_{field}"] += usage[field]
 
-    return [by_date[key] for key in sorted(by_date.keys())][-day_limit:]
+    return tuple(by_date[key] for key in sorted(by_date.keys()))
+
+
+def _build_token_history(
+    poll_runs_dir: Path,
+    *,
+    day_limit: int = 14,
+    latest_file: Path | None = None,
+) -> list[dict[str, Any]]:
+    """返回最近若干天的令牌历史，并隔离缓存对象以免被调用方修改。"""
+    resolved_latest_file = latest_file or find_latest_poll_run_file(poll_runs_dir)
+    if resolved_latest_file is None:
+        return []
+    history = _build_token_history_cached(
+        poll_runs_dir,
+        day_limit,
+        _poll_run_file_signature(resolved_latest_file),
+    )
+    return [dict(entry) for entry in history]
 
 
 def _status_label(value: str) -> str:
@@ -535,7 +565,7 @@ def _normalize_source(source: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
-    latest_file = _find_latest_poll_run_file(settings.poll_runs_dir)
+    latest_file = find_latest_poll_run_file(settings.poll_runs_dir)
     if latest_file is None:
         return {
             "ok": False,
@@ -556,7 +586,10 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
             "error": f"failed to parse poll_runs summary: {exc}",
             "latest_file": str(latest_file),
             "poll": {},
-            "token_history": _build_token_history(settings.poll_runs_dir),
+            "token_history": _build_token_history(
+                settings.poll_runs_dir,
+                latest_file=latest_file,
+            ),
             "sources": [],
             "items": [],
             "schema_has_item_details": False,
@@ -567,7 +600,7 @@ def get_latest_rss_poll_audit(settings: Settings) -> dict[str, Any]:
     flat_items = [item for source in sources for item in source["items"]]
     run_finished_at = _as_string(payload.get("run_finished_at"))
     llm_usage = _normalize_llm_usage(payload.get("llm_usage"), fallback=payload)
-    token_history = _build_token_history(settings.poll_runs_dir)
+    token_history = _build_token_history(settings.poll_runs_dir, latest_file=latest_file)
 
     return {
         "ok": True,

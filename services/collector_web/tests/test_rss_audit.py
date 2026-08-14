@@ -1,4 +1,5 @@
 import json
+import os
 
 from collector_web.rss_audit import _build_token_history, _normalize_source
 
@@ -110,6 +111,66 @@ def test_build_token_history_groups_poll_runs_by_day(tmp_path):
             "llm_reasoning_tokens": 0,
         },
     ]
+
+
+def test_build_token_history_reads_only_latest_requested_days(tmp_path):
+    """令牌历史应保留最近天数，并聚合同一天内的多次执行。"""
+    poll_runs_dir = tmp_path / "poll_runs"
+    month_dir = poll_runs_dir / "2026" / "05"
+    month_dir.mkdir(parents=True)
+
+    for day in range(1, 17):
+        payload = {
+            "run_finished_at": f"2026-05-{day:02d}T10:00:00Z",
+            "llm_usage": {"calls": 1, "total_tokens": day},
+        }
+        poll_run_file = month_dir / f"execution-{day}_01_rss_to_obsidian_raw.json"
+        poll_run_file.write_text(json.dumps(payload), encoding="utf-8")
+        os.utime(poll_run_file, (day, day))
+
+    history = _build_token_history(poll_runs_dir, day_limit=14)
+
+    assert [entry["date"] for entry in history] == [
+        f"2026-05-{day:02d}" for day in range(3, 17)
+    ]
+    assert sum(entry["llm_total_tokens"] for entry in history) == sum(range(3, 17))
+
+
+def test_build_token_history_cache_invalidates_for_new_latest_file(tmp_path):
+    """新增最新执行文件后，令牌历史缓存必须自动刷新。"""
+    poll_runs_dir = tmp_path / "poll_runs"
+    month_dir = poll_runs_dir / "2026" / "05"
+    month_dir.mkdir(parents=True)
+    first_file = month_dir / "execution-1_01_rss_to_obsidian_raw.json"
+    first_file.write_text(
+        json.dumps(
+            {
+                "run_finished_at": "2026-05-16T10:00:00Z",
+                "llm_usage": {"calls": 1, "total_tokens": 10},
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.utime(first_file, (100, 100))
+
+    first_history = _build_token_history(poll_runs_dir)
+
+    second_file = month_dir / "execution-2_01_rss_to_obsidian_raw.json"
+    second_file.write_text(
+        json.dumps(
+            {
+                "run_finished_at": "2026-05-16T11:00:00Z",
+                "llm_usage": {"calls": 1, "total_tokens": 20},
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.utime(second_file, (200, 200))
+
+    second_history = _build_token_history(poll_runs_dir)
+
+    assert first_history[0]["llm_total_tokens"] == 10
+    assert second_history[0]["llm_total_tokens"] == 30
 
 
 def test_normalize_source_dedupes_same_item_audit_states():
