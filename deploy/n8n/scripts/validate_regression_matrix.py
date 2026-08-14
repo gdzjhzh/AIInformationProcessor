@@ -660,6 +660,39 @@ def check_feishu_notify_uses_card_v2() -> list[CheckFailure]:
     return failures
 
 
+def check_source_last_seen_preserves_speaker_tristate() -> list[CheckFailure]:
+    """守门：07 不得把未设置的说话人识别压成 false，必须把三态交给 04。"""
+    failures: list[CheckFailure] = []
+    workflow_name = "07_common_source_last_seen_gate.json"
+    workflow = load_workflow(workflow_name)
+    for node_name in (
+        "Prepare Source Gate Context",
+        "Expand Source Processing Items",
+    ):
+        require_code_contains(
+            workflow_name,
+            workflow,
+            node_name,
+            "parseOptionalBoolean",
+            failures,
+        )
+        forbid_code_contains(
+            workflow_name,
+            workflow,
+            node_name,
+            "Boolean($json.useSpeakerRecognition ??",
+            failures,
+        )
+        forbid_code_contains(
+            workflow_name,
+            workflow,
+            node_name,
+            "Boolean(inputItem.useSpeakerRecognition ??",
+            failures,
+        )
+    return failures
+
+
 def check_local_verify_no_vault_write() -> list[CheckFailure]:
     failures: list[CheckFailure] = []
     workflow_name = "90_local_verify_transcript_mainline.json"
@@ -701,6 +734,7 @@ CHECKS: dict[str, Callable[[], list[CheckFailure]]] = {
     "rss_transcript_uses_shared_mainline": check_rss_transcript_uses_shared_mainline,
     "manual_media_uses_shared_mainline": check_manual_media_uses_shared_mainline,
     "feishu_notify_uses_card_v2": check_feishu_notify_uses_card_v2,
+    "source_last_seen_preserves_speaker_tristate": check_source_last_seen_preserves_speaker_tristate,
     "local_verify_no_vault_write": check_local_verify_no_vault_write,
 }
 
