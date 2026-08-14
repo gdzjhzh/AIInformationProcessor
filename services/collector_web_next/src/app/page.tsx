@@ -134,8 +134,8 @@ export default async function HomePage() {
               <article className="rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/15 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-base font-semibold">FastAPI 控制层</h3>
-                  <StatusPill tone={status.data.overall_status_tone ?? mode}>
-                    {textValue(status.data.overall_status_label, mode)}
+                  <StatusPill tone={status.data.overall?.status_tone ?? mode}>
+                    {textValue(status.data.overall?.status_label, mode)}
                   </StatusPill>
                 </div>
                 <div className="mt-4 space-y-3">

@@ -39,40 +39,39 @@ def load_env_value(key: str) -> str:
 
 
 def build_card_payload() -> dict[str, object]:
+    markdown = (
+        "**飞书群机器人消息卡片 UTF-8 测试**\n\n"
+        "**来源**：Signal to Obsidian\n\n"
+        "**摘要**\n"
+        "这是一条通过仓库脚本发送的测试卡片，用来避免 Windows "
+        "PowerShell 管道把中文转成问号。\n\n"
+        "**状态**：如果这条显示正常，说明飞书 webhook 和消息卡片编码链路正常。"
+    )
     return {
         "msg_type": "interactive",
         "card": {
-            "config": {"wide_screen_mode": True},
+            "schema": "2.0",
+            "config": {
+                "update_multi": True,
+                "wide_screen_mode": True,
+                "summary": {"content": "飞书消息卡片 UTF-8 测试"},
+            },
             "header": {
                 "template": "blue",
-                "title": {
-                    "tag": "plain_text",
-                    "content": "AI \u4fe1\u606f\u6458\u8981",
-                },
+                "title": {"tag": "plain_text", "content": "AI 信息摘要"},
+                "padding": "12px 12px 12px 12px",
             },
-            "elements": [
-                {
-                    "tag": "div",
-                    "text": {
-                        "tag": "lark_md",
-                        "content": (
-                            "**\u98de\u4e66\u7fa4\u673a\u5668\u4eba\u6d88\u606f"
-                            "\u5361\u7247 UTF-8 \u6d4b\u8bd5**\n\n"
-                            "**\u6765\u6e90**: Signal to Obsidian\n\n"
-                            "**\u6458\u8981**\n"
-                            "\u8fd9\u662f\u4e00\u6761\u901a\u8fc7\u4ed3\u5e93"
-                            "\u811a\u672c\u53d1\u9001\u7684\u6d4b\u8bd5\u5361"
-                            "\u7247\uff0c\u7528\u6765\u907f\u514d Windows "
-                            "PowerShell \u7ba1\u9053\u628a\u4e2d\u6587\u8f6c"
-                            "\u6210\u95ee\u53f7\u3002\n\n"
-                            "**\u72b6\u6001**: \u5982\u679c\u8fd9\u6761"
-                            "\u663e\u793a\u6b63\u5e38\uff0c\u8bf4\u660e"
-                            "\u98de\u4e66 webhook \u548c\u6d88\u606f\u5361"
-                            "\u7247\u7f16\u7801\u94fe\u8def\u6b63\u5e38\u3002"
-                        ),
-                    },
-                }
-            ],
+            "body": {
+                "direction": "vertical",
+                "padding": "12px 12px 12px 12px",
+                "elements": [
+                    {
+                        "tag": "markdown",
+                        "content": markdown,
+                        "text_align": "left",
+                    }
+                ],
+            },
         },
     }
 

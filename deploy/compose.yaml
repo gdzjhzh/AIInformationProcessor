@@ -196,8 +196,8 @@ services:
       - ./data/collector_web:/data
       - ./data/n8n/storage/poll_runs:/data/n8n_poll_runs:ro
       - ./data/n8n:/data/n8n:ro
-      - ./.env:/workspace/deploy/.env
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.env:/workspace/deploy/.env:ro
+      # 默认不挂 docker.sock，避免 collector-web 变成宿主机 Docker 控制面。
       - ../services/collector_web/src:/app/src:ro
       - ../services/collector_web/main.py:/app/main.py:ro
     environment:

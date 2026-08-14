@@ -48,7 +48,7 @@
 - `Every Day Analysis`
 - `微信群总结`
 
-订阅管理 Web 端已经落地：日常写操作走 `collector-web`（`http://127.0.0.1:8300`），`collector-web-next` 只是只读实验面板。
+订阅管理 Web 端已经落地：日常写操作走 `collector-web`。本机浏览器是 `http://127.0.0.1:${COLLECTOR_WEB_PORT:-18300}`，容器内是 `http://collector-web:8300`。`collector-web-next` 只是只读实验面板。
 
 ## 直接启动核心服务
 

@@ -247,6 +247,7 @@ def complete_manual_submission(
                 finished_at = ?,
                 updated_at = ?
             WHERE id = ?
+              AND status = 'running'
               AND stage != 'cancelled'
             """,
             (

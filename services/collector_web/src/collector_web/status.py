@@ -676,11 +676,21 @@ def _build_qdrant_status(settings: Settings) -> dict[str, Any]:
     if snapshot["distance"]:
         detail_lines.append(f"距离函数: {snapshot['distance']}")
 
+    if not snapshot.get("search_ok", False):
+        detail_lines.append(f"向量搜索失败: {snapshot.get('search_error') or 'unknown search error'}")
+        return _build_check(
+            "qdrant",
+            "Qdrant",
+            "error",
+            "向量库 collection 能读到，但 search 失败，去重主链当前不可用。",
+            detail_lines,
+        )
+
     return _build_check(
         "qdrant",
         "Qdrant",
         "success",
-        "向量库和目标 collection 可达，去重链路的基础依赖在线。",
+        "向量库、目标 collection 和 search 探活都通过。",
         detail_lines,
     )
 

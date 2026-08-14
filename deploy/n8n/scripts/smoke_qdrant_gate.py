@@ -112,10 +112,8 @@ def decide_action(
     matched_payload = match.get("payload") if match else None
     matched_score = float(match.get("score", 0)) if match else 0.0
 
-    normalized_source_type = source_type.strip().lower()
     same_item = bool(matched_payload and matched_payload.get("item_id") == item_id)
     same_content = bool(same_item and matched_payload.get("content_hash") == content_hash)
-    same_transcript_item = bool(same_item and normalized_source_type == "transcript")
 
     if same_content:
         dedupe_action = "silent"
@@ -123,22 +121,10 @@ def decide_action(
         should_write_to_vault = False
         should_notify = False
         should_upsert_qdrant = False
-    elif same_transcript_item:
-        dedupe_action = "silent"
-        notification_mode = "silent"
-        should_write_to_vault = False
-        should_notify = False
-        should_upsert_qdrant = False
     elif same_item:
-        # 必须与 03 Decide Dedupe Action 的 same_item_content_changed 一致：hash 变了不能 silent。
+        # 必须与 03 Decide Dedupe Action 的 same_item_content_changed 一致，含 transcript。
         dedupe_action = "diff_push"
         notification_mode = "incremental"
-    elif match and matched_score >= silent_threshold:
-        dedupe_action = "silent"
-        notification_mode = "silent"
-        should_write_to_vault = False
-        should_notify = False
-        should_upsert_qdrant = False
     elif match and matched_score >= diff_threshold:
         dedupe_action = "diff_push"
         notification_mode = "incremental"
@@ -203,6 +189,20 @@ def run_smoke(
         raise RuntimeError(
             f"Collection size mismatch: env QDRANT_VECTOR_SIZE={qdrant_vector_size}, actual={actual_size}"
         )
+    # 当前 Qdrant 1.17.1 对 payload filter 会 OffsetZero panic。
+    # smoke 改走独立 collection，搜索不加 filter，避免误伤生产库。
+    smoke_collection = f"{qdrant_collection}__runtime_smoke"
+    smoke_collection_url = f"{qdrant_base_url.rstrip('/')}/collections/{smoke_collection}"
+    try:
+        request_json("DELETE", smoke_collection_url)
+    except RequestJsonError as exc:
+        if exc.status_code != 404:
+            raise
+    request_json(
+        "PUT",
+        smoke_collection_url,
+        {"vectors": {"size": actual_size, "distance": "Cosine"}},
+    )
 
     smoke_run_id = f"smoke-{uuid.uuid4()}"
     smoke_point_ids = [qdrant_uuid(f"{smoke_run_id}:base")]
@@ -242,12 +242,12 @@ def run_smoke(
             "expected": "diff_push",
         },
         {
-            "name": "silent_same_transcript_item_updated",
+            "name": "diff_push_same_transcript_item_updated",
             "item_id": "smoke-base-item",
             "content_hash": "sha256:transcript-updated",
             "source_type": "transcript",
             "vector": make_unit_vector(qdrant_vector_size, 1.0),
-            "expected": "silent",
+            "expected": "diff_push",
         },
     ]
 
@@ -257,7 +257,7 @@ def run_smoke(
     try:
         request_json_with_retry(
             "PUT",
-            f"{collection_url}/points",
+            f"{smoke_collection_url}/points",
             {
                 "points": [
                     {
@@ -278,17 +278,9 @@ def run_smoke(
         for scenario in scenarios:
             search = request_json_with_retry(
                 "POST",
-                f"{collection_url}/points/search",
+                f"{smoke_collection_url}/points/search",
                 {
                     "vector": scenario["vector"],
-                    "filter": {
-                        "must": [
-                            {
-                                "key": "smoke_run_id",
-                                "match": {"value": smoke_run_id},
-                            }
-                        ]
-                    },
                     "limit": 1,
                     "with_payload": True,
                 },
@@ -318,12 +310,7 @@ def run_smoke(
                 failures.append(f"{scenario['name']}: expected {scenario['expected']}, got {actual}")
     finally:
         try:
-            request_json_with_retry(
-                "POST",
-                f"{collection_url}/points/delete",
-                {"points": smoke_point_ids},
-                timeout_seconds=10,
-            )
+            request_json("DELETE", smoke_collection_url)
         except Exception as exc:
             cleanup_error = exc
 

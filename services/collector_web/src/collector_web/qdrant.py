@@ -57,6 +57,49 @@ def _item_id_filter(item_id: str) -> dict[str, Any]:
     }
 
 
+def _is_offset_zero_error(exc: Exception) -> bool:
+    """识别当前 Qdrant 1.17.1 对 payload filter 的 OffsetZero panic。"""
+    return "OffsetZero" in str(exc)
+
+
+def _scroll_point_ids_by_item_id(
+    settings: Settings,
+    collection: str,
+    item_id: str,
+) -> list[str]:
+    """在 filter 不可用时，无过滤 scroll 后在客户端按 item_id 筛选。"""
+    base_url = settings.qdrant_base_url.rstrip("/")
+    matched_ids: list[str] = []
+    offset: Any = None
+    while True:
+        payload: dict[str, Any] = {
+            "limit": 256,
+            "with_payload": True,
+            "with_vector": False,
+        }
+        if offset is not None:
+            payload["offset"] = offset
+        response = _request_json(
+            f"{base_url}/collections/{collection}/points/scroll",
+            payload=payload,
+            timeout_seconds=settings.qdrant_timeout_seconds,
+        )
+        result = response.get("result") if isinstance(response.get("result"), dict) else {}
+        for point in result.get("points") or []:
+            if not isinstance(point, dict):
+                continue
+            point_payload = point.get("payload") if isinstance(point.get("payload"), dict) else {}
+            if str(point_payload.get("item_id") or "").strip() != item_id:
+                continue
+            point_id = point.get("id")
+            if point_id is not None:
+                matched_ids.append(str(point_id))
+        offset = result.get("next_page_offset")
+        if not offset:
+            break
+    return matched_ids
+
+
 def delete_points_by_item_id(settings: Settings, item_id: str) -> dict[str, Any]:
     normalized_item_id = item_id.strip()
     if not normalized_item_id:
@@ -65,30 +108,45 @@ def delete_points_by_item_id(settings: Settings, item_id: str) -> dict[str, Any]
     base_url = settings.qdrant_base_url.rstrip("/")
     collection = urllib.parse.quote(settings.qdrant_collection, safe="")
     filter_payload = {"filter": _item_id_filter(normalized_item_id)}
+    used_scroll_fallback = False
 
-    count_before_response = _request_json(
-        f"{base_url}/collections/{collection}/points/count",
-        payload=filter_payload,
-        timeout_seconds=settings.qdrant_timeout_seconds,
-    )
-    count_before = int(
-        count_before_response.get("result", {}).get("count", 0) or 0
-    )
+    try:
+        count_before_response = _request_json(
+            f"{base_url}/collections/{collection}/points/count",
+            payload=filter_payload,
+            timeout_seconds=settings.qdrant_timeout_seconds,
+        )
+        count_before = int(
+            count_before_response.get("result", {}).get("count", 0) or 0
+        )
+        delete_selector: dict[str, Any] = filter_payload
+    except QdrantOperationError as exc:
+        if not _is_offset_zero_error(exc):
+            raise
+        used_scroll_fallback = True
+        point_ids = _scroll_point_ids_by_item_id(settings, collection, normalized_item_id)
+        count_before = len(point_ids)
+        delete_selector = {"points": point_ids}
 
     delete_response = None
     if count_before > 0:
         delete_response = _request_json(
             f"{base_url}/collections/{collection}/points/delete?wait=true",
-            payload=filter_payload,
+            payload=delete_selector,
             timeout_seconds=settings.qdrant_timeout_seconds,
         )
 
-    count_after_response = _request_json(
-        f"{base_url}/collections/{collection}/points/count",
-        payload=filter_payload,
-        timeout_seconds=settings.qdrant_timeout_seconds,
-    )
-    count_after = int(count_after_response.get("result", {}).get("count", 0) or 0)
+    if used_scroll_fallback:
+        count_after = len(
+            _scroll_point_ids_by_item_id(settings, collection, normalized_item_id)
+        )
+    else:
+        count_after_response = _request_json(
+            f"{base_url}/collections/{collection}/points/count",
+            payload=filter_payload,
+            timeout_seconds=settings.qdrant_timeout_seconds,
+        )
+        count_after = int(count_after_response.get("result", {}).get("count", 0) or 0)
 
     return {
         "item_id": normalized_item_id,
@@ -98,6 +156,7 @@ def delete_points_by_item_id(settings: Settings, item_id: str) -> dict[str, Any]
         "count_after": count_after,
         "deleted_count": max(count_before - count_after, 0),
         "delete_response": delete_response,
+        "used_scroll_fallback": used_scroll_fallback,
     }
 
 
@@ -135,6 +194,21 @@ def get_collection_snapshot(settings: Settings) -> dict[str, Any]:
         vector_size = vectors.get("size")
         distance = str(vectors.get("distance", "")).strip()
 
+    search_ok = False
+    search_error = ""
+    if isinstance(vector_size, int) and vector_size > 0:
+        probe = [0.0] * vector_size
+        probe[0] = 1.0
+        try:
+            _request_json(
+                f"{base_url}/collections/{collection}/points/search",
+                payload={"vector": probe, "limit": 1, "with_payload": False},
+                timeout_seconds=settings.qdrant_timeout_seconds,
+            )
+            search_ok = True
+        except QdrantOperationError as exc:
+            search_error = str(exc)
+
     return {
         "qdrant_base_url": settings.qdrant_base_url,
         "qdrant_collection": settings.qdrant_collection,
@@ -143,4 +217,6 @@ def get_collection_snapshot(settings: Settings) -> dict[str, Any]:
         "points_count": int(count_response.get("result", {}).get("count", 0) or 0),
         "vector_size": vector_size,
         "distance": distance,
+        "search_ok": search_ok,
+        "search_error": search_error,
     }

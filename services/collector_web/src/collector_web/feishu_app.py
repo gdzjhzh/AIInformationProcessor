@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -7,6 +8,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping
 from urllib import error, parse, request
+
+from Crypto.Cipher import AES
 
 from .config import Settings
 from .db import connect, utc_now
@@ -605,6 +608,54 @@ def compute_callback_signature(
     return digest.hexdigest()
 
 
+def _pkcs7_pad(value: bytes) -> bytes:
+    """给 AES CBC 明文补齐到 16 字节块。"""
+    pad = AES.block_size - (len(value) % AES.block_size)
+    return value + bytes([pad] * pad)
+
+
+def _pkcs7_unpad(value: bytes) -> bytes:
+    """去掉 AES CBC 解密后的 PKCS7 填充。"""
+    if not value:
+        raise FeishuCallbackAuthError("encrypted Feishu callback is empty")
+    pad = value[-1]
+    if pad < 1 or pad > AES.block_size or value[-pad:] != bytes([pad] * pad):
+        raise FeishuCallbackAuthError("encrypted Feishu callback has invalid padding")
+    return value[:-pad]
+
+
+def encrypt_callback_payload(encrypt_key: str, payload: dict[str, Any]) -> str:
+    """按飞书 Encrypt Key 策略加密回调体，供测试构造合法密文。"""
+    key = hashlib.sha256(encrypt_key.encode("utf-8")).digest()
+    iv = hashlib.sha256(f"{encrypt_key}:iv".encode("utf-8")).digest()[: AES.block_size]
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    plaintext = _pkcs7_pad(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    return base64.b64encode(iv + cipher.encrypt(plaintext)).decode("ascii")
+
+
+def decrypt_callback_payload(encrypt_key: str, encrypt_text: str) -> dict[str, Any]:
+    """解密飞书 Encrypt Key 策略下的回调正文。"""
+    try:
+        blob = base64.b64decode(encrypt_text)
+    except Exception as exc:
+        raise FeishuCallbackAuthError("encrypted Feishu callback is not valid base64") from exc
+    if len(blob) < AES.block_size * 2:
+        raise FeishuCallbackAuthError("encrypted Feishu callback is too short")
+    key = hashlib.sha256(encrypt_key.encode("utf-8")).digest()
+    iv = blob[: AES.block_size]
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    try:
+        plaintext = _pkcs7_unpad(cipher.decrypt(blob[AES.block_size:]))
+        parsed = json.loads(plaintext.decode("utf-8"))
+    except FeishuCallbackAuthError:
+        raise
+    except Exception as exc:
+        raise FeishuCallbackAuthError("encrypted Feishu callback could not be decrypted") from exc
+    if not isinstance(parsed, dict):
+        raise FeishuCallbackAuthError("decrypted Feishu callback is not an object")
+    return parsed
+
+
 def verify_callback_request(
     settings: Settings,
     payload: dict[str, Any],
@@ -612,24 +663,23 @@ def verify_callback_request(
     headers: Mapping[str, str] | None = None,
     raw_body: bytes | None = None,
 ) -> dict[str, Any]:
-    """校验回调来自飞书；已配置的 token / 签名任一失败即拒绝。"""
-    if isinstance(payload.get("encrypt"), str) and payload["encrypt"].strip():
-        raise FeishuCallbackAuthError("encrypted Feishu callback is not supported without a decryptor")
-
-    if settings.feishu_callback_encrypt_key:
+    """先验签，再按需解密，最后核对 verification token。"""
+    encrypt_key = settings.feishu_callback_encrypt_key
+    if encrypt_key:
         timestamp = _header_value(headers, "X-Lark-Request-Timestamp")
         nonce = _header_value(headers, "X-Lark-Request-Nonce")
         signature = _header_value(headers, "X-Lark-Signature")
         if not timestamp or not nonce or not signature or raw_body is None:
             raise FeishuCallbackAuthError("Feishu callback signature headers are missing")
-        expected = compute_callback_signature(
-            timestamp,
-            nonce,
-            settings.feishu_callback_encrypt_key,
-            raw_body,
-        )
+        expected = compute_callback_signature(timestamp, nonce, encrypt_key, raw_body)
         if not hmac.compare_digest(expected, signature):
             raise FeishuCallbackAuthError("Feishu callback signature mismatch")
+
+    encrypt_text = payload.get("encrypt")
+    if isinstance(encrypt_text, str) and encrypt_text.strip():
+        if not encrypt_key:
+            raise FeishuCallbackAuthError("encrypted Feishu callback received but FEISHU_ENCRYPT_KEY is empty")
+        payload = decrypt_callback_payload(encrypt_key, encrypt_text.strip())
 
     if settings.feishu_callback_verification_token:
         token = _extract_verification_token(payload)

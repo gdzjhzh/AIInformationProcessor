@@ -178,6 +178,24 @@ def test_calibration_compare_api_publicizes_backend_links(monkeypatch, tmp_path)
     )
 
 
+def test_mutating_control_plane_requires_internal_token(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLECTOR_WEB_INTERNAL_TOKEN", "internal-secret")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        rerun = client.post("/api/rss-poll/rerun")
+        switch = client.post("/api/mainline-llm/switch", json={"model": "deepseek-v4-flash"})
+        submit = client.post(
+            "/api/manual-media-submit",
+            json={"url": "https://www.xiaoyuzhoufm.com/episode/abc"},
+        )
+
+    assert rerun.status_code == 401
+    assert switch.status_code == 401
+    assert submit.status_code == 401
+
+
 def test_internal_feishu_notify_rejects_missing_token(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     monkeypatch.setenv("FEISHU_APP_ID", "cli_test_app")
@@ -414,6 +432,83 @@ def test_feishu_card_action_rejects_wrong_token(monkeypatch, tmp_path):
     assert response.status_code == 401
 
 
+def test_feishu_card_action_accepts_valid_signature_and_decrypts(monkeypatch, tmp_path):
+    import hashlib
+    import hmac as hmac_lib
+
+    from collector_web.feishu_app import compute_callback_signature, encrypt_callback_payload
+
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FEISHU_NOTIFY_MODE", "app")
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_test_app")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "test-secret")
+    monkeypatch.setenv("FEISHU_TARGET_CHAT_ID", "oc_default")
+    monkeypatch.setenv("FEISHU_VERIFICATION_TOKEN", "verify-token")
+    monkeypatch.setenv("FEISHU_ENCRYPT_KEY", "encrypt-key")
+    get_settings.cache_clear()
+
+    sent_cards = []
+
+    def fake_send_card_message(settings, *, chat_id, card, idempotency_key):
+        sent_cards.append({"chat_id": chat_id, "idempotency_key": idempotency_key})
+        return {"code": 0, "data": {"message_id": f"om_{len(sent_cards)}"}}
+
+    monkeypatch.setattr(feishu_app_module, "send_card_message", fake_send_card_message)
+
+    inner = {
+        "token": "verify-token",
+        "event": {
+            "context": {"open_chat_id": "oc_attacker"},
+            "action": {
+                "value": {
+                    "action": "show_full",
+                    "notification_id": "notify-encrypted",
+                }
+            },
+        },
+    }
+    encrypted_body = json.dumps(
+        {"encrypt": encrypt_callback_payload("encrypt-key", inner)},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    timestamp = "1710000000"
+    nonce = "nonce-1"
+    signature = compute_callback_signature(timestamp, nonce, "encrypt-key", encrypted_body)
+
+    with TestClient(create_app()) as client:
+        create_response = client.post(
+            "/api/internal/feishu/notify",
+            json={
+                "payload": {
+                    "feishu_notification_id": "notify-encrypted",
+                    "title": "加密回调",
+                    "should_notify": True,
+                    "vault_write_status": "written",
+                }
+            },
+        )
+        callback_response = client.post(
+            "/api/feishu/card-action",
+            content=encrypted_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Lark-Request-Timestamp": timestamp,
+                "X-Lark-Request-Nonce": nonce,
+                "X-Lark-Signature": signature,
+            },
+        )
+
+    assert create_response.status_code == 202
+    assert callback_response.status_code == 200
+    assert callback_response.json()["toast"]["type"] == "success"
+    assert sent_cards[-1]["chat_id"] == "oc_default"
+    assert hmac_lib.compare_digest(
+        signature,
+        hashlib.sha256((timestamp + nonce + "encrypt-key").encode("utf-8") + encrypted_body).hexdigest(),
+    )
+
+
 def test_feishu_card_action_rejects_bad_signature(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     monkeypatch.setenv("FEISHU_ENCRYPT_KEY", "encrypt-key")
@@ -634,6 +729,8 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
             "points_count": 6,
             "vector_size": 1536,
             "distance": "Cosine",
+            "search_ok": True,
+            "search_error": "",
         },
     )
 
@@ -642,6 +739,7 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
             settings,
             {"url": "https://d.dedao.cn/GCTnMYcf1f6tUyxd"},
         )
+        assert mark_manual_submission_running(settings, submission["id"]) is True
         complete_manual_submission(
             settings,
             submission["id"],
@@ -1244,6 +1342,45 @@ def test_cancel_manual_submission_api_keeps_cancelled_state_after_running_result
     assert final_submission["status"] == "cancelled"
 
 
+def test_complete_manual_submission_ignores_late_callback_after_completed(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    settings = get_settings()
+    with TestClient(create_app()):
+        submission = create_manual_submission(
+            settings,
+            {"url": "https://www.xiaoyuzhoufm.com/episode/late"},
+        )
+        assert mark_manual_submission_running(settings, submission["id"]) is True
+        first = complete_manual_submission(
+            settings,
+            submission["id"],
+            {
+                "ok": True,
+                "stage": "vault_write",
+                "title": "第一次完成",
+                "item_id": "item-first",
+                "vault_write_status": "written",
+            },
+        )
+        late = complete_manual_submission(
+            settings,
+            submission["id"],
+            {
+                "ok": False,
+                "stage": "forged",
+                "title": "迟到回调",
+                "item_id": "item-forged",
+                "error": "should not overwrite",
+            },
+        )
+
+    assert first["status"] == "completed"
+    assert first["item_id"] == "item-first"
+    assert late["status"] == "completed"
+    assert late["item_id"] == "item-first"
+    assert late["stage"] == "vault_write"
+
+
 def test_manual_media_submit_callback_api_completes_running_submission(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
     settings = get_settings()
@@ -1289,6 +1426,7 @@ def test_manual_submission_detail_api_reads_persisted_history(monkeypatch, tmp_p
             settings,
             {"url": "https://www.xiaoyuzhoufm.com/episode/abc"},
         )
+        assert mark_manual_submission_running(settings, submission["id"]) is True
         complete_manual_submission(
             settings,
             submission["id"],
@@ -1386,6 +1524,7 @@ def test_manual_media_submit_precheck_api_detects_existing_submission(monkeypatc
             settings,
             {"url": "https://d.dedao.cn/GCTnMYcf1f6tUyxd"},
         )
+        assert mark_manual_submission_running(settings, submission["id"]) is True
         complete_manual_submission(
             settings,
             submission["id"],
@@ -1423,6 +1562,7 @@ def test_manual_media_submit_precheck_api_detects_existing_canonical_match(monke
             settings,
             {"url": "https://www.dedao.cn/share/course/article?id=7NqeGmE2w4bnK4ENvnVP31lv5WZ9rj"},
         )
+        assert mark_manual_submission_running(settings, submission["id"]) is True
         complete_manual_submission(
             settings,
             submission["id"],

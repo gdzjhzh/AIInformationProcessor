@@ -247,8 +247,20 @@ function renderSubmissionDetail(submission) {
   `;
 }
 
+function collectorAuthHeaders(extra = {}) {
+  const token = document.body?.dataset?.internalToken || "";
+  const headers = { ...extra };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, {
+    ...options,
+    headers: collectorAuthHeaders(options.headers || {}),
+  });
   const payload = await response.json();
   return { response, payload };
 }

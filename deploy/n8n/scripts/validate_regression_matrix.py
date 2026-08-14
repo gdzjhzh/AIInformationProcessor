@@ -693,6 +693,13 @@ def check_same_item_content_change_is_diff_push() -> list[CheckFailure]:
         "same_item_vector_silent",
         failures,
     )
+    forbid_code_contains(
+        "03_qdrant_gate.json",
+        workflow,
+        "Decide Dedupe Action",
+        "dedupeReason = 'same_transcript_item'",
+        failures,
+    )
     return failures
 
 

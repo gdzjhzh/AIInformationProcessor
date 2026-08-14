@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
 
     if settings.static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(settings.static_dir)), name="static")
+    templates.env.globals["internal_token"] = settings.internal_token
 
     @app.on_event("startup")
     async def startup_event() -> None:
@@ -143,14 +144,19 @@ def create_app() -> FastAPI:
         return get_latest_rss_poll_audit(settings)
 
     @app.post("/api/rss-poll/rerun", status_code=status.HTTP_202_ACCEPTED)
-    async def rss_poll_rerun_api() -> dict[str, Any]:
+    async def rss_poll_rerun_api(request: Request) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             return trigger_rss_poll_rerun(settings)
         except RssPollRerunError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @app.post("/api/mainline-llm/switch", status_code=status.HTTP_202_ACCEPTED)
-    async def mainline_llm_switch_api(payload: MainlineLlmSwitchRequest) -> dict[str, Any]:
+    async def mainline_llm_switch_api(
+        request: Request,
+        payload: MainlineLlmSwitchRequest,
+    ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             return switch_mainline_llm_model(settings, payload.model)
         except MainlineLlmSwitchError as exc:
@@ -190,8 +196,10 @@ def create_app() -> FastAPI:
 
     @app.post("/api/calibration-compare", status_code=status.HTTP_202_ACCEPTED)
     async def calibration_compare_api(
+        request: Request,
         payload: CalibrationCompareRequest,
     ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             result = submit_calibration_compare(
                 settings,
@@ -211,7 +219,11 @@ def create_app() -> FastAPI:
         return publicize_calibration_compare_payload(settings, result)
 
     @app.post("/api/calibration-compare/{job_id}/open-directory")
-    async def calibration_compare_open_directory_api(job_id: str) -> dict[str, Any]:
+    async def calibration_compare_open_directory_api(
+        request: Request,
+        job_id: str,
+    ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             return open_calibration_compare_directory(settings, job_id)
         except CalibrationCompareError as exc:
@@ -252,8 +264,10 @@ def create_app() -> FastAPI:
 
     @app.post("/api/manual-media-submit", status_code=status.HTTP_202_ACCEPTED)
     async def manual_media_submit_api(
+        request: Request,
         payload: ManualMediaSubmitRequest,
     ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             submission = enqueue_manual_submission(
                 settings,
@@ -269,15 +283,21 @@ def create_app() -> FastAPI:
 
     @app.post("/api/manual-media-submit/precheck")
     async def manual_media_submit_precheck_api(
+        request: Request,
         payload: ManualMediaPrecheckRequest,
     ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         return precheck_manual_media_submission(settings, payload.url)
 
     @app.post(
         "/api/manual-media-submit/{submission_id}/cancel",
         status_code=status.HTTP_202_ACCEPTED,
     )
-    async def cancel_manual_media_submit_api(submission_id: int) -> dict[str, Any]:
+    async def cancel_manual_media_submit_api(
+        request: Request,
+        submission_id: int,
+    ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             submission, cancel_mode = cancel_manual_submission(
                 settings,
@@ -296,7 +316,11 @@ def create_app() -> FastAPI:
         "/api/manual-media-submit/{submission_id}/delete-vector-and-rerun",
         status_code=status.HTTP_202_ACCEPTED,
     )
-    async def delete_vector_and_rerun_api(submission_id: int) -> dict[str, Any]:
+    async def delete_vector_and_rerun_api(
+        request: Request,
+        submission_id: int,
+    ) -> dict[str, Any]:
+        _require_internal_token(request, settings)
         try:
             rerun_submission, delete_detail = delete_vector_and_rerun_submission(
                 settings,

@@ -2,7 +2,7 @@
 
 Next.js **只读实验面板**，不是日常写操作入口。
 
-它单独渲染现有 FastAPI 的只读数据：不提交媒体、不重跑 RSS、不切模型、不写 `deploy/.env`、不重启容器。日常提交、重跑和模型切换仍走 `collector-web` 的 Jinja 控制台 `http://127.0.0.1:8300`。
+它单独渲染现有 FastAPI 的只读数据：不提交媒体、不重跑 RSS、不切模型、不写 `deploy/.env`、不重启容器。日常提交、重跑和模型切换仍走 `collector-web` 的 Jinja 控制台。本机浏览器看 FastAPI 用 `http://127.0.0.1:18300`；容器内地址是 `http://collector-web:8300`。
 
 ## Development
 
@@ -50,13 +50,15 @@ This keeps `collector-web-next` read-only while `collector-web` remains the API/
 By default, the frontend reads the FastAPI host port used by this repo:
 
 ```text
-http://127.0.0.1:8300
+http://127.0.0.1:18300
 ```
+
+容器内 Next 读 `http://collector-web:8300`。本机 `npm run dev` 默认打宿主机映射口 `18300`。
 
 Override it with:
 
 ```powershell
-$env:COLLECTOR_WEB_API_BASE_URL="http://127.0.0.1:8300"
+$env:COLLECTOR_WEB_API_BASE_URL="http://127.0.0.1:18300"
 npm run dev
 ```
 

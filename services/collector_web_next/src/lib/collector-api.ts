@@ -197,7 +197,7 @@ const FALLBACK_STATUS: ServiceStatusPayload = {
       status_tone: "muted",
       status_label: "离线",
       summary: "Next 只读前端已加载，但还没有连接到 FastAPI 数据源。",
-      detail_lines: ["默认数据源: http://127.0.0.1:8300"],
+      detail_lines: ["默认数据源: http://127.0.0.1:18300"],
     },
   ],
 };
@@ -211,7 +211,7 @@ const FALLBACK_RSS_POLL: RssPollPayload = {
 function apiBaseUrl() {
   return (
     process.env.COLLECTOR_WEB_API_BASE_URL?.replace(/\/$/, "") ||
-    "http://127.0.0.1:8300"
+    "http://127.0.0.1:18300"
   );
 }
 

@@ -6,7 +6,7 @@
     <title>{% block title %}Collector Web{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/app.css?v=20260505-rss-audit">
 </head>
-<body>
+<body data-internal-token="{{ internal_token|default('', true) }}">
     <div class="page-shell">
         <header class="site-header">
             <div>
