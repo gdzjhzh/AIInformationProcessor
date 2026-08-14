@@ -660,6 +660,50 @@ def check_feishu_notify_uses_card_v2() -> list[CheckFailure]:
     return failures
 
 
+def check_continue_on_error_reads_object_errors() -> list[CheckFailure]:
+    """守门：continueRegularOutput 包装必须同时识别字符串和 {message} 失败对象。"""
+    failures: list[CheckFailure] = []
+    targets = (
+        (
+            "01_rss_to_obsidian_raw.json",
+            (
+                "Normalize RSS Read Result",
+                "Normalize Transcript Ingest Result",
+                "Normalize 00 Result",
+            ),
+        ),
+        (
+            "06_manual_media_submit.json",
+            (
+                "Normalize Manual Submit Result",
+                "Normalize 00 Result",
+            ),
+        ),
+        (
+            "90_local_verify_transcript_mainline.json",
+            ("Normalize Verify Result",),
+        ),
+    )
+    for workflow_name, node_names in targets:
+        workflow = load_workflow(workflow_name)
+        for node_name in node_names:
+            require_code_contains(
+                workflow_name,
+                workflow,
+                node_name,
+                "readError",
+                failures,
+            )
+            require_code_contains(
+                workflow_name,
+                workflow,
+                node_name,
+                "value.message === 'string'",
+                failures,
+            )
+    return failures
+
+
 def check_source_last_seen_preserves_speaker_tristate() -> list[CheckFailure]:
     """守门：07 不得把未设置的说话人识别压成 false，必须把三态交给 04。"""
     failures: list[CheckFailure] = []
@@ -734,6 +778,7 @@ CHECKS: dict[str, Callable[[], list[CheckFailure]]] = {
     "rss_transcript_uses_shared_mainline": check_rss_transcript_uses_shared_mainline,
     "manual_media_uses_shared_mainline": check_manual_media_uses_shared_mainline,
     "feishu_notify_uses_card_v2": check_feishu_notify_uses_card_v2,
+    "continue_on_error_reads_object_errors": check_continue_on_error_reads_object_errors,
     "source_last_seen_preserves_speaker_tristate": check_source_last_seen_preserves_speaker_tristate,
     "local_verify_no_vault_write": check_local_verify_no_vault_write,
 }

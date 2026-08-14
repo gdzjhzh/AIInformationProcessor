@@ -65,7 +65,7 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\n\nif (typeof metadata.error === 'string' && metadata.error.trim()) {\n  return {\n    json: {\n      ok: false,\n      stage: '04_video_transcript_ingest',\n      error: metadata.error.trim(),\n      error_metadata: $input.item.metadata ?? null,\n      debug_input: $('Normalize Verify Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ok: true,\n    ...metadata\n  }\n};"
+        "jsCode": "const readError = (value) => {\n  if (typeof value === 'string') {\n    return value.trim();\n  }\n  if (value && typeof value === 'object') {\n    if (typeof value.message === 'string' && value.message.trim()) {\n      return value.message.trim();\n    }\n    if (typeof value.error === 'string' && value.error.trim()) {\n      return value.error.trim();\n    }\n    if (value.error && typeof value.error.message === 'string' && value.error.message.trim()) {\n      return value.error.message.trim();\n    }\n  }\n  return '';\n};\n\nconst metadata = $input.item.json && typeof $input.item.json === 'object' ? $input.item.json : {};\n\nconst error = readError(metadata.error);\nif (error) {\n  return {\n    json: {\n      ok: false,\n      stage: '04_video_transcript_ingest',\n      error,\n      error_metadata: $input.item.metadata ?? null,\n      debug_input: $('Normalize Verify Request').item.json ?? {}\n    }\n  };\n}\n\nreturn {\n  json: {\n    ok: true,\n    ...metadata\n  }\n};"
       },
       "id": "40c84630-f5ba-4395-ab1a-5d04d2f24765",
       "name": "Normalize Verify Result",
