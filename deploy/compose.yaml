@@ -25,7 +25,7 @@ services:
       - ./data/n8n:/home/node/.n8n
       - ./data/n8n/storage:/home/node/.n8n-files
       - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
-      - "${AI_WIKI_RAW_EXPORT_PATH:-C:/Users/hewqb/Documents/Obsidian Vault/AI_Wiki/raw}:/ai_wiki_raw"
+      - "${AI_WIKI_RAW_EXPORT_PATH:-./data/ai_wiki_raw}:/ai_wiki_raw"
     environment:
       TZ: ${TZ:-America/New_York}
       GENERIC_TIMEZONE: ${TZ:-America/New_York}
