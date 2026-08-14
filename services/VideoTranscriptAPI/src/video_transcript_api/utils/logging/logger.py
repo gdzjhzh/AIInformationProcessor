@@ -16,7 +16,7 @@ _config_cache = None
 # 加载配置文件
 def load_config():
     """
-    加载配置文件
+    加载配置文件；测试等隔离环境可通过 VIDEO_TRANSCRIPT_CONFIG_PATH 显式覆盖。
     """
     global _config_cache
 
@@ -27,7 +27,14 @@ def load_config():
     # 获取项目根目录下的配置文件路径
     current_file = Path(__file__).resolve()
     project_root = current_file.parents[4]
-    config_path = project_root / "config" / "config.jsonc"
+    configured_path = os.getenv("VIDEO_TRANSCRIPT_CONFIG_PATH", "").strip()
+    config_path = (
+        Path(configured_path).expanduser()
+        if configured_path
+        else Path("config/config.jsonc")
+    )
+    if not config_path.is_absolute():
+        config_path = project_root / config_path
 
     with config_path.open("r", encoding="utf-8") as f:
         _config_cache = json.load(f)

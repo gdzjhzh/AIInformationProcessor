@@ -11,7 +11,15 @@ import sys
 import pytest
 
 # 添加src目录到Python路径
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+project_root = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(project_root, 'src'))
+
+# 测试必须使用无凭据的示例配置，避免依赖被忽略的本地生产配置。
+os.environ["VIDEO_TRANSCRIPT_CONFIG_PATH"] = os.path.join(
+    project_root,
+    "config",
+    "config.example.jsonc",
+)
 
 from video_transcript_api.utils.notifications.wechat import init_global_notifier, shutdown_global_notifier
 
