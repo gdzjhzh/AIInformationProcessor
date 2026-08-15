@@ -160,6 +160,35 @@ def delete_points_by_item_id(settings: Settings, item_id: str) -> dict[str, Any]
     }
 
 
+def _probe_payload_pages(settings: Settings, collection: str) -> tuple[bool, str, int]:
+    """分页读取生产 payload。单次无 payload 搜索成功不能证明 collection 完整。"""
+    base_url = settings.qdrant_base_url.rstrip("/")
+    offset: Any = None
+    read_count = 0
+    while True:
+        payload: dict[str, Any] = {
+            "limit": 128,
+            "with_payload": True,
+            "with_vector": False,
+        }
+        if offset is not None:
+            payload["offset"] = offset
+        try:
+            response = _request_json(
+                f"{base_url}/collections/{collection}/points/scroll",
+                payload=payload,
+                timeout_seconds=settings.qdrant_timeout_seconds,
+            )
+        except QdrantOperationError as exc:
+            return False, str(exc), read_count
+        result = response.get("result") if isinstance(response.get("result"), dict) else {}
+        points = result.get("points") or []
+        read_count += len(points) if isinstance(points, list) else 0
+        offset = result.get("next_page_offset")
+        if not offset:
+            return True, "", read_count
+
+
 def get_collection_snapshot(settings: Settings) -> dict[str, Any]:
     base_url = settings.qdrant_base_url.rstrip("/")
     collection = urllib.parse.quote(settings.qdrant_collection, safe="")
@@ -202,12 +231,17 @@ def get_collection_snapshot(settings: Settings) -> dict[str, Any]:
         try:
             _request_json(
                 f"{base_url}/collections/{collection}/points/search",
-                payload={"vector": probe, "limit": 1, "with_payload": False},
+                payload={"vector": probe, "limit": 1, "with_payload": True},
                 timeout_seconds=settings.qdrant_timeout_seconds,
             )
             search_ok = True
         except QdrantOperationError as exc:
             search_error = str(exc)
+
+    payload_ok, payload_error, payload_points_read = _probe_payload_pages(
+        settings,
+        collection,
+    )
 
     return {
         "qdrant_base_url": settings.qdrant_base_url,
@@ -219,4 +253,7 @@ def get_collection_snapshot(settings: Settings) -> dict[str, Any]:
         "distance": distance,
         "search_ok": search_ok,
         "search_error": search_error,
+        "payload_ok": payload_ok,
+        "payload_error": payload_error,
+        "payload_points_read": payload_points_read,
     }

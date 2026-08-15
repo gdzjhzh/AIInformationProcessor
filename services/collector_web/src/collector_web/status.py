@@ -678,11 +678,25 @@ def _build_qdrant_status(settings: Settings) -> dict[str, Any]:
             detail_lines,
         )
 
+    if not snapshot.get("payload_ok", False):
+        detail_lines.append(
+            f"payload 分页读到 {snapshot.get('payload_points_read', 0)} 条后失败: "
+            f"{snapshot.get('payload_error') or 'unknown payload error'}"
+        )
+        return _build_check(
+            "qdrant",
+            "Qdrant",
+            "error",
+            "向量搜索能通，但生产 collection 的 payload 分页读取失败，去重主链不能当健康。",
+            detail_lines,
+        )
+
+    detail_lines.append(f"payload 分页已读 {snapshot.get('payload_points_read', 0)} 条")
     return _build_check(
         "qdrant",
         "Qdrant",
         "success",
-        "向量库、目标 collection 和 search 探活都通过。",
+        "向量库、目标 collection、带 payload 的 search 和分页读取都通过。",
         detail_lines,
     )
 

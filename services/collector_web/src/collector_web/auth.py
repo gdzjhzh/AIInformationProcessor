@@ -51,10 +51,13 @@ def secrets_match(provided: str, expected: str) -> bool:
 
 
 def require_internal_token(request: Request, settings: Settings) -> None:
-    """服务间接口鉴权：只认内部令牌，不认浏览器 Session。"""
+    """服务间接口鉴权：未配置令牌直接 503，不因缺配置而放行。"""
     expected = settings.internal_token
     if not expected:
-        return
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="internal token not configured",
+        )
     if not secrets_match(extract_internal_token(request), expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid internal token")
 
@@ -135,9 +138,14 @@ def passwords_match(provided: str, expected: str) -> bool:
 
 
 def require_browser_session(request: Request, settings: Settings) -> BrowserSession | None:
-    """浏览器写接口鉴权：配置了 UI 密码时必须有 Session 和 CSRF。"""
+    """浏览器写接口鉴权：未配置 UI 密码时默认拒绝，除非显式打开 insecure 开关。"""
     if not settings.ui_password:
-        return read_session(request, settings)
+        if settings.allow_insecure_browser:
+            return read_session(request, settings)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="browser auth not configured",
+        )
 
     session = read_session(request, settings)
     if session is None:
@@ -152,8 +160,9 @@ def require_browser_session(request: Request, settings: Settings) -> BrowserSess
 def template_auth_context(request: Request, settings: Settings) -> dict[str, Any]:
     """给 Jinja 页面提供 CSRF 和登录态，绝不下发内部令牌。"""
     session = read_session(request, settings)
+    browser_auth_required = bool(settings.ui_password) or not settings.allow_insecure_browser
     return {
         "csrf_token": session.csrf if session else "",
-        "browser_auth_required": bool(settings.ui_password),
+        "browser_auth_required": browser_auth_required,
         "browser_signed_in": session is not None,
     }

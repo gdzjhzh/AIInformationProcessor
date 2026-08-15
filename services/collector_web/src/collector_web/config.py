@@ -3,6 +3,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+def _env_flag(name: str) -> bool:
+    """读取显式开关；只有 1/true/yes/on 才算打开。"""
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 DEFAULT_MANUAL_MEDIA_SUBMIT_WEBHOOK_PATH = (
     "6b8eaf7c41d2439a/manual-media-submit-webhook/signal-to-obsidian/local/manual-media-submit"
 )
@@ -56,6 +61,7 @@ class Settings:
     internal_token: str
     ui_password: str
     session_secret: str
+    allow_insecure_browser: bool
 
 
 @lru_cache(maxsize=1)
@@ -240,4 +246,5 @@ def get_settings() -> Settings:
         internal_token=os.getenv("COLLECTOR_WEB_INTERNAL_TOKEN", "").strip(),
         ui_password=os.getenv("COLLECTOR_WEB_UI_PASSWORD", "").strip(),
         session_secret=os.getenv("COLLECTOR_WEB_SESSION_SECRET", "").strip(),
+        allow_insecure_browser=_env_flag("COLLECTOR_WEB_ALLOW_INSECURE_BROWSER"),
     )

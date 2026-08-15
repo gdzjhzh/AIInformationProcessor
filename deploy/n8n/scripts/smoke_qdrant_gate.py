@@ -98,6 +98,31 @@ def qdrant_uuid(name: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, name))
 
 
+def probe_production_payload(qdrant_base_url: str, qdrant_collection: str) -> dict:
+    """扫描生产 collection 的 payload 分页，避免只测干净临时库漏掉损坏。"""
+    collection_url = f"{qdrant_base_url.rstrip('/')}/collections/{qdrant_collection}"
+    offset = None
+    read_count = 0
+    pages = 0
+    while True:
+        pages += 1
+        body: dict = {"limit": 128, "with_payload": True, "with_vector": False}
+        if offset is not None:
+            body["offset"] = offset
+        try:
+            result = request_json("POST", f"{collection_url}/points/scroll", body).get("result", {})
+        except RequestJsonError as exc:
+            raise RuntimeError(
+                "Production collection payload scroll failed after "
+                f"{read_count} points (page {pages}): {exc}"
+            ) from exc
+        points = result.get("points") or []
+        read_count += len(points) if isinstance(points, list) else 0
+        offset = result.get("next_page_offset")
+        if not offset:
+            return {"pages": pages, "points_read": read_count}
+
+
 def normalize_canonical_url(value: object) -> str:
     """与 03 Decide Dedupe Action 的 normalizeUrl 对齐：去掉 fragment、跟踪参数和尾部斜杠。"""
     text = str(value or "").strip()
@@ -386,6 +411,8 @@ def run_smoke(
     if failures:
         raise RuntimeError("Smoke test failures: " + "; ".join(failures))
 
+    production_payload = probe_production_payload(qdrant_base_url, qdrant_collection)
+
     return {
         "env_file": env_file,
         "qdrant_base_url": qdrant_base_url,
@@ -401,6 +428,8 @@ def run_smoke(
         "diff_threshold": diff_threshold,
         "silent_threshold": silent_threshold,
         "scenario_results": scenario_results,
+        "production_payload_pages": production_payload["pages"],
+        "production_payload_points": production_payload["points_read"],
     }
 
 
@@ -420,6 +449,11 @@ def print_smoke_result(result: dict) -> None:
     print(f"  actual vector size: {result['actual_vector_size']}")
     print(f"  diff threshold: {result['diff_threshold']}")
     print(f"  silent threshold: {result['silent_threshold']}")
+
+    print(
+        "Production payload scroll: "
+        f"{result['production_payload_points']} points / {result['production_payload_pages']} pages"
+    )
 
     print("Synthetic gate scenarios:")
     for scenario in result["scenario_results"]:

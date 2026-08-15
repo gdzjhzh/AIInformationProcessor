@@ -719,6 +719,7 @@ def check_smoke_qdrant_gate_aligns_with_03() -> list[CheckFailure]:
         "silent_threshold",
         "silent_same_url_high_similarity_different_item",
         "diff_push_same_url_below_silent_threshold",
+        "probe_production_payload",
     ):
         if needle not in source:
             failures.append(

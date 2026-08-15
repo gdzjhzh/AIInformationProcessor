@@ -79,7 +79,8 @@ services:
     ports:
       - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
     volumes:
-      - ./data/qdrant:/qdrant/storage
+      # Windows 主机 bind mount 会损坏 Qdrant payload 存储；命名卷落在 Docker 的 Linux 盘上。
+      - qdrant_storage:/qdrant/storage
     environment:
       TZ: ${TZ:-America/New_York}
 
@@ -208,6 +209,7 @@ services:
       COLLECTOR_WEB_INTERNAL_TOKEN: ${COLLECTOR_WEB_INTERNAL_TOKEN:-}
       COLLECTOR_WEB_UI_PASSWORD: ${COLLECTOR_WEB_UI_PASSWORD:-}
       COLLECTOR_WEB_SESSION_SECRET: ${COLLECTOR_WEB_SESSION_SECRET:-}
+      COLLECTOR_WEB_ALLOW_INSECURE_BROWSER: ${COLLECTOR_WEB_ALLOW_INSECURE_BROWSER:-}
       COLLECTOR_WEB_DB_PATH: /data/collector_web.sqlite
       COLLECTOR_WEB_POLL_RUNS_DIR: /data/n8n_poll_runs
       COLLECTOR_WEB_N8N_DATABASE_PATH: /data/n8n/database.sqlite
@@ -318,3 +320,6 @@ services:
       FEISHU_APP_SECRET: ${FEISHU_APP_SECRET}
     depends_on:
       - memos
+
+volumes:
+  qdrant_storage:

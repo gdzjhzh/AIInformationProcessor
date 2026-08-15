@@ -21,6 +21,13 @@ from collector_web.repository import (
 )
 from collector_web.feishu_app import get_notification
 
+TEST_INTERNAL_TOKEN = "test-internal-token"
+
+
+def _internal_headers() -> dict[str, str]:
+    """测试里调用服务间接口时带上内部令牌。"""
+    return {"Authorization": f"Bearer {TEST_INTERNAL_TOKEN}"}
+
 RSS_SOURCE_URLS_JSON = """
 [
   {
@@ -76,6 +83,8 @@ def _prepare_env(monkeypatch, tmp_path, rss_source_urls_json=RSS_SOURCE_URLS_JSO
     monkeypatch.setenv("COLLECTOR_WEB_QDRANT_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("COLLECTOR_WEB_MAINLINE_LLM_ENV_PATH", str(mainline_env_path))
     monkeypatch.setenv("RSS_SOURCE_URLS_JSON", rss_source_urls_json)
+    monkeypatch.setenv("COLLECTOR_WEB_ALLOW_INSECURE_BROWSER", "1")
+    monkeypatch.setenv("COLLECTOR_WEB_INTERNAL_TOKEN", TEST_INTERNAL_TOKEN)
     get_settings.cache_clear()
     return db_path
 
@@ -227,8 +236,36 @@ def test_status_api_does_not_expose_webhook_urls(monkeypatch, tmp_path):
     assert all(value in {"已配置", "未配置"} for value in webhook_values)
 
 
+def test_browser_write_requires_configured_password(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("COLLECTOR_WEB_ALLOW_INSECURE_BROWSER", raising=False)
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        denied = client.post("/api/rss-poll/rerun")
+
+    assert denied.status_code == 503
+    assert denied.json()["detail"] == "browser auth not configured"
+
+
+def test_internal_token_missing_is_unavailable(monkeypatch, tmp_path):
+    _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("COLLECTOR_WEB_INTERNAL_TOKEN", raising=False)
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/internal/feishu/notify",
+            json={"payload": {"title": "未配置令牌"}},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "internal token not configured"
+
+
 def test_browser_write_requires_session_and_csrf(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("COLLECTOR_WEB_ALLOW_INSECURE_BROWSER", raising=False)
     monkeypatch.setenv("COLLECTOR_WEB_UI_PASSWORD", "ui-secret")
     get_settings.cache_clear()
 
@@ -254,6 +291,7 @@ def test_browser_write_requires_session_and_csrf(monkeypatch, tmp_path):
 
 def test_browser_write_succeeds_after_login(monkeypatch, tmp_path):
     _prepare_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("COLLECTOR_WEB_ALLOW_INSECURE_BROWSER", raising=False)
     monkeypatch.setenv("COLLECTOR_WEB_UI_PASSWORD", "ui-secret")
     get_settings.cache_clear()
 
@@ -347,6 +385,7 @@ def test_feishu_app_notify_api_sends_compact_card(monkeypatch, tmp_path):
     with TestClient(create_app()) as client:
         response = client.post(
             "/api/internal/feishu/notify",
+            headers=_internal_headers(),
             json={
                 "payload": {
                     "feishu_notification_id": "notify-test-1",
@@ -405,8 +444,16 @@ def test_feishu_app_notify_api_is_idempotent_after_sent(monkeypatch, tmp_path):
     }
 
     with TestClient(create_app()) as client:
-        first_response = client.post("/api/internal/feishu/notify", json=payload)
-        second_response = client.post("/api/internal/feishu/notify", json=payload)
+        first_response = client.post(
+            "/api/internal/feishu/notify",
+            headers=_internal_headers(),
+            json=payload,
+        )
+        second_response = client.post(
+            "/api/internal/feishu/notify",
+            headers=_internal_headers(),
+            json=payload,
+        )
 
     assert first_response.status_code == 202
     assert second_response.status_code == 202
@@ -441,6 +488,7 @@ def test_feishu_card_action_replies_with_full_card(monkeypatch, tmp_path):
     with TestClient(create_app()) as client:
         create_response = client.post(
             "/api/internal/feishu/notify",
+            headers=_internal_headers(),
             json={
                 "payload": {
                     "feishu_notification_id": "notify-test-2",
@@ -588,6 +636,7 @@ def test_feishu_card_action_accepts_valid_signature_and_decrypts(monkeypatch, tm
     with TestClient(create_app()) as client:
         create_response = client.post(
             "/api/internal/feishu/notify",
+            headers=_internal_headers(),
             json={
                 "payload": {
                     "feishu_notification_id": "notify-encrypted",
@@ -840,6 +889,9 @@ def test_status_api_returns_runtime_summary(monkeypatch, tmp_path):
             "distance": "Cosine",
             "search_ok": True,
             "search_error": "",
+            "payload_ok": True,
+            "payload_error": "",
+            "payload_points_read": 6,
         },
     )
 
@@ -1503,6 +1555,7 @@ def test_manual_media_submit_callback_api_completes_running_submission(monkeypat
 
         response = client.post(
             "/api/internal/manual-media-submit-callback",
+            headers=_internal_headers(),
             json={
                 "submission_id": submission["id"],
                 "result": {

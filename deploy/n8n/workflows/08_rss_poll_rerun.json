@@ -65,7 +65,7 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "language": "javaScript",
-        "jsCode": "const expected = String($env.COLLECTOR_WEB_INTERNAL_TOKEN || '').trim();\n\nconst readHeader = (headers, name) => {\n  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {\n    return '';\n  }\n  const target = String(name || '').toLowerCase();\n  for (const [key, value] of Object.entries(headers)) {\n    if (String(key).toLowerCase() !== target) {\n      continue;\n    }\n    if (Array.isArray(value)) {\n      return String(value[0] || '').trim();\n    }\n    return String(value || '').trim();\n  }\n  return '';\n};\n\nconst headers = ($json && $json.headers && typeof $json.headers === 'object') ? $json.headers : {};\nconst auth = readHeader(headers, 'authorization');\nconst dedicated = readHeader(headers, 'x-collector-internal-token');\nconst bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';\nconst provided = dedicated || bearer;\nconst authorized = !expected || provided === expected;\n\nif (!authorized) {\n  return { json: { webhook_authorized: false } };\n}\n\nreturn { json: { ...$json, webhook_authorized: true } };\n"
+        "jsCode": "const expected = String($env.COLLECTOR_WEB_INTERNAL_TOKEN || '').trim();\n\nconst readHeader = (headers, name) => {\n  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {\n    return '';\n  }\n  const target = String(name || '').toLowerCase();\n  for (const [key, value] of Object.entries(headers)) {\n    if (String(key).toLowerCase() !== target) {\n      continue;\n    }\n    if (Array.isArray(value)) {\n      return String(value[0] || '').trim();\n    }\n    return String(value || '').trim();\n  }\n  return '';\n};\n\nconst headers = ($json && $json.headers && typeof $json.headers === 'object') ? $json.headers : {};\nconst auth = readHeader(headers, 'authorization');\nconst dedicated = readHeader(headers, 'x-collector-internal-token');\nconst bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';\nconst provided = dedicated || bearer;\nif (!expected) {\n  return {\n    json: {\n      webhook_authorized: false,\n      webhook_auth_status: 503,\n      webhook_auth_error: 'internal token not configured',\n    },\n  };\n}\n\nif (provided !== expected) {\n  return {\n    json: {\n      webhook_authorized: false,\n      webhook_auth_status: 401,\n      webhook_auth_error: 'unauthorized webhook',\n    },\n  };\n}\n\nreturn { json: { ...$json, webhook_authorized: true } };\n"
       },
       "id": "d1b2c3d4-5e67-4890-b123-456789abcdef",
       "name": "Verify Internal Token",
@@ -99,9 +99,9 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: false, error: 'unauthorized webhook' } }}",
+        "responseBody": "={{ { ok: false, error: ($json.webhook_auth_error || 'unauthorized webhook') } }}",
         "options": {
-          "responseCode": 401
+          "responseCode": "={{Number($json.webhook_auth_status || 401)}}"
         }
       },
       "id": "f3a4b5c6-7d89-4012-d345-678901abcdef",

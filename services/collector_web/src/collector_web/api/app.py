@@ -147,6 +147,9 @@ def create_app() -> FastAPI:
             ),
             "internal_auth_configured": bool(settings.internal_token),
             "browser_auth_configured": bool(settings.ui_password),
+            "browser_insecure_writes": bool(
+                settings.allow_insecure_browser and not settings.ui_password
+            ),
         }
 
     @app.get("/login", response_class=HTMLResponse)
